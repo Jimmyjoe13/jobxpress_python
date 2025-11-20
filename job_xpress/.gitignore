@@ -1,0 +1,23 @@
+# Byte-code files
+*.pyc
+__pycache__/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Sensitive files
+.env
+
+# Output files
+output/
+
+# IDE specific files
+.vscode/
+
+# Package dependencies
+*.egg-info/
+.eggs/
+dist/
+build/
