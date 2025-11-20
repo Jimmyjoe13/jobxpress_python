@@ -1,10 +1,10 @@
 import httpx
+import traceback  # <-- Ajouté pour voir les détails de l'erreur
 from typing import List
 from core.config import settings
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 
-# Mapping simplifié pour aider le filtre technique (sans polluer la barre de recherche)
 JSEARCH_TYPES_MAP = {
     "CDI": "FULLTIME",
     "CDD": "CONTRACT",
@@ -23,52 +23,58 @@ class SearchEngine:
         }
 
     async def find_jobs(self, candidate: CandidateProfile, limit: int = 10) -> List[JobOffer]:
-        
-        # --- 1. Construction de la requête SIMPLIFIÉE ---
-        # On imite une recherche naturelle : "Quoi Où"
-        # Ex: "Growth Hacker Marseille"
         query = f"{candidate.job_title} {candidate.location}"
-        
         print(f"🔎 Query JSearch (Simple) : '{query}'")
 
-        # --- 2. Paramètres API ---
         params = {
             "query": query,
             "page": "1",
             "num_pages": "1", 
-            "date_posted": "month",  # On garde un spectre large
+            "date_posted": "month",
             "country": "fr",
             "language": "fr"
         }
 
-        # On ajoute le filtre technique de contrat si disponible
-        # (C'est mieux que de l'écrire dans la requête)
         jsearch_type = JSEARCH_TYPES_MAP.get(candidate.contract_type)
         if jsearch_type:
             params["job_type"] = jsearch_type
             print(f"   👉 Filtre type : {jsearch_type}")
 
-        # --- 3. Appel API ---
+        # Vérification Clé API
         if not settings.RAPIDAPI_KEY:
             print("⚠️  Pas de clé API. Mode MOCK.")
             return self._get_mock_jobs()
 
         async with httpx.AsyncClient() as client:
             try:
-                response = await client.get(self.BASE_URL, headers=self.headers, params=params, timeout=15.0)
+                # On ajoute un print ici pour vérifier que la requête part bien
+                print(f"   🚀 Envoi requête JSearch...")
                 
+                response = await client.get(self.BASE_URL, headers=self.headers, params=params, timeout=30.0)
+                
+                # Debug Status
+                print(f"   📩 Statut Réponse API : {response.status_code}")
+
                 if response.status_code == 429:
-                    print("❌ Quota RapidAPI dépassé !")
+                    print("❌ Quota RapidAPI dépassé ! (Erreur 429)")
                     return []
+                
+                # Si erreur HTTP (4xx ou 5xx), on affiche le texte de l'erreur avant de planter
+                if response.is_error:
+                    print(f"❌ ERREUR HTTP DÉTAILLÉE : {response.text}")
                 
                 response.raise_for_status()
                 data = response.json()
                 
-                # print(f"DEBUG RAW: {data}") # Décommenter si toujours 0 résultats
-                
                 return self._parse_results(data.get("data", []))
+
             except Exception as e:
-                print(f"❌ Erreur JSearch : {str(e)}")
+                print("\n❌ --- ERREUR CRITIQUE JSEARCH ---")
+                print(f"Type de l'erreur : {type(e).__name__}")
+                print(f"Message : {str(e)}")
+                print("Traceback complet :")
+                traceback.print_exc()  # <-- Affiche la ligne exacte qui plante
+                print("----------------------------------\n")
                 return []
 
     def _parse_results(self, raw_jobs: List[dict]) -> List[JobOffer]:
@@ -78,8 +84,6 @@ class SearchEngine:
             
         for item in raw_jobs:
             description = (item.get("job_description") or "").lower()
-            
-            # Détection du remote
             is_remote = item.get("job_is_remote") is True or \
                         "télétravail" in description or \
                         "remote" in (item.get("job_title") or "").lower()
