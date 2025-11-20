@@ -1,6 +1,6 @@
 import httpx
-import traceback  # <-- Ajouté pour voir les détails de l'erreur
-from typing import List
+import json
+from typing import List, Any
 from core.config import settings
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
@@ -24,65 +24,77 @@ class SearchEngine:
 
     async def find_jobs(self, candidate: CandidateProfile, limit: int = 10) -> List[JobOffer]:
         query = f"{candidate.job_title} {candidate.location}"
-        print(f"🔎 Query JSearch (Simple) : '{query}'")
+        print(f"🔎 Query JSearch : '{query}'")
 
-        params = {
+        # --- MODIFICATION ICI : Paramètres beaucoup plus larges ---
+        base_params = {
             "query": query,
             "page": "1",
             "num_pages": "1", 
-            "date_posted": "month",
+            # "date_posted": "month",  <-- SUPPRIMÉ (Trop restrictif)
             "country": "fr",
-            "language": "fr"
+            # "language": "fr"         <-- SUPPRIMÉ (Growth Hacker est souvent en anglais)
         }
 
+        # Tentative 1 : Stricte (avec type de contrat)
+        jobs = []
         jsearch_type = JSEARCH_TYPES_MAP.get(candidate.contract_type)
+        
         if jsearch_type:
-            params["job_type"] = jsearch_type
-            print(f"   👉 Filtre type : {jsearch_type}")
+            print(f"   👉 Tentative 1 (Stricte) : Filtre type = {jsearch_type}")
+            params_strict = base_params.copy()
+            params_strict["job_type"] = jsearch_type
+            jobs = await self._execute_search(params_strict)
 
-        # Vérification Clé API
+        # Tentative 2 : Large (sans type de contrat)
+        if not jobs:
+            print(f"   ⚠️ 0 résultat strict. Tentative 2 (Large) : Sans filtre de contrat...")
+            jobs = await self._execute_search(base_params)
+            
+        return jobs
+
+    async def _execute_search(self, params: dict) -> List[JobOffer]:
         if not settings.RAPIDAPI_KEY:
             print("⚠️  Pas de clé API. Mode MOCK.")
             return self._get_mock_jobs()
 
         async with httpx.AsyncClient() as client:
             try:
-                # On ajoute un print ici pour vérifier que la requête part bien
-                print(f"   🚀 Envoi requête JSearch...")
-                
                 response = await client.get(self.BASE_URL, headers=self.headers, params=params, timeout=30.0)
                 
-                # Debug Status
-                print(f"   📩 Statut Réponse API : {response.status_code}")
-
                 if response.status_code == 429:
                     print("❌ Quota RapidAPI dépassé ! (Erreur 429)")
                     return []
                 
-                # Si erreur HTTP (4xx ou 5xx), on affiche le texte de l'erreur avant de planter
-                if response.is_error:
-                    print(f"❌ ERREUR HTTP DÉTAILLÉE : {response.text}")
-                
                 response.raise_for_status()
                 data = response.json()
                 
-                return self._parse_results(data.get("data", []))
+                raw_list = data.get("data", [])
+                
+                # --- DEBUG DE L'EXTRÊME ---
+                # Si la liste est vide, on veut savoir pourquoi !
+                if not raw_list:
+                    print(f"   ❓ API JSearch a répondu 200 OK mais liste vide.")
+                    # Décommente la ligne suivante si tu veux voir TOUT le JSON (attention c'est gros)
+                    # print(f"   🔍 Réponse brute : {json.dumps(data)[:500]}...") 
+                else:
+                    print(f"   ✅ API a renvoyé {len(raw_list)} items bruts.")
+
+                return self._parse_results(raw_list)
 
             except Exception as e:
-                print("\n❌ --- ERREUR CRITIQUE JSEARCH ---")
-                print(f"Type de l'erreur : {type(e).__name__}")
-                print(f"Message : {str(e)}")
-                print("Traceback complet :")
-                traceback.print_exc()  # <-- Affiche la ligne exacte qui plante
-                print("----------------------------------\n")
+                print(f"❌ Erreur appel JSearch : {str(e)}")
                 return []
 
-    def _parse_results(self, raw_jobs: List[dict]) -> List[JobOffer]:
+    def _parse_results(self, raw_jobs: List[Any]) -> List[JobOffer]:
         clean_offers = []
         if not raw_jobs:
             return []
             
         for item in raw_jobs:
+            # Sécurité : parfois item est None ou mal formé
+            if not isinstance(item, dict): continue
+            
             description = (item.get("job_description") or "").lower()
             is_remote = item.get("job_is_remote") is True or \
                         "télétravail" in description or \
