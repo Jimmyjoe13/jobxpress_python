@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # Email (SMTP Gmail)
     SMTP_SERVER: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
+    SMTP_PORT: int = 465
     SMTP_USER: str = ""      # Ton adresse Gmail
     SMTP_PASSWORD: str = ""  # Ton mot de passe d'application (pas le mot de passe normal)
 

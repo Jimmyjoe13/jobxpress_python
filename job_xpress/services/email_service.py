@@ -15,21 +15,17 @@ class EmailService:
         self.password = settings.SMTP_PASSWORD
 
     def send_application_email(self, candidate: CandidateProfile, offer: JobOffer, pdf_path: str):
-        """
-        Envoie l'email final au candidat avec le PDF en pièce jointe.
-        """
         if not self.user or not self.password:
             print("⚠️ Configuration SMTP manquante. Email non envoyé.")
             return
 
         try:
-            # 1. Construction de l'objet Email
+            # 1. Construction de l'email
             msg = MIMEMultipart()
             msg['Subject'] = f"Candidature générée : {offer.title} chez {offer.company}"
             msg['From'] = self.user
             msg['To'] = candidate.email
 
-            # 2. Corps du message
             body_text = f"""
             Bonjour {candidate.first_name},
 
@@ -39,7 +35,7 @@ class EmailService:
             🏢 Entreprise : {offer.company}
             ⭐️ Score de pertinence : {offer.match_score}%
             
-            Vous trouverez ci-joint votre lettre de motivation personnalisée au format PDF, prête à être envoyée.
+            Vous trouverez ci-joint votre lettre de motivation personnalisée au format PDF.
 
             Lien de l'offre : {offer.url}
 
@@ -48,20 +44,18 @@ class EmailService:
             """
             msg.attach(MIMEText(body_text, 'plain'))
 
-            # 3. Pièce jointe (PDF)
+            # 2. Pièce jointe
             if pdf_path and os.path.exists(pdf_path):
                 with open(pdf_path, "rb") as f:
                     part = MIMEApplication(f.read(), Name=os.path.basename(pdf_path))
-                
                 part['Content-Disposition'] = f'attachment; filename="{os.path.basename(pdf_path)}"'
                 msg.attach(part)
-            else:
-                print("⚠️ Fichier PDF introuvable, envoi sans pièce jointe.")
 
-            # 4. Envoi via SMTP
-            print(f"📧 Connexion au serveur SMTP ({self.server})...")
-            with smtplib.SMTP(self.server, self.port) as server:
-                server.starttls() # Sécurisation de la connexion
+            # 3. Envoi via SMTP_SSL (Port 465)
+            print(f"📧 Connexion SSL au serveur SMTP ({self.server}:{self.port})...")
+            
+            # Utilisation de SMTP_SSL direct (plus robuste sur Render)
+            with smtplib.SMTP_SSL(self.server, self.port) as server:
                 server.login(self.user, self.password)
                 server.send_message(msg)
             
