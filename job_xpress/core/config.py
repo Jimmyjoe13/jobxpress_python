@@ -13,10 +13,8 @@ class Settings(BaseSettings):
     RAPIDAPI_KEY: str = ""
 
     # Email (SMTP Gmail)
-    SMTP_SERVER: str = "smtp.gmail.com"
-    SMTP_PORT: int = 465
-    SMTP_USER: str = ""      # Ton adresse Gmail
-    SMTP_PASSWORD: str = ""  # Ton mot de passe d'application (pas le mot de passe normal)
+    BREVO_API_KEY: str = ""  # <-- Nouvelle variable
+    SENDER_EMAIL: str = ""   # <-- L'email validé sur Brevo
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
 
