@@ -11,7 +11,7 @@ payload = {
       {"key": "question_l6NAep", "label": "Prénom", "type": "INPUT_TEXT", "value": "Jimmy"},
       {"key": "question_Y4ZO06", "label": "Nom", "type": "INPUT_TEXT", "value": "Gay"},
       {"key": "question_D7V1kj", "label": "Email", "type": "INPUT_EMAIL", "value": "jimmygay13180@gmail.com"},
-      {"key": "question_a26zVy", "label": "Emploi", "type": "INPUT_TEXT", "value": "Growth Hacker"},
+      {"key": "question_a26zVy", "label": "Emploi", "type": "INPUT_TEXT", "value": "Commercial"},
       # ID pour 'CDI' d'après ton mapping
       {"key": "question_7NWEGz", "label": "Contrat", "type": "DROPDOWN", "value": ["5bdc568d-a217-464e-af74-bf1a5add3c9c"]},
       # ID pour 'Junior' d'après ton mapping
