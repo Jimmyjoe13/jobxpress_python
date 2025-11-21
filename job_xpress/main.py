@@ -3,6 +3,8 @@ from models.candidate import TallyWebhookPayload, CandidateProfile
 from services.search_engine import search_engine
 from services.llm_engine import llm_engine
 from services.pdf_generator import pdf_generator
+from services.database import db_service
+from services.email_service import email_service  # <-- Nouvel import
 from core.config import settings
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
@@ -14,82 +16,64 @@ def health_check():
 @app.post("/webhook/tally")
 async def receive_tally_webhook(payload: TallyWebhookPayload):
     """
-    Orchestrateur avec "Smart Batching" :
-    Tant qu'on n'a pas de match, on continue d'analyser les offres suivantes.
+    Orchestrateur Complet : Tally -> Search -> IA -> PDF -> DB -> Email
     """
     try:
-        # --- ÉTAPE 1 : CRÉATION DU PROFIL ---
+        # 1. PROFIL
         candidate = CandidateProfile.from_tally(payload)
-        print(f"\n✅ Profil reçu : {candidate.first_name} {candidate.last_name} - {candidate.job_title}")
+        print(f"\n✅ Profil reçu : {candidate.first_name} {candidate.last_name}")
 
-        # --- ÉTAPE 2 : RECHERCHE JSEARCH ---
+        # 2. RECHERCHE
         raw_jobs = await search_engine.find_jobs(candidate)
         total_found = len(raw_jobs)
         print(f"🔍 {total_found} offres brutes trouvées.")
 
         if not raw_jobs:
-            return {"status": "no_jobs_found", "message": "Aucune offre trouvée sur JSearch."}
+            return {"status": "no_jobs_found", "message": "Aucune offre trouvée."}
 
-        # --- ÉTAPE 3 : ANALYSE IA INTELLIGENTE (BOUCLE) ---
+        # 3. ANALYSE INTELLIGENTE (Batching)
         valid_jobs = []
-        BATCH_SIZE = 5  # On analyse par paquets de 5
+        BATCH_SIZE = 5 
         
-        # On boucle sur les offres par paquets
         for i in range(0, total_found, BATCH_SIZE):
-            # Si on a déjà trouvé au moins 1 bonne offre, on peut s'arrêter 
-            # (ou continuer si on veut absolument un Top 3, ici on optimise les coûts : 1 suffit)
-            if len(valid_jobs) >= 1:
-                break
+            if len(valid_jobs) >= 1: break
 
-            # Sélection du lot courant (ex: 0 à 5, puis 5 à 10...)
             batch = raw_jobs[i : i + BATCH_SIZE]
-            print(f"\n🧠 Analyse du lot {i+1}-{i+len(batch)} (sur {total_found})...")
+            print(f"\n🧠 Analyse du lot {i+1}-{i+len(batch)}...")
             
-            # Analyse parallèle du lot
             analyzed_batch = await llm_engine.analyze_offers_parallel(candidate, batch)
-            
-            # Filtrage des succès (> 50%)
             new_matches = [j for j in analyzed_batch if j.match_score >= 50]
             valid_jobs.extend(new_matches)
             
-            print(f"   -> {len(new_matches)} offre(s) pertinente(s) trouvée(s) dans ce lot.")
+            print(f"   -> {len(new_matches)} offre(s) pertinente(s).")
 
-        # --- VÉRIFICATION FINALE ---
         if not valid_jobs:
-            print("\n⚠️  Toutes les offres ont été analysées et aucune ne convient (probablement que des écoles).")
-            return {"status": "no_match_found", "message": "Aucune offre pertinente après analyse complète."}
+            print("\n⚠️ Aucune offre pertinente après analyse.")
+            return {"status": "no_match_found"}
 
-        # Tri final des résultats (du meilleur au moins bon)
         valid_jobs.sort(key=lambda x: x.match_score, reverse=True)
 
-        print("\n📊 RÉSULTATS FINAUX (Top 3 retenus) :")
-        for job in valid_jobs[:3]:
-            print(f"   ★ {job.match_score}% - {job.title} ({job.company})")
-
-        # --- ÉTAPE 4 : GÉNÉRATION DES LIVRABLES ---
+        # 4. GÉNÉRATION LIVRABLES (Top 1)
         best_offer = valid_jobs[0]
-        print(f"\n🏆 Meilleure offre sélectionnée : {best_offer.title} chez {best_offer.company}")
+        print(f"\n🏆 Top 1 : {best_offer.title} chez {best_offer.company} ({best_offer.match_score}%)")
 
+        # Rédaction & PDF
         letter_data = await llm_engine.generate_cover_letter(candidate, best_offer)
-        
-        pdf_path = pdf_generator.create_application_pdf(
-            candidate, 
-            best_offer, 
-            letter_data.get("html_content", "")
-        )
+        pdf_path = pdf_generator.create_application_pdf(candidate, best_offer, letter_data.get("html_content", ""))
 
         if pdf_path:
             print(f"✅ PDF généré : {pdf_path}")
+            
+            # 5. SAUVEGARDE DB
+            db_service.save_application(candidate, best_offer, pdf_path)
+            
+            # 6. ENVOI EMAIL (Final Step)
+            email_service.send_application_email(candidate, best_offer, pdf_path)
 
         return {
             "status": "completed",
             "candidate": candidate.email,
-            "jobs_found_total": total_found,
-            "best_match": {
-                "company": best_offer.company,
-                "score": best_offer.match_score,
-                "pdf_path": pdf_path
-            }
+            "best_match": best_offer.company
         }
 
     except Exception as e:

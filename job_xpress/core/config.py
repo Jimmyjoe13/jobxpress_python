@@ -8,11 +8,16 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
     
-    # APIs Externes
+    # IA & Search
     DEEPSEEK_API_KEY: str = ""
-    RAPIDAPI_KEY: str = "" # Pour JSearch
+    RAPIDAPI_KEY: str = ""
 
-    # Chargement depuis le fichier .env
+    # Email (SMTP Gmail)
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""      # Ton adresse Gmail
+    SMTP_PASSWORD: str = ""  # Ton mot de passe d'application (pas le mot de passe normal)
+
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
 
 settings = Settings()
