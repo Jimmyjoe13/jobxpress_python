@@ -15,62 +15,62 @@ class LLMEngine:
 
     async def analyze_offers_parallel(self, candidate: CandidateProfile, offers: List[JobOffer]) -> List[JobOffer]:
         """
-        Analyse toutes les offres en parallèle en injectant des données Web et OCR.
+        Analyse toutes les offres en parallèle avec le nouveau scoring expert.
         """
-        print(f"🧠 Analyse IA + Vérification Web pour {len(offers)} offres...")
+        print(f"🧠 Analyse IA Expert + Web pour {len(offers)} offres...")
         
         tasks = [self._analyze_single_offer(candidate, offer) for offer in offers]
         analyzed_offers = await asyncio.gather(*tasks)
+        
+        # Tri par le nouveau score calculé (Pondéré)
         analyzed_offers.sort(key=lambda x: x.match_score, reverse=True)
         
         return analyzed_offers
 
     async def _analyze_single_offer(self, candidate: CandidateProfile, offer: JobOffer) -> JobOffer:
         """
-        1. Cherche infos Web sur l'entreprise.
-        2. Analyse IA avec contexte Web + Offre + Candidat (CV complet).
+        Analyse une offre sur 3 axes (Tech, Structure, Exp) et calcule un score pondéré.
         """
-        # 1. Données Web
+        # 1. Contexte Web (E-réputation)
         web_context = await web_search.get_company_reputation(offer.company)
 
-        # 2. Prompt "PONDÉRÉ" (Plus de tolérance)
+        # 2. Prompt de Scoring Multidimensionnel
         prompt = f"""
-        Tu es un expert en recrutement. Ton but est de classer les offres par pertinence.
+        Agis comme un Directeur du Recrutement expert. Evalue la compatibilité de cette offre pour le candidat.
 
-        ⚠️ CRITÈRE ÉLIMINATOIRE UNIQUE (KILLER) -> SCORE 0 :
-        - Si l'entreprise est une ÉCOLE, un CFA, un BOOTCAMP ou un organisme de formation qui cherche des élèves/étudiants (formation payante ou financée).
-        - Exemples à bannir : "Rocket School", "OpenClassrooms", "Iscod", "Wall Street English".
-        -> Dans ce cas, mets IMPÉRATIVEMENT "match_probability": 0.
+        🚨 RÈGLE D'OR (KILLER CRITERIA) :
+        - Si l'entreprise est une ÉCOLE, un CFA ou vend une formation : Mets TOUS les scores à 0.
 
-        ⚠️ CRITÈRES DE PÉNALITÉ (MALUS) -> NE PAS METTRE 0 :
-        Si c'est une vraie entreprise mais que ça ne colle pas parfaitement :
-        
-        1. TYPE DE CONTRAT (Candidat veut : "{candidate.contract_type}") :
-           - Si l'offre est un Stage alors que le candidat veut Alternance : Applique un MALUS important (ex: Score max 40-50%), mais NE METS PAS 0.
-           - Si l'offre est un CDI alors que le candidat veut Alternance : MALUS moyen (Score max 60%).
-           
-        2. MODE DE TRAVAIL (Candidat veut : "{candidate.work_type}") :
-           - Si ça ne correspond pas (ex: Présentiel au lieu de Remote) : MALUS léger (Score max 70%).
+        ANALYSE SUR 3 AXES (Note chaque axe de 0 à 100) :
 
-        --- CONTEXTE ---
-        Infos Web : {web_context}
-        
-        --- OFFRE ---
-        Entreprise : {offer.company}
-        Titre : {offer.title}
-        Desc : {offer.description[:2500]}...
+        1. **TECHNIQUE (Hard Skills)** :
+           - Les compétences du CV correspondent-elles aux besoins de l'offre ?
+           - Le candidat maitrise-t-il la stack/outils demandés ?
 
-        --- CANDIDAT ---
-        Poste : {candidate.job_title}
-        Contrat visé : {candidate.contract_type}
-        CV (Extrait) : {candidate.cv_text[:2000] if candidate.cv_text else "Non fourni"}
+        2. **STRUCTUREL (Contrat & Remote)** :
+           - Le candidat veut : "{candidate.contract_type}" en "{candidate.work_type}".
+           - Si l'offre est un Stage alors qu'il veut Alternance -> Note faible (ex: 20).
+           - Si l'offre est Présentiel alors qu'il veut Full Remote -> Note faible.
+           - Si c'est parfait -> 100.
 
-        Réponds UNIQUEMENT en JSON :
+        3. **EXPÉRIENCE (Niveau)** :
+           - Le candidat est : "{candidate.experience_level}".
+           - Si l'offre demande 5 ans d'xp et qu'il est Junior -> Note faible.
+
+        --- DONNÉES ---
+        Entreprise (Web Info) : {web_context}
+        Offre (Contenu) : {offer.description[:2500]}...
+        Candidat (CV) : {candidate.cv_text[:3000] if candidate.cv_text else "Non fourni"}
+
+        Réponds UNIQUEMENT en JSON valide :
         {{
-            "match_probability": (int 0-100),
-            "reasoning": "Pourquoi ce score ? (Explique les malus)",
-            "summary": "Résumé en 1 phrase",
-            "company_type": "Entreprise" ou "École"
+            "score_technical": (0-100),
+            "score_structural": (0-100),
+            "score_experience": (0-100),
+            "is_school_scheme": (boolean, true si c'est une école),
+            "reasoning": "Analyse courte en 1 phrase",
+            "strengths": ["Point fort 1", "Point fort 2"],
+            "weaknesses": ["Point faible 1"]
         }}
         """
 
@@ -85,7 +85,7 @@ class LLMEngine:
                 {"role": "system", "content": "Tu es un analyste JSON strict."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.4,
+            "temperature": 0.0, # Zéro créativité pour le scoring
             "response_format": { "type": "json_object" }
         }
 
@@ -100,8 +100,26 @@ class LLMEngine:
                 response.raise_for_status()
                 data = json.loads(response.json()['choices'][0]['message']['content'])
                 
-                offer.match_score = data.get("match_probability", 0)
-                offer.ai_analysis = data
+                # --- CALCUL DU SCORE PONDÉRÉ ---
+                # On applique nos propres poids pour contrôler la décision
+                w_tech = 0.4      # 40% Compétences
+                w_struct = 0.3    # 30% Contrat/Lieu
+                w_exp = 0.3       # 30% Expérience
+
+                s_tech = data.get("score_technical", 0)
+                s_struct = data.get("score_structural", 0)
+                s_exp = data.get("score_experience", 0)
+
+                # Score final arrondi
+                final_score = int((s_tech * w_tech) + (s_struct * w_struct) + (s_exp * w_exp))
+                
+                # Si c'est une école, on force 0 (sécurité ultime)
+                if data.get("is_school_scheme") is True:
+                    final_score = 0
+
+                offer.match_score = final_score
+                # On stocke les détails pour l'affichage dans l'email
+                offer.ai_analysis = data 
                 
             except Exception as e:
                 print(f"⚠️ Erreur IA sur '{offer.title}': {e}")
@@ -155,7 +173,7 @@ class LLMEngine:
         payload = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "Tu es un assistant JSON sénior."},
+                {"role": "system", "content": "Tu es un assistant JSON strict."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.7,

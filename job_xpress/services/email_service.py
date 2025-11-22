@@ -37,20 +37,29 @@ class EmailService:
             other_jobs_html = ""
             if other_offers:
                 list_items = ""
-                for job in other_offers[:5]: # On limite à 5 pour ne pas faire un mail trop long
+                for job in other_offers[:6]: 
+                    # Récupération sécurisée des sous-scores
+                    analysis = job.ai_analysis or {}
+                    s_tech = analysis.get("score_technical", "?")
+                    s_struct = analysis.get("score_structural", "?")
+                    
                     list_items += f"""
-                    <li style="margin-bottom: 10px;">
-                        <strong>{job.title}</strong> chez {job.company} <br>
-                        <span style="color: green;">Match: {job.match_score}%</span> 
-                        - <a href="{job.url}" style="text-decoration: none; color: #0066cc;">Voir l'offre 🔗</a>
+                    <li style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                        <div style="font-size: 14px;"><strong>{job.title}</strong> chez {job.company}</div>
+                        <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                            Match Global : <strong style="color: #0066cc;">{job.match_score}%</strong> 
+                            <span style="color: #999;">(Tech: {s_tech}% | Contrat: {s_struct}%)</span>
+                        </div>
+                        <div style="margin-top: 4px;">
+                            <a href="{job.url}" style="text-decoration: none; color: #0066cc; font-size: 12px;">👉 Voir l'offre</a>
+                        </div>
                     </li>
                     """
                 
                 other_jobs_html = f"""
                 <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-                <h3>📍 Autres opportunités détectées ({len(other_offers)}) :</h3>
-                <p>Ces offres pourraient aussi vous intéresser :</p>
-                <ul style="padding-left: 20px;">
+                <h3>📍 Autres opportunités ({len(other_offers)}) :</h3>
+                <ul style="padding-left: 0; list-style: none;">
                     {list_items}
                 </ul>
                 """
