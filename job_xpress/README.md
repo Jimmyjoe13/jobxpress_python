@@ -49,7 +49,6 @@ Elle transforme un simple formulaire de candidature en un pipeline complet : rec
 git clone [https://github.com/votre-repo/jobxpress.git](https://github.com/votre-repo/jobxpress.git)
 cd jobxpress/job_xpress
 3. Environnement Virtuel
-Bash
 
 # Windows
 python -m venv venv
@@ -64,8 +63,6 @@ Bash
 pip install -r requirements.txt
 5. Configuration (.env)
 Créez un fichier .env à la racine du dossier job_xpress et remplissez-le :
-
-Extrait de code
 
 # API Globale
 PYTHON_VERSION=3.10.0
@@ -82,7 +79,6 @@ RAPIDAPI_KEY=votre-cle-rapidapi
 BREVO_API_KEY=xkeysib-votre-cle-brevo
 SENDER_EMAIL=votre.email@valide-brevo.com
 6. Lancer le serveur local
-Bash
 
 python main.py
 Le serveur démarrera sur http://127.0.0.1:8000.
@@ -93,8 +89,6 @@ Un script de test est inclus pour simuler une requête Tally sans interface web.
 Assurez-vous que le serveur tourne (python main.py).
 
 Dans un autre terminal, lancez :
-
-Bash
 
 python test_local.py
 Observez les logs du serveur pour voir la magie opérer (Recherche -> Analyse -> PDF -> Email).
@@ -117,8 +111,11 @@ job_xpress/
 ├── main.py                # Point d'entrée FastAPI & Orchestrateur
 ├── requirements.txt       # Liste des dépendances
 └── test_local.py          # Script de simulation
-🌍 Déploiement (Render)
-Ce projet est configuré pour être déployé facilement sur Render (Free Tier).
+
+```
+
+## 🌍 Déploiement (Render)
+Ce projet est configuré pour être déployé facilement sur Render (Free Tier). 
 
 Poussez votre code sur GitHub.
 
@@ -132,7 +129,7 @@ Start Command : uvicorn main:app --host 0.0.0.0 --port $PORT.
 
 Ajoutez vos variables d'environnement dans le dashboard Render.
 
-🛡️ Licence
+### 🛡️ Licence
 Ce projet est sous licence MIT. Libre à vous de le modifier et de l'améliorer pour votre propre usage.
 
 Développé avec passion par [Votre Nom] - Architecte Growth Python.
