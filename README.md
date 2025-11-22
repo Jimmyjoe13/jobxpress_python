@@ -115,19 +115,19 @@ job_xpress/
 ```
 
 ## 🌍 Déploiement (Render)
-Ce projet est configuré pour être déployé facilement sur Render (Free Tier). 
+1. Ce projet est configuré pour être déployé facilement sur Render (Free Tier). 
 
-Poussez votre code sur GitHub.
+2. Poussez votre code sur GitHub.
 
-Créez un Web Service sur Render connecté à votre repo.
+3. Créez un Web Service sur Render connecté à votre repo.
 
-Root Directory : job_xpress.
+4. Root Directory : job_xpress.
 
-Build Command : pip install -r requirements.txt.
+5. Build Command : pip install -r requirements.txt.
 
-Start Command : uvicorn main:app --host 0.0.0.0 --port $PORT.
+6. Start Command : uvicorn main:app --host 0.0.0.0 --port $PORT.
 
-Ajoutez vos variables d'environnement dans le dashboard Render.
+7. Ajoutez vos variables d'environnement dans le dashboard Render.
 
 ### 🛡️ Licence
 Ce projet est sous licence MIT. Libre à vous de le modifier et de l'améliorer pour votre propre usage.
