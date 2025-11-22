@@ -1,4 +1,5 @@
 import asyncio
+import time
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from models.candidate import TallyWebhookPayload, CandidateProfile
 from services.search_engine import search_engine
@@ -6,13 +7,16 @@ from services.llm_engine import llm_engine
 from services.pdf_generator import pdf_generator
 from services.database import db_service
 from services.email_service import email_service
-from services.ocr_service import ocr_service  # <-- Import OCR
+from services.ocr_service import ocr_service
 from core.config import settings
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 
-# Déduplication basique
-PROCESSED_EVENTS = set()
+# --- DÉDUPLICATION INTELLIGENTE ---
+# Stocke { "email": timestamp }
+# Si un candidat resoumet avant 5 minutes (300s), on ignore.
+PROCESSED_EMAILS = {}
+COOLDOWN_SECONDS = 300 
 
 @app.get("/")
 def health_check():
@@ -22,7 +26,6 @@ def health_check():
 def health_check_head():
     return {}
 
-# --- FONCTION DE TRAITEMENT EN ARRIÈRE-PLAN ---
 async def process_application_task(payload: TallyWebhookPayload):
     event_id = payload.eventId
     print(f"\n🚀 [Background] Démarrage traitement Event ID: {event_id}")
@@ -30,15 +33,13 @@ async def process_application_task(payload: TallyWebhookPayload):
     try:
         # 1. PROFIL
         candidate = CandidateProfile.from_tally(payload)
-        print(f"👤 Candidat : {candidate.first_name} {candidate.last_name}")
+        print(f"👤 Candidat : {candidate.first_name} {candidate.last_name} ({candidate.email})")
 
-        # --- ETAPE OCR (CORRIGÉE) ---
+        # --- OCR ---
         if candidate.cv_url:
-            # Correction : appel direct avec await (sans to_thread)
             candidate.cv_text = await ocr_service.extract_text_from_cv(candidate.cv_url)
         else:
-            print("⚠️ Pas de CV fourni, on utilise uniquement les champs du formulaire.")
-        # ---------------------------
+            print("⚠️ Pas de CV fourni.")
 
         # 2. RECHERCHE
         raw_jobs = await search_engine.find_jobs(candidate)
@@ -55,19 +56,21 @@ async def process_application_task(payload: TallyWebhookPayload):
         
         for i in range(0, total_found, BATCH_SIZE):
             batch = raw_jobs[i : i + BATCH_SIZE]
-            print(f"🧠 Analyse lot {i+1}-{i+len(batch)} (sur {total_found})...")
+            print(f"🧠 Analyse lot {i+1}-{i+len(batch)}...")
             
             analyzed_batch = await llm_engine.analyze_offers_parallel(candidate, batch)
-            new_matches = [j for j in analyzed_batch if j.match_score > 0] 
+            
+            # Seuil à 1 pour garder les "non-écoles"
+            new_matches = [j for j in analyzed_batch if j.match_score > 0]
             valid_jobs.extend(new_matches)
             
-            print(f"   -> {len(new_matches)} offre(s) conservée(s) (non-école).")
+            print(f"   -> {len(new_matches)} offre(s) conservée(s).")
 
         if not valid_jobs:
-            print("⚠️ Aucune offre retenue (que des écoles détectées).")
+            print("⚠️ Aucune offre retenue (que des écoles).")
             return
 
-        # Tri final : Le meilleur score gagne, même si c'est un score de 40%
+        # Tri final
         valid_jobs.sort(key=lambda x: x.match_score, reverse=True)
 
         print("\n📊 PODIUM FINAL :")
@@ -83,7 +86,6 @@ async def process_application_task(payload: TallyWebhookPayload):
         pdf_path = pdf_generator.create_application_pdf(candidate, best_offer, letter_data.get("html_content", ""))
 
         if pdf_path:
-            # 5. SAUVEGARDE & ENVOI
             db_service.save_application(candidate, best_offer, pdf_path)
             email_service.send_application_email(candidate, best_offer, other_offers, pdf_path)
             print(f"✅ Cycle terminé avec succès pour {candidate.email}")
@@ -93,19 +95,44 @@ async def process_application_task(payload: TallyWebhookPayload):
         import traceback
         traceback.print_exc()
 
-# --- ENDPOINT API ---
 @app.post("/webhook/tally")
 async def receive_tally_webhook(payload: TallyWebhookPayload, background_tasks: BackgroundTasks):
-    if payload.eventId in PROCESSED_EVENTS:
-        print(f"♻️ Doublon détecté (Event {payload.eventId}), ignoré.")
-        return {"status": "ignored", "reason": "duplicate_event"}
-    
-    PROCESSED_EVENTS.add(payload.eventId)
+    """
+    Endpoint avec protection anti-doublon par EMAIL.
+    """
+    try:
+        # On extrait l'email AVANT de lancer le traitement lourd
+        # Pour faire propre, on utilise une méthode légère pour choper l'email
+        fields = {f.key: f.value for f in payload.data.fields}
+        # ID de l'email dans Tally (question_D7V1kj)
+        candidate_email = fields.get("question_D7V1kj", "unknown")
 
-    background_tasks.add_task(process_application_task, payload)
+        # --- VÉRIFICATION DOUBLON ---
+        current_time = time.time()
+        last_time = PROCESSED_EMAILS.get(candidate_email, 0)
 
-    print(f"📨 Webhook reçu (Event {payload.eventId}). Traitement lancé en arrière-plan.")
-    return {"status": "received", "message": "Processing started in background"}
+        if (current_time - last_time) < COOLDOWN_SECONDS:
+            print(f"⛔ Doublon bloqué pour {candidate_email} (Trop tôt, attend 5 min).")
+            return {"status": "ignored", "reason": "rate_limited"}
+        
+        # Mise à jour du timestamp
+        PROCESSED_EMAILS[candidate_email] = current_time
+
+        # Nettoyage du cache (simple) : si plus de 1000 entrées, on vide tout
+        if len(PROCESSED_EMAILS) > 1000:
+            PROCESSED_EMAILS.clear()
+
+        # Lancement
+        background_tasks.add_task(process_application_task, payload)
+
+        print(f"📨 Webhook reçu pour {candidate_email}. Traitement lancé.")
+        return {"status": "received", "message": "Processing started"}
+
+    except Exception as e:
+        # Si l'extraction de l'email plante, on accepte quand même par sécurité
+        print(f"⚠️ Erreur extraction email pour dédup : {e}")
+        background_tasks.add_task(process_application_task, payload)
+        return {"status": "received_fallback"}
 
 if __name__ == "__main__":
     import uvicorn
