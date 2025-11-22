@@ -85,7 +85,7 @@ class LLMEngine:
                 {"role": "system", "content": "Tu es un analyste JSON strict."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.0, # Zéro créativité pour le scoring
+            "temperature": 0.1, 
             "response_format": { "type": "json_object" }
         }
 
