@@ -36,7 +36,7 @@ class SearchEngine:
         }
 
     async def find_jobs(self, candidate: CandidateProfile, limit: int = 10) -> List[JobOffer]:
-        print(f"🔎 Recherche stricte : {candidate.job_title} ({candidate.contract_type}) - {candidate.work_type}")
+        print(f"🔎 Recherche élargie : {candidate.job_title} ({candidate.contract_type}) à {candidate.location}")
 
         # --- LANCEMENT PARALLÈLE ---
         task_jsearch = self._search_jsearch_strategy(candidate)
@@ -59,7 +59,7 @@ class SearchEngine:
                 unique_jobs.append(job)
                 seen_urls.add(job.url)
         
-        print(f"   ✨ Total unique avant filtrage : {len(unique_jobs)}")
+        print(f"   ✨ Total unique avant filtrage IA : {len(unique_jobs)}")
 
         # --- DEEP FETCHING ---
         if unique_jobs:
@@ -69,10 +69,10 @@ class SearchEngine:
         return unique_jobs
 
     # ==========================================
-    # STRATÉGIE JSEARCH (DURCIE)
+    # STRATÉGIE JSEARCH (ASSOUPLIE)
     # ==========================================
     async def _search_jsearch_strategy(self, candidate: CandidateProfile) -> List[JobOffer]:
-        # 1. Gestion des Synonymes
+        # 1. Synonymes
         base_title = candidate.job_title.lower()
         keywords = [candidate.job_title]
         for key, synonyms in JOB_SYNONYMS_LIST.items():
@@ -82,65 +82,59 @@ class SearchEngine:
         
         or_group = " OR ".join([f'"{k}"' for k in keywords])
         
-        # 2. FILTRAGE STRICT (Alternance vs Stage)
-        # On injecte les termes obligatoires dans la requête texte
+        # 2. Mots-clés Contrat (Positifs uniquement)
         contract_keywords = ""
         if candidate.contract_type == "Alternance":
-            contract_keywords = '("Alternance" OR "Apprentissage" OR "Contrat de professionnalisation")'
+            contract_keywords = '("Alternance" OR "Apprentissage" OR "Contrat Pro")'
         elif candidate.contract_type == "Stage":
             contract_keywords = '("Stage" OR "Internship")'
         
-        # 3. Exclusions
-        negatives = ""
-        if candidate.contract_type == "CDI": negatives = "-stage -alternance -freelance -apprenticeship"
-        if candidate.contract_type == "Alternance": negatives = "-stage -cdi -freelance"
-
-        # 4. Construction de la Requête Experte
-        # Ex: (Growth Hacker OR ...) (Alternance OR ...) Marseille -stage
-        query_expert = f"({or_group}) {contract_keywords} {candidate.location} {negatives}".strip()
+        # 3. Suppression des NEGATIVES (-stage -cdi...)
+        # C'est ici qu'on assouplit : on ne bannit plus rien, on filtre juste positivement.
         
-        # 5. Paramètres API de base
+        # 4. Requête Experte (Synonymes + Contrat + Lieu)
+        query_expert = f"({or_group}) {contract_keywords} {candidate.location}".strip()
+        
+        # 5. Paramètres Base
         base_params = {
             "query": query_expert,
             "page": "1", "num_pages": "1", "country": "fr"
         }
         
-        # --- APPLICATION DES FILTRES TECHNIQUES ---
-        
-        # A. Filtre Remote (JSearch a un paramètre dédié)
         if candidate.work_type == "Full Remote":
             base_params["remote_jobs_only"] = "true"
-            print("   👉 JSearch : Filtre Remote Only ACTIVÉ")
 
-        # B. Filtre Type de Contrat
-        jsearch_type = JSEARCH_TYPES_MAP.get(candidate.contract_type)
-        
-        print(f"   🔎 JSearch Query : {query_expert}")
+        print(f"   🔎 JSearch Query Expert : {query_expert}")
         
         jobs = []
         
-        # TENTATIVE 1 : Expert + Filtre Technique (Le top du top)
+        # TENTATIVE 1 : Expert + Filtre Technique JSearch
+        jsearch_type = JSEARCH_TYPES_MAP.get(candidate.contract_type)
         if jsearch_type:
             params = base_params.copy()
             params["job_type"] = jsearch_type
             jobs = await self._call_jsearch_api(params)
-            if jobs: print(f"      ✅ JSearch : Trouvé avec Tentative 1 (Strict)")
+            if jobs: print(f"      ✅ JSearch : Trouvé avec Tentative 1 (Strict + Filtre API)")
 
-        # TENTATIVE 2 : Expert Large (Si le filtre technique bug, on fait confiance aux mots-clés)
+        # TENTATIVE 2 : Expert Large (Sans filtre technique API)
         if not jobs:
             print("      ⚠️ JSearch Strict vide -> Tentative Large (Mots-clés seuls)...")
-            # On garde remote_jobs_only s'il est actif, mais on enlève job_type
+            # On garde les mots clés "Alternance" dans le texte, mais on enlève le filtre technique strict
             jobs = await self._call_jsearch_api(base_params)
             if jobs: print(f"      ✅ JSearch : Trouvé avec Tentative 2 (Large)")
 
-        # TENTATIVE 3 : SAUVETAGE (Query Simple + Mots clés Contrat)
+        # TENTATIVE 3 : SAUVETAGE ULTIME (Titre + Ville uniquement)
+        # Si on ne trouve rien avec "Alternance", on cherche tout le reste.
+        # L'IA filtrera si c'est vraiment pas bon, mais au moins on aura des résultats.
         if not jobs:
-            print("      ⚠️ JSearch Large vide -> Tentative Sauvetage...")
-            simple_query = f"{candidate.job_title} {contract_keywords} {candidate.location}"
+            print("      ⚠️ JSearch Large vide -> Tentative Sauvetage (Open Bar)...")
+            # On retire les mots clés de contrat
+            simple_query = f"{candidate.job_title} {candidate.location}"
             params_simple = base_params.copy()
             params_simple["query"] = simple_query
+            
             jobs = await self._call_jsearch_api(params_simple)
-            if jobs: print(f"      ✅ JSearch : Trouvé avec Tentative 3 (Simple)")
+            if jobs: print(f"      ✅ JSearch : Trouvé avec Tentative 3 (Sauvetage)")
             else: print("      ❌ Échec total JSearch.")
             
         return jobs
@@ -170,28 +164,28 @@ class SearchEngine:
         return clean
 
     # ==========================================
-    # STRATÉGIE ACTIVE JOBS
+    # STRATÉGIE ACTIVE JOBS (ASSOUPLIE)
     # ==========================================
     async def _search_active_jobs_db(self, candidate: CandidateProfile) -> List[JobOffer]:
         if not settings.RAPIDAPI_KEY: return []
 
-        titles_to_try = [candidate.job_title]
+        # On teste d'abord le titre précis, puis le titre générique
+        titles_to_try = []
         
-        # Si Alternance, on combine le titre avec le mot clé pour filtrer dès la recherche
+        # 1. Avec mention contrat (ex: "Growth Hacker Alternance")
         if candidate.contract_type == "Alternance":
-            titles_to_try = [f"{candidate.job_title} Alternance", f"{candidate.job_title} Apprentissage"]
-        elif candidate.contract_type == "Stage":
-            titles_to_try = [f"{candidate.job_title} Stage"]
+            titles_to_try.append(f"{candidate.job_title} Alternance")
+        
+        # 2. Titre seul (ex: "Growth Hacker") - Plus large
+        titles_to_try.append(candidate.job_title)
 
-        # Gestion du filtre Location pour le Remote (Active Jobs n'a pas de booléen)
         loc_filter = candidate.location
         if candidate.work_type == "Full Remote":
             loc_filter = "Remote" 
 
         print(f"   🔎 Active Jobs : Test {titles_to_try} à {loc_filter}...")
         
-        all_found_jobs = []
-        
+        all_found = []
         for title in titles_to_try:
             params = {
                 "title_filter": title,
@@ -199,23 +193,19 @@ class SearchEngine:
                 "limit": "10",
                 "offset": "0"
             }
-            
-            async with httpx.AsyncClient() as client:
-                try:
+            try:
+                async with httpx.AsyncClient() as client:
                     resp = await client.get(self.URL_ACTIVE_JOBS, headers=self.headers_active_jobs, params=params, timeout=10.0)
                     if resp.status_code == 200:
                         data = resp.json()
                         raw_list = data if isinstance(data, list) else data.get("jobs", [])
-                        parsed = self._parse_active_jobs_results(raw_list)
-                        if parsed:
-                            print(f"      ✅ Active Jobs : {len(parsed)} offres pour '{title}'")
-                            all_found_jobs.extend(parsed)
-                except Exception: pass
-
-            if len(all_found_jobs) > 0:
-                break
+                        if raw_list:
+                            all_found.extend(self._parse_active_jobs_results(raw_list))
+                            # Si on trouve avec le titre précis, on peut s'arrêter (optionnel)
+                            # break 
+            except: pass
             
-        return all_found_jobs
+        return all_found
 
     def _parse_active_jobs_results(self, raw_jobs: List[dict]) -> List[JobOffer]:
         clean = []
@@ -233,7 +223,7 @@ class SearchEngine:
         return clean
 
     # ==========================================
-    # DEEP FETCHING
+    # DEEP FETCHING (Commun)
     # ==========================================
     async def _enrich_jobs_with_full_content(self, offers: List[JobOffer]) -> List[JobOffer]:
         tasks = [self._fetch_single_url(offer) for offer in offers]
