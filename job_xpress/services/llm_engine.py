@@ -33,47 +33,44 @@ class LLMEngine:
         # 1. Données Web
         web_context = await web_search.get_company_reputation(offer.company)
 
-        # 2. Prompt Intelligent et IMPITOYABLE
-        # On injecte le CV complet et les règles strictes
+        # 2. Prompt "PONDÉRÉ" (Plus de tolérance)
         prompt = f"""
-        Tu es un expert en recrutement. Ton but est de filtrer les offres selon des critères STRICTS.
+        Tu es un expert en recrutement. Ton but est de classer les offres par pertinence.
 
-        ⚠️ CRITÈRES ÉLIMINATOIRES (KILLER CRITERIA) :
+        ⚠️ CRITÈRE ÉLIMINATOIRE UNIQUE (KILLER) -> SCORE 0 :
+        - Si l'entreprise est une ÉCOLE, un CFA, un BOOTCAMP ou un organisme de formation qui cherche des élèves/étudiants (formation payante ou financée).
+        - Exemples à bannir : "Rocket School", "OpenClassrooms", "Iscod", "Wall Street English".
+        -> Dans ce cas, mets IMPÉRATIVEMENT "match_probability": 0.
+
+        ⚠️ CRITÈRES DE PÉNALITÉ (MALUS) -> NE PAS METTRE 0 :
+        Si c'est une vraie entreprise mais que ça ne colle pas parfaitement :
         
-        1. TYPE DE CONTRAT : Le candidat veut "{candidate.contract_type}".
-           - Si l'offre est clairement un "Stage" (Internship) de courte durée (< 12 mois) alors que le candidat veut "Alternance" (Apprenticeship) -> SCORE 0.
-           - Si l'offre est un "CDI" alors que le candidat veut "Alternance" -> SCORE 0 (sauf si "CDI" est mentionné comme possible après alternance).
+        1. TYPE DE CONTRAT (Candidat veut : "{candidate.contract_type}") :
+           - Si l'offre est un Stage alors que le candidat veut Alternance : Applique un MALUS important (ex: Score max 40-50%), mais NE METS PAS 0.
+           - Si l'offre est un CDI alors que le candidat veut Alternance : MALUS moyen (Score max 60%).
            
-        2. MODE DE TRAVAIL : Le candidat veut "{candidate.work_type}".
-           - Si candidat = "Full Remote" et l'offre exige une présence sur site (Hybride/Présentiel) -> SCORE 0.
-           - Si candidat = "Présentiel" et l'offre est "Full Remote" -> Pénalité (mais pas 0, car adaptable).
-
-        3. TYPE D'ENTREPRISE :
-           - Si c'est une ÉCOLE, un CFA ou un organisme de formation qui cherche à vendre une formation (et non un emploi salarié) -> SCORE 0.
+        2. MODE DE TRAVAIL (Candidat veut : "{candidate.work_type}") :
+           - Si ça ne correspond pas (ex: Présentiel au lieu de Remote) : MALUS léger (Score max 70%).
 
         --- CONTEXTE ---
-        Infos Web Entreprise : {web_context}
+        Infos Web : {web_context}
         
-        --- OFFRE D'EMPLOI ---
+        --- OFFRE ---
         Entreprise : {offer.company}
         Titre : {offer.title}
-        Description : {offer.description[:2500]}... (tronqué)
+        Desc : {offer.description[:2500]}...
 
-        --- PROFIL CANDIDAT ---
-        Poste visé : {candidate.job_title}
-        Expérience : {candidate.experience_level}
+        --- CANDIDAT ---
+        Poste : {candidate.job_title}
         Contrat visé : {candidate.contract_type}
-        Mode de travail souhaité : {candidate.work_type}
-        
-        DÉTAILS DU CV (OCR) :
-        {candidate.cv_text[:3000] if candidate.cv_text else "Pas de CV analysé."}
+        CV (Extrait) : {candidate.cv_text[:2000] if candidate.cv_text else "Non fourni"}
 
-        Réponds UNIQUEMENT en JSON valide :
+        Réponds UNIQUEMENT en JSON :
         {{
             "match_probability": (int 0-100),
-            "reasoning": "Pourquoi ce score ? (Mentionne explicitement si le contrat ou le remote ne colle pas)",
-            "summary": "Résumé court de l'offre",
-            "company_type": "Entreprise" ou "École/Formation"
+            "reasoning": "Pourquoi ce score ? (Explique les malus)",
+            "summary": "Résumé en 1 phrase",
+            "company_type": "Entreprise" ou "École"
         }}
         """
 
@@ -88,7 +85,7 @@ class LLMEngine:
                 {"role": "system", "content": "Tu es un analyste JSON strict."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.0, # Rigueur maximale
+            "temperature": 0.4,
             "response_format": { "type": "json_object" }
         }
 
@@ -158,7 +155,7 @@ class LLMEngine:
         payload = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "Tu es un assistant JSON strict."},
+                {"role": "system", "content": "Tu es un assistant JSON sénior."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.7,

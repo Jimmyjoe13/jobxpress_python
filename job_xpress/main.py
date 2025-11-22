@@ -58,16 +58,16 @@ async def process_application_task(payload: TallyWebhookPayload):
             print(f"🧠 Analyse lot {i+1}-{i+len(batch)} (sur {total_found})...")
             
             analyzed_batch = await llm_engine.analyze_offers_parallel(candidate, batch)
-            new_matches = [j for j in analyzed_batch if j.match_score >= 50]
+            new_matches = [j for j in analyzed_batch if j.match_score > 0] 
             valid_jobs.extend(new_matches)
             
-            print(f"   -> {len(new_matches)} offre(s) pertinente(s) dans ce lot.")
+            print(f"   -> {len(new_matches)} offre(s) conservée(s) (non-école).")
 
         if not valid_jobs:
-            print("\n⚠️ Aucune offre pertinente après analyse complète.")
+            print("⚠️ Aucune offre retenue (que des écoles détectées).")
             return
 
-        # Tri final
+        # Tri final : Le meilleur score gagne, même si c'est un score de 40%
         valid_jobs.sort(key=lambda x: x.match_score, reverse=True)
 
         print("\n📊 PODIUM FINAL :")
