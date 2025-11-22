@@ -13,3 +13,4 @@ requests>=2.0.0
 ddgs>=2.0.0
 trafilatura>=1.6.0
 lxml_html_clean
+mistralai>=1.0.0

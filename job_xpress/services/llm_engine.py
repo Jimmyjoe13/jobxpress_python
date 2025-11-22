@@ -57,8 +57,13 @@ class LLMEngine:
         Titre : {offer.title}
         Desc : {offer.description[:1500]}...
 
-        --- CANDIDAT ---
-        Poste : {candidate.job_title} (Exp: {candidate.experience_level})
+        --- PROFIL CANDIDAT ---
+        Poste visé (déclaré) : {candidate.job_title}
+        Expérience (déclaré) : {candidate.experience_level}
+        Contrat visé : {candidate.contract_type}
+        
+        DÉTAILS DU CV (OCR) :
+        {candidate.cv_text[:4000] if candidate.cv_text else "Pas de CV analysé."}
 
         Réponds UNIQUEMENT en JSON :
         {{
@@ -118,8 +123,7 @@ class LLMEngine:
         
         CANDIDAT:
         - Nom: {candidate.first_name} {candidate.last_name}
-        - Poste actuel: {candidate.job_title}
-        - Expérience: {candidate.experience_level}
+        - Profil Complet (CV) : {candidate.cv_text[:3000] if candidate.cv_text else candidate.job_title}
         
         OFFRE CIBLE:
         - Entreprise: {offer.company}

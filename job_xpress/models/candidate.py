@@ -49,6 +49,7 @@ class CandidateProfile(BaseModel):
     experience_level: str
     location: str
     cv_url: Optional[str] = None
+    cv_text: Optional[str] = ""
     
     # Champs qui seront remplis par l'IA plus tard
     key_skills: List[str] = []
@@ -91,5 +92,6 @@ class CandidateProfile(BaseModel):
             contract_type=contract_clean,
             experience_level=exp_clean,
             location=fields_dict.get("question_4K2egY", "Paris"),
-            cv_url=cv_url
+            cv_url=cv_url,
+            cv_text=""
         )

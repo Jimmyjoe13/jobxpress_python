@@ -6,6 +6,7 @@ from services.pdf_generator import pdf_generator
 from services.database import db_service
 from services.email_service import email_service
 from core.config import settings
+from services.ocr_service import ocr_service
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 
@@ -33,6 +34,12 @@ async def process_application_task(payload: TallyWebhookPayload):
         # 1. PROFIL
         candidate = CandidateProfile.from_tally(payload)
         print(f"👤 Candidat : {candidate.first_name} {candidate.last_name}")
+
+        # --- NOUVEAU : ETAPE OCR ---
+        if candidate.cv_url:
+            candidate.cv_text = await asyncio.to_thread(ocr_service.extract_text_from_cv, candidate.cv_url)
+        else:
+            print("⚠️ Pas de CV fourni, on utilise uniquement les champs du formulaire.")
 
         # 2. RECHERCHE
         raw_jobs = await search_engine.find_jobs(candidate)

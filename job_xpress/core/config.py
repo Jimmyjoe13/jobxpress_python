@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     
     # IA & Search
     DEEPSEEK_API_KEY: str = ""
+    MISTRAL_API_KEY: str = ""
     RAPIDAPI_KEY: str = ""
 
     # Email (SMTP Gmail)
