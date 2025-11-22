@@ -16,7 +16,7 @@ CONTRACT_MAP = {
     "b1bd7297-85fe-467f-8f46-e541aff12900": "Stage"
 }
 
-# NOUVEAU : Mapping pour le mode de travail (Remote/Hybride/Présentiel)
+# Mapping pour le mode de travail
 WORK_TYPE_MAP = {
     "29694558-89d8-4dfa-973b-19506de2a1ad": "Full Remote",
     "74591379-f02b-4565-93f8-53d2251ec6ab": "Hybride",
@@ -53,15 +53,11 @@ class CandidateProfile(BaseModel):
     phone: Optional[str] = None
     job_title: str
     contract_type: str
-    work_type: str  # NOUVEAU CHAMP : Mode de travail
+    work_type: str
     experience_level: str
     location: str
     cv_url: Optional[str] = None
-    
-    # Champ rempli par l'OCR (Mistral)
     cv_text: Optional[str] = ""
-    
-    # Champs enrichis plus tard
     key_skills: List[str] = []
 
     @classmethod
@@ -71,7 +67,7 @@ class CandidateProfile(BaseModel):
         """
         fields_dict = {f.key: f.value for f in payload.data.fields}
 
-        # Helper pour extraire la valeur proprement (Tally met souvent les dropdowns dans des listes)
+        # Helper pour extraire la valeur proprement
         def get_val(key: str):
             val = fields_dict.get(key)
             if isinstance(val, list) and len(val) > 0 and isinstance(val[0], str):
@@ -87,23 +83,24 @@ class CandidateProfile(BaseModel):
         # Mapping des IDs
         contract_id = get_val("question_7NWEGz")
         exp_id = get_val("question_6Z7Po5")
-        work_id = get_val("question_Q7Je8X")  # ID du type d'emploi
+        work_id = get_val("question_Q7Je8X")
         
         # Conversion en valeurs lisibles
         contract_clean = CONTRACT_MAP.get(contract_id, "Non spécifié")
         exp_clean = EXPERIENCE_MAP.get(exp_id, "Non spécifié")
-        work_clean = WORK_TYPE_MAP.get(work_id, "Présentiel") # Valeur par défaut si non trouvé
+        work_clean = WORK_TYPE_MAP.get(work_id, "Présentiel")
 
         return cls(
-            first_name=fields_dict.get("question_l6NAep", "Inconnu"),
-            last_name=fields_dict.get("question_Y4ZO06", "Inconnu"),
-            email=fields_dict.get("question_D7V1kj", ""),
+            first_name=fields_dict.get("question_l6NAep") or "Inconnu",
+            last_name=fields_dict.get("question_Y4ZO06") or "Inconnu",
+            email=fields_dict.get("question_D7V1kj") or "",
             phone=fields_dict.get("question_RDz4Mp"),
-            job_title=fields_dict.get("question_a26zVy", "Non spécifié"),
+            job_title=fields_dict.get("question_a26zVy") or "Non spécifié",
             contract_type=contract_clean,
-            work_type=work_clean,  # On passe le nouveau champ
+            work_type=work_clean,
             experience_level=exp_clean,
-            location=fields_dict.get("question_4K2egY", "Paris"),
+            # MODIFICATION ICI : "France" par défaut au lieu de "Paris"
+            location=fields_dict.get("question_4K2egY") or "France",
             cv_url=cv_url,
-            cv_text="" # Initialisé vide, sera rempli par l'OCR
+            cv_text=""
         )
