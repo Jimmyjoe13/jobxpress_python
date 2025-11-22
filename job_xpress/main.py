@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from models.candidate import TallyWebhookPayload, CandidateProfile
 from services.search_engine import search_engine
