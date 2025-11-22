@@ -6,13 +6,12 @@ from services.llm_engine import llm_engine
 from services.pdf_generator import pdf_generator
 from services.database import db_service
 from services.email_service import email_service
+from services.ocr_service import ocr_service  # <-- Import OCR
 from core.config import settings
-from services.ocr_service import ocr_service
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 
-# Stockage mémoire simple pour dédoublonner les IDs récents (cache de 10 min idéalement)
-# Pour la prod, Supabase est mieux, mais ceci suffit pour stopper les retries immédiats de Tally
+# Déduplication basique
 PROCESSED_EVENTS = set()
 
 @app.get("/")
@@ -25,9 +24,6 @@ def health_check_head():
 
 # --- FONCTION DE TRAITEMENT EN ARRIÈRE-PLAN ---
 async def process_application_task(payload: TallyWebhookPayload):
-    """
-    C'est ici que tout le travail lourd se fait, sans bloquer Tally.
-    """
     event_id = payload.eventId
     print(f"\n🚀 [Background] Démarrage traitement Event ID: {event_id}")
 
@@ -36,11 +32,13 @@ async def process_application_task(payload: TallyWebhookPayload):
         candidate = CandidateProfile.from_tally(payload)
         print(f"👤 Candidat : {candidate.first_name} {candidate.last_name}")
 
-        # --- NOUVEAU : ETAPE OCR ---
+        # --- ETAPE OCR (CORRIGÉE) ---
         if candidate.cv_url:
-            candidate.cv_text = await asyncio.to_thread(ocr_service.extract_text_from_cv, candidate.cv_url)
+            # Correction : appel direct avec await (sans to_thread)
+            candidate.cv_text = await ocr_service.extract_text_from_cv(candidate.cv_url)
         else:
             print("⚠️ Pas de CV fourni, on utilise uniquement les champs du formulaire.")
+        # ---------------------------
 
         # 2. RECHERCHE
         raw_jobs = await search_engine.find_jobs(candidate)
@@ -57,23 +55,29 @@ async def process_application_task(payload: TallyWebhookPayload):
         
         for i in range(0, total_found, BATCH_SIZE):
             batch = raw_jobs[i : i + BATCH_SIZE]
-            print(f"🧠 Analyse lot {i+1}-{i+len(batch)}...")
+            print(f"🧠 Analyse lot {i+1}-{i+len(batch)} (sur {total_found})...")
             
             analyzed_batch = await llm_engine.analyze_offers_parallel(candidate, batch)
             new_matches = [j for j in analyzed_batch if j.match_score >= 50]
             valid_jobs.extend(new_matches)
+            
+            print(f"   -> {len(new_matches)} offre(s) pertinente(s) dans ce lot.")
 
         if not valid_jobs:
-            print("⚠️ Aucune offre pertinente après analyse.")
+            print("\n⚠️ Aucune offre pertinente après analyse complète.")
             return
 
         # Tri final
         valid_jobs.sort(key=lambda x: x.match_score, reverse=True)
 
+        print("\n📊 PODIUM FINAL :")
+        for j in valid_jobs[:3]:
+            print(f"   🥇 {j.match_score}% - {j.title} ({j.company})")
+
         # 4. SÉLECTION & LIVRABLES
         best_offer = valid_jobs[0]
         other_offers = valid_jobs[1:]
-        print(f"🏆 Gagnant : {best_offer.title} ({best_offer.company})")
+        print(f"\n🏆 GAGNANT : {best_offer.title} chez {best_offer.company}")
 
         letter_data = await llm_engine.generate_cover_letter(candidate, best_offer)
         pdf_path = pdf_generator.create_application_pdf(candidate, best_offer, letter_data.get("html_content", ""))
@@ -88,28 +92,18 @@ async def process_application_task(payload: TallyWebhookPayload):
         print(f"❌ CRASH Background Task : {str(e)}")
         import traceback
         traceback.print_exc()
-    finally:
-        # Nettoyage éventuel
-        pass
 
-# --- ENDPOINT API (Réponse Rapide) ---
+# --- ENDPOINT API ---
 @app.post("/webhook/tally")
 async def receive_tally_webhook(payload: TallyWebhookPayload, background_tasks: BackgroundTasks):
-    """
-    Reçoit la requête, valide, et lance le travail en fond.
-    Répond instantanément à Tally.
-    """
-    # 1. Déduplication basique
     if payload.eventId in PROCESSED_EVENTS:
         print(f"♻️ Doublon détecté (Event {payload.eventId}), ignoré.")
         return {"status": "ignored", "reason": "duplicate_event"}
     
     PROCESSED_EVENTS.add(payload.eventId)
 
-    # 2. Lancement de la tâche de fond
     background_tasks.add_task(process_application_task, payload)
 
-    # 3. Réponse immédiate (< 1s)
     print(f"📨 Webhook reçu (Event {payload.eventId}). Traitement lancé en arrière-plan.")
     return {"status": "received", "message": "Processing started in background"}
 
