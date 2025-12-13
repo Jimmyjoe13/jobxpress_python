@@ -12,13 +12,61 @@ JSEARCH_TYPES_MAP = {
     "CDI": "FULLTIME", "CDD": "CONTRACT", "Stage": "INTERN", "Alternance": "INTERN", "Freelance": "CONTRACT"
 }
 
+# LISTE ULTRA-ÉTENDUE DE SYNONYMES (Français/Anglais + Abréviations)
 JOB_SYNONYMS_LIST = {
-    "growth hacker": ["Growth Hacker", "Growth Marketer", "Traffic Manager", "Responsable Acquisition"],
-    "business developer": ["Business Developer", "BizDev", "Sales Manager", "Account Manager"],
-    "développeur": ["Développeur", "Developer", "Software Engineer", "Backend", "Fullstack"],
-    "data analyst": ["Data Analyst", "Data Scientist", "Business Analyst"],
-    "chef de projet": ["Chef de projet", "Project Manager", "Product Owner"],
-    "commercial": ["Commercial", "Vendeur", "Sales Representative"],
+    "growth hacker": [
+        "Growth Hacker", "Growth Marketer", "Traffic Manager", "Responsable Acquisition", 
+        "Head of Growth", "Digital Marketer", "Chargé de marketing digital", "SEO Manager", 
+        "Acquisition Specialist", "Demand Generation Manager", "Inbound Marketer"
+    ],
+    "business developer": [
+        "Business Developer", "BizDev", "Sales Manager", "Account Manager", 
+        "Chargé d'affaires", "Ingénieur commercial", "Commercial B2B", 
+        "Sales Development Representative", "SDR", "Business Development Representative", "BDR",
+        "Responsable commercial", "Technico-commercial", "Inside Sales", "Key Account Manager", "KAM"
+    ],
+    "développeur": [
+        "Développeur", "Developer", "Software Engineer", "Backend Developer", 
+        "Frontend Developer", "Fullstack Developer", "Ingénieur d'études", 
+        "Programmer", "Tech Lead", "DevOps", "Architecte Web", "Lead Developer"
+    ],
+    "data analyst": [
+        "Data Analyst", "Data Scientist", "Business Analyst", "Data Engineer", 
+        "Consultant Data", "Analytics Manager", "BI Analyst", "Machine Learning Engineer",
+        "Data Manager", "Chief Data Officer"
+    ],
+    "chef de projet": [
+        "Chef de projet", "Project Manager", "Product Owner", "Product Manager", 
+        "Scrum Master", "Consultant fonctionnel", "Chargé de mission", "Program Manager", 
+        "Delivery Manager", "Chef de projet digital", "Chef de projet MOA"
+    ],
+    "commercial": [
+        "Commercial", "Vendeur", "Sales Representative", "Négociateur", 
+        "Conseiller commercial", "Attaché commercial", "Directeur de clientèle",
+        "Responsable des ventes", "Agent commercial", "Sales Executive"
+    ],
+    "marketing": [
+        "Assistant Marketing", "Chargé de marketing", "Chef de produit", 
+        "Brand Manager", "Responsable Marketing", "Communication Officer",
+        "Social Media Manager", "Community Manager", "Content Manager", "Marketing Manager"
+    ],
+    "rh": [
+        "Chargé de recrutement", "Talent Acquisition", "Assistant RH", 
+        "Ressources Humaines", "HR Manager", "Gestionnaire Paie", 
+        "Recruteur", "HRBP", "Responsable RH", "Directeur des Ressources Humaines"
+    ],
+    "assistant": [
+        "Assistant", "Office Manager", "Secrétaire", "Assistant de direction",
+        "Assistant administratif", "Assistant polyvalent", "Clerc", "Assistant de gestion"
+    ],
+    "finance": [
+        "Contrôleur de gestion", "Comptable", "Auditeur", "Directeur Financier",
+        "DAF", "Trésorier", "Analyste financier", "Comptable fournisseurs", "Comptable clients"
+    ],
+    "communication": [
+        "Chargé de communication", "Responsable communication", "Attaché de presse",
+        "Directeur de la communication", "Chargé de relations publiques"
+    ]
 }
 
 class SearchEngine:
@@ -36,7 +84,7 @@ class SearchEngine:
         }
 
     async def find_jobs(self, candidate: CandidateProfile, limit: int = 10) -> List[JobOffer]:
-        print(f"🔎 Recherche élargie : {candidate.job_title} ({candidate.contract_type}) à {candidate.location}")
+        print(f"🔎 Recherche élargie (V3 - Tous Métiers) : {candidate.job_title} ({candidate.contract_type}) à {candidate.location}")
 
         # --- LANCEMENT PARALLÈLE ---
         task_jsearch = self._search_jsearch_strategy(candidate)
@@ -63,42 +111,46 @@ class SearchEngine:
 
         # --- DEEP FETCHING ---
         if unique_jobs:
-            print(f"   ⬇️ Deep Fetching : Extraction contenu pour {len(unique_jobs)} offres...")
-            unique_jobs = await self._enrich_jobs_with_full_content(unique_jobs)
+            # On limite le deep fetching à 25 pour être large mais performant
+            jobs_to_fetch = unique_jobs[:25]
+            print(f"   ⬇️ Deep Fetching : Extraction contenu pour {len(jobs_to_fetch)} offres...")
+            unique_jobs = await self._enrich_jobs_with_full_content(jobs_to_fetch)
 
         return unique_jobs
 
     # ==========================================
-    # STRATÉGIE JSEARCH (ASSOUPLIE)
+    # STRATÉGIE JSEARCH (VOLUME MAXIMISÉ)
     # ==========================================
     async def _search_jsearch_strategy(self, candidate: CandidateProfile) -> List[JobOffer]:
-        # 1. Synonymes
+        # 1. Synonymes Intelligents
         base_title = candidate.job_title.lower()
         keywords = [candidate.job_title]
+        
+        # On cherche la catégorie la plus proche
         for key, synonyms in JOB_SYNONYMS_LIST.items():
             if key in base_title:
                 keywords = synonyms
                 break
         
+        # Construction du groupe OR
         or_group = " OR ".join([f'"{k}"' for k in keywords])
         
-        # 2. Mots-clés Contrat (Positifs uniquement)
+        # 2. Mots-clés Contrat
         contract_keywords = ""
         if candidate.contract_type == "Alternance":
-            contract_keywords = '("Alternance" OR "Apprentissage" OR "Contrat Pro")'
+            contract_keywords = '("Alternance" OR "Apprentissage" OR "Contrat Pro" OR "Professionalisation")'
         elif candidate.contract_type == "Stage":
-            contract_keywords = '("Stage" OR "Internship")'
+            contract_keywords = '("Stage" OR "Internship" OR "Stagiaire")'
         
-        # 3. Suppression des NEGATIVES (-stage -cdi...)
-        # C'est ici qu'on assouplit : on ne bannit plus rien, on filtre juste positivement.
-        
-        # 4. Requête Experte (Synonymes + Contrat + Lieu)
+        # 3. Requête Experte
         query_expert = f"({or_group}) {contract_keywords} {candidate.location}".strip()
         
-        # 5. Paramètres Base
+        # 4. Paramètres (Volume : 2 pages)
         base_params = {
             "query": query_expert,
-            "page": "1", "num_pages": "1", "country": "fr"
+            "page": "1", 
+            "num_pages": "2",
+            "country": "fr"
         }
         
         if candidate.work_type == "Full Remote":
@@ -108,33 +160,36 @@ class SearchEngine:
         
         jobs = []
         
-        # TENTATIVE 1 : Expert + Filtre Technique JSearch
+        # TENTATIVE 1 : Expert + Filtre Technique
         jsearch_type = JSEARCH_TYPES_MAP.get(candidate.contract_type)
         if jsearch_type:
             params = base_params.copy()
             params["job_type"] = jsearch_type
             jobs = await self._call_jsearch_api(params)
-            if jobs: print(f"      ✅ JSearch : Trouvé avec Tentative 1 (Strict + Filtre API)")
+            if jobs: print(f"      ✅ JSearch : {len(jobs)} offres (Strict)")
 
-        # TENTATIVE 2 : Expert Large (Sans filtre technique API)
-        if not jobs:
-            print("      ⚠️ JSearch Strict vide -> Tentative Large (Mots-clés seuls)...")
-            # On garde les mots clés "Alternance" dans le texte, mais on enlève le filtre technique strict
-            jobs = await self._call_jsearch_api(base_params)
-            if jobs: print(f"      ✅ JSearch : Trouvé avec Tentative 2 (Large)")
+        # TENTATIVE 2 : Expert Large (Si < 5 offres)
+        if len(jobs) < 5:
+            print("      ⚠️ Peu de résultats -> Tentative Large (Mots-clés seuls)...")
+            jobs_large = await self._call_jsearch_api(base_params)
+            
+            # Fusion intelligente
+            existing_urls = {j.url for j in jobs}
+            for j in jobs_large:
+                if j.url not in existing_urls:
+                    jobs.append(j)
+            print(f"      ✅ JSearch : Total {len(jobs)} offres après élargissement")
 
-        # TENTATIVE 3 : SAUVETAGE ULTIME (Titre + Ville uniquement)
-        # Si on ne trouve rien avec "Alternance", on cherche tout le reste.
-        # L'IA filtrera si c'est vraiment pas bon, mais au moins on aura des résultats.
+        # TENTATIVE 3 : SAUVETAGE (Simple)
         if not jobs:
-            print("      ⚠️ JSearch Large vide -> Tentative Sauvetage (Open Bar)...")
-            # On retire les mots clés de contrat
+            print("      ⚠️ Toujours vide -> Tentative Sauvetage (Simple)...")
             simple_query = f"{candidate.job_title} {candidate.location}"
             params_simple = base_params.copy()
             params_simple["query"] = simple_query
+            params_simple["num_pages"] = "2"
             
             jobs = await self._call_jsearch_api(params_simple)
-            if jobs: print(f"      ✅ JSearch : Trouvé avec Tentative 3 (Sauvetage)")
+            if jobs: print(f"      ✅ JSearch : {len(jobs)} offres (Sauvetage)")
             else: print("      ❌ Échec total JSearch.")
             
         return jobs
@@ -164,34 +219,43 @@ class SearchEngine:
         return clean
 
     # ==========================================
-    # STRATÉGIE ACTIVE JOBS (ASSOUPLIE)
+    # STRATÉGIE ACTIVE JOBS (OPTIMISÉE)
     # ==========================================
     async def _search_active_jobs_db(self, candidate: CandidateProfile) -> List[JobOffer]:
         if not settings.RAPIDAPI_KEY: return []
 
-        # On teste d'abord le titre précis, puis le titre générique
-        titles_to_try = []
+        base_title = candidate.job_title.lower()
+        titles_to_try = [candidate.job_title]
         
-        # 1. Avec mention contrat (ex: "Growth Hacker Alternance")
+        # Ajout des synonymes pertinents (Max 3 pour Active Jobs)
+        for key, synonyms in JOB_SYNONYMS_LIST.items():
+            if key in base_title:
+                for syn in synonyms: 
+                    if syn.lower() != base_title and syn not in titles_to_try:
+                        titles_to_try.append(syn)
+                break
+        
+        # On limite à 4 titres à tester max
+        titles_to_try = titles_to_try[:4]
+
+        # Combinaison Contrat
+        final_titles = []
         if candidate.contract_type == "Alternance":
-            titles_to_try.append(f"{candidate.job_title} Alternance")
-        
-        # 2. Titre seul (ex: "Growth Hacker") - Plus large
-        titles_to_try.append(candidate.job_title)
+            for t in titles_to_try:
+                final_titles.append(f"{t} Alternance")
+                # On ne garde pas le titre nu ici pour éviter trop de bruit non-alternance sur Active Jobs
+        else:
+            final_titles = titles_to_try
 
-        loc_filter = candidate.location
-        if candidate.work_type == "Full Remote":
-            loc_filter = "Remote" 
-
-        print(f"   🔎 Active Jobs : Test {titles_to_try} à {loc_filter}...")
+        loc_filter = "Remote" if candidate.work_type == "Full Remote" else candidate.location
+        print(f"   🔎 Active Jobs : Test {final_titles} à {loc_filter}...")
         
         all_found = []
-        for title in titles_to_try:
+        for title in final_titles:
             params = {
                 "title_filter": title,
                 "location_filter": loc_filter,
-                "limit": "10",
-                "offset": "0"
+                "limit": "10", "offset": "0"
             }
             try:
                 async with httpx.AsyncClient() as client:
@@ -201,8 +265,6 @@ class SearchEngine:
                         raw_list = data if isinstance(data, list) else data.get("jobs", [])
                         if raw_list:
                             all_found.extend(self._parse_active_jobs_results(raw_list))
-                            # Si on trouve avec le titre précis, on peut s'arrêter (optionnel)
-                            # break 
             except: pass
             
         return all_found
@@ -223,7 +285,7 @@ class SearchEngine:
         return clean
 
     # ==========================================
-    # DEEP FETCHING (Commun)
+    # DEEP FETCHING
     # ==========================================
     async def _enrich_jobs_with_full_content(self, offers: List[JobOffer]) -> List[JobOffer]:
         tasks = [self._fetch_single_url(offer) for offer in offers]
