@@ -1,6 +1,9 @@
 import httpx
 from mistralai import Mistral
 from core.config import settings
+from core.logging_config import get_logger
+
+logger = get_logger()
 
 class OCRService:
     def __init__(self):
@@ -14,13 +17,13 @@ class OCRService:
         Télécharge le CV et utilise Mistral OCR pour extraire le texte.
         """
         if not self.client:
-            print("⚠️ Clé API Mistral manquante. OCR ignoré.")
+            logger.warning("⚠️ Clé API Mistral manquante. OCR ignoré.")
             return ""
 
         if not cv_url:
             return ""
 
-        print(f"👁️ Analyse OCR en cours pour : {cv_url}")
+        logger.info(f"👁️ Analyse OCR: {cv_url[:50]}...")
 
         try:
             # 1. Envoi de l'URL directement à Mistral OCR
@@ -39,11 +42,11 @@ class OCRService:
             for page in ocr_response.pages:
                 full_text += page.markdown + "\n\n"
             
-            print(f"✅ OCR Terminé ({len(full_text)} caractères extraits)")
+            logger.info(f"✅ OCR terminé: {len(full_text)} caractères")
             return full_text
 
         except Exception as e:
-            print(f"❌ Erreur OCR Mistral : {e}")
+            logger.exception(f"❌ Erreur OCR Mistral: {e}")
             return ""
 
 ocr_service = OCRService()

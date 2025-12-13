@@ -1,5 +1,8 @@
 from ddgs import DDGS
 import asyncio
+from core.logging_config import get_logger
+
+logger = get_logger()
 
 class WebSearchService:
     def __init__(self):
@@ -13,7 +16,7 @@ class WebSearchService:
         # Ex: "Media-Start activité avis employé" -> remonte Glassdoor, LinkedIn, Societe.com
         query = f"{company_name} activité secteur avis employé recrutement"
         
-        print(f"🌐 Vérification web pour : {company_name}...")
+        logger.debug(f"🌐 Vérification web: {company_name}")
         
         try:
             results = await asyncio.to_thread(self._search_sync, query)
@@ -26,7 +29,7 @@ class WebSearchService:
             return context
 
         except Exception as e:
-            print(f"⚠️ Erreur recherche web ({company_name}): {e}")
+            logger.warning(f"⚠️ Erreur recherche web ({company_name}): {e}")
             return "Recherche indisponible."
 
     def _search_sync(self, query):

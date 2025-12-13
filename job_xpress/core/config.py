@@ -1,8 +1,12 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from functools import lru_cache
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "JobXpress API"
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.1.0"
+    
+    # Environnement
+    ENVIRONMENT: str = "development"  # development, staging, production
     
     # Base de données
     SUPABASE_URL: str = ""
@@ -14,9 +18,24 @@ class Settings(BaseSettings):
     RAPIDAPI_KEY: str = ""
 
     # Email (SMTP Gmail)
-    BREVO_API_KEY: str = ""  # <-- Nouvelle variable
-    SENDER_EMAIL: str = ""   # <-- L'email validé sur Brevo
+    BREVO_API_KEY: str = ""
+    SENDER_EMAIL: str = ""
+    
+    # --- Robustness Settings ---
+    REQUEST_TIMEOUT: int = 30
+    MAX_RETRIES: int = 3
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = ""  # Vide = pas de fichier log
+    
+    # Monitoring (Sentry)
+    SENTRY_DSN: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Retourne une instance cachée des settings."""
+    return Settings()
 
 settings = Settings()

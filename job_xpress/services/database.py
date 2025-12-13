@@ -1,7 +1,10 @@
 from supabase import create_client, Client
 from core.config import settings
+from core.logging_config import get_logger
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
+
+logger = get_logger()
 
 class DatabaseService:
     def __init__(self):
@@ -12,15 +15,16 @@ class DatabaseService:
         if self.url and self.key:
             try:
                 self.client = create_client(self.url, self.key)
+                logger.info("✅ Connexion Supabase établie")
             except Exception as e:
-                print(f"⚠️ Erreur connexion Supabase : {e}")
+                logger.error(f"⚠️ Erreur connexion Supabase: {e}")
 
     def save_application(self, candidate: CandidateProfile, offer: JobOffer, pdf_path: str):
         """
         Sauvegarde le candidat et sa candidature.
         """
         if not self.client:
-            print("⚠️ Supabase non configuré (Pas de sauvegarde).")
+            logger.warning("⚠️ Supabase non configuré")
             return
 
         try:
@@ -58,9 +62,9 @@ class DatabaseService:
             }
             
             self.client.table("applications").insert(app_data).execute()
-            print(f"💾 Sauvegarde Supabase réussie pour {candidate.email} -> {offer.company}")
+            logger.info(f"💾 Sauvegarde Supabase: {candidate.email} -> {offer.company}")
 
         except Exception as e:
-            print(f"❌ Erreur Sauvegarde Supabase : {e}")
+            logger.exception(f"❌ Erreur Supabase: {e}")
 
 db_service = DatabaseService()

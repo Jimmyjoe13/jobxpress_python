@@ -1,7 +1,10 @@
 import os
-from xhtml2pdf import pisa  # <-- Nouvelle librairie
+from xhtml2pdf import pisa
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
+from core.logging_config import get_logger
+
+logger = get_logger()
 
 class PDFGenerator:
     def __init__(self):
@@ -95,7 +98,7 @@ class PDFGenerator:
         </html>
         """
 
-        print(f"🖨️  Génération du PDF (xhtml2pdf) : {filepath}")
+        logger.info(f"🖨️ Génération PDF: {filepath}")
         
         try:
             # Ouverture du fichier en mode binaire pour écriture
@@ -105,13 +108,14 @@ class PDFGenerator:
 
             # Vérification des erreurs
             if pisa_status.err:
-                print(f"❌ Erreur xhtml2pdf : {pisa_status.err}")
+                logger.error(f"❌ Erreur xhtml2pdf: {pisa_status.err}")
                 return None
             
+            logger.info(f"✅ PDF créé: {filepath}")
             return filepath
 
         except Exception as e:
-            print(f"❌ Exception lors de la création du PDF : {e}")
+            logger.exception(f"❌ Exception PDF: {e}")
             return None
 
 pdf_generator = PDFGenerator()

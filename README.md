@@ -1,6 +1,6 @@
-# 🚀 JobXpress - L'Assistant de Candidature IA
+# 🚀 JobXpress v1.1.0 - L'Assistant de Candidature IA
 
-JobXpress est une application d'automatisation intelligente (Growth Engineering) conçue pour révolutionner la recherche d'emploi. 
+JobXpress est une application d'automatisation intelligente (Growth Engineering) conçue pour révolutionner la recherche d'emploi.
 
 Elle transforme un simple formulaire de candidature en un pipeline complet : recherche d'offres multi-sources, filtrage "anti-bullshit" par IA, rédaction de lettres de motivation ultra-personnalisées et envoi automatique par email.
 
@@ -8,43 +8,57 @@ Elle transforme un simple formulaire de candidature en un pipeline complet : rec
 
 ## ✨ Fonctionnalités Clés
 
-* **📥 Acquisition** : Réception des données candidat via Webhook (Tally, Typeform...).
-* **🕵️‍♂️ Recherche Multi-Sourcing** :
-    * Agrégation d'offres via **JSearch** (Google Jobs) et **Active Jobs DB**.
-    * Stratégie de recherche résiliente (Cascade : Expert -> Large -> Simple).
-* **🧠 Intelligence Artificielle (DeepSeek)** :
-    * **Deep Fetching** : Analyse du contenu complet des pages carrières (pas juste le résumé).
-    * **Filtre Anti-École** : Vérification de la e-réputation (DuckDuckGo) pour exclure les fausses offres (formations déguisées).
-    * **Scoring** : Classement des offres par pertinence (0-100%).
-* **✍️ Rédaction & PDF** : Génération d'une lettre de motivation HTML convertie en PDF professionnel.
-* **💾 Base de Données** : Sauvegarde des profils et historiques dans **Supabase** (PostgreSQL).
-* **📧 Notification** : Envoi d'un email enrichi (Top 1 + autres opportunités) via l'API **Brevo**.
+- **📥 Acquisition** : Réception des données candidat via Webhook (Tally, Typeform...).
+- **🕵️‍♂️ Recherche Multi-Sourcing** :
+  - Agrégation d'offres via **JSearch** (Google Jobs) et **Active Jobs DB**.
+  - Stratégie de recherche résiliente (Cascade : Expert -> Large -> Simple).
+- **🧠 Intelligence Artificielle (DeepSeek)** :
+  - **Deep Fetching** : Analyse du contenu complet des pages carrières (pas juste le résumé).
+  - **Filtre Anti-École** : Vérification de la e-réputation (DuckDuckGo) pour exclure les fausses offres (formations déguisées).
+  - **Scoring** : Classement des offres par pertinence (0-100%).
+  - **Fallback Heuristique** : Mode dégradé si l'IA est indisponible.
+- **✍️ Rédaction & PDF** : Génération d'une lettre de motivation HTML convertie en PDF professionnel.
+- **💾 Base de Données** : Sauvegarde des profils et historiques dans **Supabase** (PostgreSQL).
+- **📧 Notification** : Envoi d'un email enrichi (Top 1 + autres opportunités) via l'API **Brevo**.
+
+### 🛡️ Robustesse (v1.1.0)
+
+- **Retry Pattern** : Tentatives automatiques sur échecs réseau (tenacity).
+- **Circuit Breaker** : Protection contre les services défaillants.
+- **Rate Limiting** : Protection anti-abus (10 req/min par IP).
+- **Logging Structuré** : Logs JSON pour production, colorés pour dev.
+- **Health Checks** : Endpoint `/health` avec vérification des dépendances.
+- **Monitoring Sentry** : Intégration optionnelle pour le suivi d'erreurs.
 
 ---
 
 ## 🛠️ Stack Technique
 
-* **Langage** : Python 3.10+
-* **Framework API** : FastAPI
-* **IA / LLM** : DeepSeek (via API)
-* **Scraping & Search** : `trafilatura`, `httpx`, `ddgs` (DuckDuckGo)
-* **Base de données** : Supabase
-* **Emailing** : Brevo API (Port 443)
-* **PDF** : `xhtml2pdf`
-* **Déploiement** : Compatible Render / Railway / Docker
+- **Langage** : Python 3.10+
+- **Framework API** : FastAPI
+- **IA / LLM** : DeepSeek (via API)
+- **OCR CV** : Mistral OCR
+- **Scraping & Search** : `trafilatura`, `httpx`, `ddgs` (DuckDuckGo)
+- **Base de données** : Supabase
+- **Emailing** : Brevo API (Port 443)
+- **PDF** : `xhtml2pdf`
+- **Robustesse** : `tenacity` (retry), `slowapi` (rate limit), `sentry-sdk` (monitoring)
+- **Déploiement** : Compatible Render / Railway / Docker
 
 ---
 
 ## 🚀 Installation & Démarrage
 
 ### 1. Prérequis
-* Python 3.10 ou supérieur installé.
-* Un compte **Supabase** (URL + Key).
-* Une clé API **DeepSeek**.
-* Une clé API **RapidAPI** (pour JSearch et Active Jobs DB).
-* Une clé API **Brevo** (pour l'envoi d'emails).
+
+- Python 3.10 ou supérieur installé.
+- Un compte **Supabase** (URL + Key).
+- Une clé API **DeepSeek**.
+- Une clé API **RapidAPI** (pour JSearch et Active Jobs DB).
+- Une clé API **Brevo** (pour l'envoi d'emails).
 
 ### 2. Cloner le projet
+
 ```bash
 git clone [https://github.com/votre-repo/jobxpress.git](https://github.com/votre-repo/jobxpress.git)
 cd jobxpress/job_xpress
@@ -115,7 +129,8 @@ job_xpress/
 ```
 
 ## 🌍 Déploiement (Render)
-1. **Ce projet est configuré pour être déployé facilement sur Render (Free Tier)**. 
+
+1. **Ce projet est configuré pour être déployé facilement sur Render (Free Tier)**.
 
 2. **Poussez votre code sur GitHub**.
 
@@ -130,6 +145,7 @@ job_xpress/
 7. **Ajoutez vos variables d'environnement dans le dashboard Render**.
 
 ### 🛡️ Licence
+
 Ce projet est sous licence MIT. Libre à vous de le modifier et de l'améliorer pour votre propre usage.
 
 ---

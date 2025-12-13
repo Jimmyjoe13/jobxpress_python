@@ -3,8 +3,17 @@ import asyncio
 import trafilatura
 from typing import List, Any
 from core.config import settings
+from core.logging_config import get_logger
+from core.retry import resilient_get, CircuitBreaker
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
+
+# Logger structuré
+logger = get_logger()
+
+# Circuit breakers pour les APIs
+jsearch_circuit = CircuitBreaker(failure_threshold=5, recovery_timeout=120)
+active_jobs_circuit = CircuitBreaker(failure_threshold=5, recovery_timeout=120)
 
 # --- 1. CONFIGURATION ---
 
@@ -84,7 +93,7 @@ class SearchEngine:
         }
 
     async def find_jobs(self, candidate: CandidateProfile, limit: int = 10) -> List[JobOffer]:
-        print(f"🔎 Recherche élargie (V3 - Tous Métiers) : {candidate.job_title} ({candidate.contract_type}) à {candidate.location}")
+        logger.info(f"🔎 Recherche: {candidate.job_title} ({candidate.contract_type}) à {candidate.location}")
 
         # --- LANCEMENT PARALLÈLE ---
         task_jsearch = self._search_jsearch_strategy(candidate)
@@ -95,7 +104,7 @@ class SearchEngine:
         jobs_jsearch = results[0]
         jobs_active = results[1]
         
-        print(f"   📊 Bilan : {len(jobs_jsearch)} via JSearch | {len(jobs_active)} via Active Jobs")
+        logger.info(f"📊 Bilan: {len(jobs_jsearch)} JSearch | {len(jobs_active)} Active Jobs")
 
         # --- FUSION ---
         all_jobs = jobs_jsearch + jobs_active
@@ -107,13 +116,13 @@ class SearchEngine:
                 unique_jobs.append(job)
                 seen_urls.add(job.url)
         
-        print(f"   ✨ Total unique avant filtrage IA : {len(unique_jobs)}")
+        logger.info(f"✨ Total unique: {len(unique_jobs)}")
 
         # --- DEEP FETCHING ---
         if unique_jobs:
             # On limite le deep fetching à 25 pour être large mais performant
             jobs_to_fetch = unique_jobs[:25]
-            print(f"   ⬇️ Deep Fetching : Extraction contenu pour {len(jobs_to_fetch)} offres...")
+            logger.info(f"⬇️ Deep Fetching: {len(jobs_to_fetch)} offres")
             unique_jobs = await self._enrich_jobs_with_full_content(jobs_to_fetch)
 
         return unique_jobs
@@ -156,7 +165,7 @@ class SearchEngine:
         if candidate.work_type == "Full Remote":
             base_params["remote_jobs_only"] = "true"
 
-        print(f"   🔎 JSearch Query Expert : {query_expert}")
+        logger.debug(f"JSearch Query: {query_expert}")
         
         jobs = []
         
@@ -166,11 +175,11 @@ class SearchEngine:
             params = base_params.copy()
             params["job_type"] = jsearch_type
             jobs = await self._call_jsearch_api(params)
-            if jobs: print(f"      ✅ JSearch : {len(jobs)} offres (Strict)")
+            if jobs: logger.info(f"✅ JSearch: {len(jobs)} offres (Strict)")
 
         # TENTATIVE 2 : Expert Large (Si < 5 offres)
         if len(jobs) < 5:
-            print("      ⚠️ Peu de résultats -> Tentative Large (Mots-clés seuls)...")
+            logger.info("⚠️ Peu de résultats -> Tentative Large")
             jobs_large = await self._call_jsearch_api(base_params)
             
             # Fusion intelligente
@@ -178,30 +187,41 @@ class SearchEngine:
             for j in jobs_large:
                 if j.url not in existing_urls:
                     jobs.append(j)
-            print(f"      ✅ JSearch : Total {len(jobs)} offres après élargissement")
+            logger.info(f"✅ JSearch: Total {len(jobs)} offres (élargi)")
 
         # TENTATIVE 3 : SAUVETAGE (Simple)
         if not jobs:
-            print("      ⚠️ Toujours vide -> Tentative Sauvetage (Simple)...")
+            logger.warning("⚠️ JSearch vide -> Tentative Sauvetage")
             simple_query = f"{candidate.job_title} {candidate.location}"
             params_simple = base_params.copy()
             params_simple["query"] = simple_query
             params_simple["num_pages"] = "2"
             
             jobs = await self._call_jsearch_api(params_simple)
-            if jobs: print(f"      ✅ JSearch : {len(jobs)} offres (Sauvetage)")
-            else: print("      ❌ Échec total JSearch.")
+            if jobs: logger.info(f"✅ JSearch: {len(jobs)} offres (Sauvetage)")
+            else: logger.error("❌ Échec total JSearch")
             
         return jobs
 
     async def _call_jsearch_api(self, params: dict) -> List[JobOffer]:
-        if not settings.RAPIDAPI_KEY: return self._get_mock_jobs()
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.get(self.URL_JSEARCH, headers=self.headers_jsearch, params=params, timeout=20.0)
-                if resp.status_code != 200: return []
+        if not settings.RAPIDAPI_KEY: 
+            return self._get_mock_jobs()
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                # Utilisation du retry pattern avec circuit breaker
+                resp = await jsearch_circuit.call(
+                    resilient_get,
+                    client, 
+                    self.URL_JSEARCH, 
+                    headers=self.headers_jsearch, 
+                    params=params, 
+                    timeout=settings.REQUEST_TIMEOUT
+                )
                 return self._parse_jsearch_results(resp.json().get("data", []))
-            except Exception: return []
+        except Exception as e:
+            logger.warning(f"JSearch API error: {e}")
+            return []
 
     def _parse_jsearch_results(self, raw_jobs: List[Any]) -> List[JobOffer]:
         clean = []
@@ -248,7 +268,7 @@ class SearchEngine:
             final_titles = titles_to_try
 
         loc_filter = "Remote" if candidate.work_type == "Full Remote" else candidate.location
-        print(f"   🔎 Active Jobs : Test {final_titles} à {loc_filter}...")
+        logger.debug(f"Active Jobs: Test {final_titles} à {loc_filter}")
         
         all_found = []
         for title in final_titles:
@@ -259,13 +279,20 @@ class SearchEngine:
             }
             try:
                 async with httpx.AsyncClient() as client:
-                    resp = await client.get(self.URL_ACTIVE_JOBS, headers=self.headers_active_jobs, params=params, timeout=10.0)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        raw_list = data if isinstance(data, list) else data.get("jobs", [])
-                        if raw_list:
-                            all_found.extend(self._parse_active_jobs_results(raw_list))
-            except: pass
+                    resp = await active_jobs_circuit.call(
+                        resilient_get,
+                        client,
+                        self.URL_ACTIVE_JOBS, 
+                        headers=self.headers_active_jobs, 
+                        params=params, 
+                        timeout=settings.REQUEST_TIMEOUT
+                    )
+                    data = resp.json()
+                    raw_list = data if isinstance(data, list) else data.get("jobs", [])
+                    if raw_list:
+                        all_found.extend(self._parse_active_jobs_results(raw_list))
+            except Exception as e:
+                logger.debug(f"Active Jobs query failed for {title}: {e}")
             
         return all_found
 

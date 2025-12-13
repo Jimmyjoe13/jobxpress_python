@@ -3,8 +3,11 @@ import base64
 import os
 from typing import List
 from core.config import settings
+from core.logging_config import get_logger
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
+
+logger = get_logger()
 
 class EmailService:
     API_URL = "https://api.brevo.com/v3/smtp/email"
@@ -18,7 +21,7 @@ class EmailService:
         Envoie l'email avec le PDF du Top 1 et la liste des autres offres pertinentes.
         """
         if not self.api_key:
-            print("⚠️ Clé API Brevo manquante. Email non envoyé.")
+            logger.warning("⚠️ Clé API Brevo manquante. Email non envoyé.")
             return
 
         try:
@@ -111,11 +114,11 @@ class EmailService:
                 response = client.post(self.API_URL, json=payload, headers=headers)
                 
                 if response.status_code in [200, 201]:
-                    print(f"✅ Email envoyé via Brevo à {candidate.email} !")
+                    logger.info(f"✅ Email envoyé à {candidate.email}")
                 else:
-                    print(f"❌ Erreur Brevo : {response.text}")
+                    logger.error(f"❌ Erreur Brevo: {response.text}")
 
         except Exception as e:
-            print(f"❌ Exception Email : {str(e)}")
+            logger.exception(f"❌ Exception Email: {e}")
 
 email_service = EmailService()

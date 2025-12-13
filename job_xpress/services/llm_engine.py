@@ -3,9 +3,17 @@ import json
 import asyncio
 from typing import List, Dict, Any
 from core.config import settings
+from core.logging_config import get_logger
+from core.retry import resilient_post, CircuitBreaker
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 from services.web_search import web_search
+
+# Logger structuré
+logger = get_logger()
+
+# Circuit breaker pour DeepSeek
+deepseek_circuit = CircuitBreaker(failure_threshold=3, recovery_timeout=180)
 
 class LLMEngine:
     API_URL = "https://api.deepseek.com/v1/chat/completions"
@@ -17,7 +25,7 @@ class LLMEngine:
         """
         Analyse toutes les offres en parallèle avec le nouveau scoring expert.
         """
-        print(f"🧠 Analyse IA Expert + Web pour {len(offers)} offres...")
+        logger.info(f"🧠 Analyse IA Expert pour {len(offers)} offres")
         
         tasks = [self._analyze_single_offer(candidate, offer) for offer in offers]
         analyzed_offers = await asyncio.gather(*tasks)
@@ -122,9 +130,49 @@ class LLMEngine:
                 offer.ai_analysis = data 
                 
             except Exception as e:
-                print(f"⚠️ Erreur IA sur '{offer.title}': {e}")
-                offer.match_score = 0
-                offer.ai_analysis = {"error": str(e)}
+                logger.warning(f"⚠️ Erreur IA sur '{offer.title}': {e}")
+                # Fallback: scoring heuristique
+                return self._fallback_scoring(candidate, offer)
+        
+        return offer
+    
+    def _fallback_scoring(self, candidate: CandidateProfile, offer: JobOffer) -> JobOffer:
+        """
+        Scoring heuristique sans IA en cas d'échec DeepSeek.
+        Permet de continuer le traitement même si l'IA est down.
+        """
+        logger.info(f"🔄 Fallback scoring pour: {offer.title}")
+        
+        score = 40  # Base
+        
+        # +20 si le titre correspond
+        if candidate.job_title.lower() in offer.title.lower():
+            score += 20
+        elif any(word in offer.title.lower() for word in candidate.job_title.lower().split()):
+            score += 10
+        
+        # +15 si même localisation
+        if candidate.location.lower() in (offer.location or "").lower():
+            score += 15
+        
+        # +10 si remote et candidat veut remote
+        if offer.is_remote and candidate.work_type == "Full Remote":
+            score += 10
+        
+        # Détection école basique (mots-clés)
+        school_keywords = ["formation", "école", "cfa", "campus", "academy", "bootcamp"]
+        desc_lower = (offer.description or "").lower()
+        if any(kw in desc_lower for kw in school_keywords):
+            score = max(score - 30, 0)
+        
+        offer.match_score = min(score, 75)  # Cap à 75 sans IA
+        offer.ai_analysis = {
+            "mode": "fallback_heuristic",
+            "reasoning": "Score basé sur heuristiques (IA indisponible)",
+            "score_technical": score,
+            "score_structural": score,
+            "score_experience": score
+        }
         
         return offer
 
@@ -132,7 +180,7 @@ class LLMEngine:
         """
         Génère la lettre de motivation en utilisant les détails du CV (OCR).
         """
-        print(f"✍️  Rédaction de la lettre pour : {offer.title} chez {offer.company}...")
+        logger.info(f"✍️ Rédaction lettre pour: {offer.title} chez {offer.company}")
         
         prompt = f"""
         Tu es un expert en recrutement. Rédige une lettre de motivation personnalisée et percutante.
@@ -191,7 +239,10 @@ class LLMEngine:
                 response.raise_for_status()
                 return json.loads(response.json()['choices'][0]['message']['content'])
             except Exception as e:
-                print(f"❌ Erreur Génération Lettre : {e}")
-                return {"html_content": "<p>Erreur de génération (Délai dépassé).</p>", "strategic_advice": "Réessayez."}
+                logger.exception(f"❌ Erreur Génération Lettre: {e}")
+                return {
+                    "html_content": f"<p>Madame, Monsieur,</p><p>Je me permets de vous adresser ma candidature pour le poste de {offer.title} au sein de {offer.company}.</p><p>Mon profil de {candidate.job_title} avec une expérience {candidate.experience_level} correspond aux exigences de ce poste.</p><p>Je reste à votre disposition pour un entretien.</p><p>Cordialement,<br/>{candidate.first_name} {candidate.last_name}</p>",
+                    "strategic_advice": "Lettre générée en mode fallback. Personnalisez-la avant envoi."
+                }
 
 llm_engine = LLMEngine()
