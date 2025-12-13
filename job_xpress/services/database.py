@@ -1,6 +1,7 @@
 from supabase import create_client, Client
 from core.config import settings
 from core.logging_config import get_logger
+from core.exceptions import DatabaseError, DatabaseConnectionError, DatabaseQueryError
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 

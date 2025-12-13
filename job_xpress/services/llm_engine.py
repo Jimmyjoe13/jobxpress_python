@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 from core.config import settings
 from core.logging_config import get_logger
 from core.retry import resilient_post, CircuitBreaker
+from core.exceptions import LLMError, LLMTimeoutError, LLMResponseError, LLMQuotaError
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 from services.web_search import web_search
@@ -129,9 +130,20 @@ class LLMEngine:
                 # On stocke les détails pour l'affichage dans l'email
                 offer.ai_analysis = data 
                 
+            except httpx.TimeoutException as e:
+                logger.warning(f"⚠️ Timeout IA sur '{offer.title}'")
+                return self._fallback_scoring(candidate, offer)
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    logger.warning(f"⚠️ Quota DeepSeek dépassé")
+                else:
+                    logger.warning(f"⚠️ Erreur HTTP DeepSeek: {e.response.status_code}")
+                return self._fallback_scoring(candidate, offer)
+            except json.JSONDecodeError as e:
+                logger.warning(f"⚠️ Réponse LLM invalide pour '{offer.title}'")
+                return self._fallback_scoring(candidate, offer)
             except Exception as e:
                 logger.warning(f"⚠️ Erreur IA sur '{offer.title}': {e}")
-                # Fallback: scoring heuristique
                 return self._fallback_scoring(candidate, offer)
         
         return offer
@@ -238,11 +250,24 @@ class LLMEngine:
                 )
                 response.raise_for_status()
                 return json.loads(response.json()['choices'][0]['message']['content'])
+            except httpx.TimeoutException:
+                logger.error(f"❌ Timeout génération lettre")
+                return self._generate_fallback_letter(candidate, offer)
+            except httpx.HTTPStatusError as e:
+                logger.error(f"❌ Erreur HTTP génération lettre: {e.response.status_code}")
+                return self._generate_fallback_letter(candidate, offer)
+            except json.JSONDecodeError:
+                logger.error(f"❌ Réponse JSON invalide pour lettre")
+                return self._generate_fallback_letter(candidate, offer)
             except Exception as e:
                 logger.exception(f"❌ Erreur Génération Lettre: {e}")
-                return {
-                    "html_content": f"<p>Madame, Monsieur,</p><p>Je me permets de vous adresser ma candidature pour le poste de {offer.title} au sein de {offer.company}.</p><p>Mon profil de {candidate.job_title} avec une expérience {candidate.experience_level} correspond aux exigences de ce poste.</p><p>Je reste à votre disposition pour un entretien.</p><p>Cordialement,<br/>{candidate.first_name} {candidate.last_name}</p>",
-                    "strategic_advice": "Lettre générée en mode fallback. Personnalisez-la avant envoi."
-                }
+                return self._generate_fallback_letter(candidate, offer)
+    
+    def _generate_fallback_letter(self, candidate: CandidateProfile, offer: JobOffer) -> Dict[str, str]:
+        """Génère une lettre basique en cas d'échec de l'IA."""
+        return {
+            "html_content": f"<p>Madame, Monsieur,</p><p>Je me permets de vous adresser ma candidature pour le poste de {offer.title} au sein de {offer.company}.</p><p>Mon profil de {candidate.job_title} avec une expérience {candidate.experience_level} correspond aux exigences de ce poste.</p><p>Je reste à votre disposition pour un entretien.</p><p>Cordialement,<br/>{candidate.first_name} {candidate.last_name}</p>",
+            "strategic_advice": "Lettre générée en mode fallback. Personnalisez-la avant envoi."
+        }
 
 llm_engine = LLMEngine()

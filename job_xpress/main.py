@@ -28,6 +28,8 @@ from services.ocr_service import ocr_service
 from services.cache_service import cache_service
 from core.config import settings
 from core.logging_config import setup_logging, get_logger
+from core.error_handlers import register_exception_handlers
+from core.exceptions import DuplicateRequestError
 
 # --- INITIALISATION LOGGING ---
 logger = setup_logging(
@@ -87,6 +89,9 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- ENREGISTREMENT DES HANDLERS D'EXCEPTIONS ---
+register_exception_handlers(app)
 
 # --- CONFIGURATION DEDUPLICATION ---
 COOLDOWN_SECONDS = 300  # 5 minutes

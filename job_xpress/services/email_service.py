@@ -4,6 +4,7 @@ import os
 from typing import List
 from core.config import settings
 from core.logging_config import get_logger
+from core.exceptions import EmailError, EmailSendError
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 
@@ -116,8 +117,12 @@ class EmailService:
                 if response.status_code in [200, 201]:
                     logger.info(f"✅ Email envoyé à {candidate.email}")
                 else:
-                    logger.error(f"❌ Erreur Brevo: {response.text}")
+                    logger.error(f"❌ Erreur Brevo [{response.status_code}]: {response.text[:200]}")
 
+        except httpx.TimeoutException:
+            logger.error(f"❌ Timeout envoi email à {candidate.email}")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"❌ Erreur HTTP Brevo [{e.response.status_code}]")
         except Exception as e:
             logger.exception(f"❌ Exception Email: {e}")
 

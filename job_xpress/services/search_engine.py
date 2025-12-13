@@ -5,6 +5,7 @@ from typing import List, Any
 from core.config import settings
 from core.logging_config import get_logger
 from core.retry import resilient_get, CircuitBreaker
+from core.exceptions import SearchError, SearchTimeoutError, SearchAPIError
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 
@@ -219,6 +220,12 @@ class SearchEngine:
                     timeout=settings.REQUEST_TIMEOUT
                 )
                 return self._parse_jsearch_results(resp.json().get("data", []))
+        except httpx.TimeoutException as e:
+            logger.warning(f"JSearch timeout: {e}")
+            return []  # Graceful degradation
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"JSearch HTTP error: {e.response.status_code}")
+            return []
         except Exception as e:
             logger.warning(f"JSearch API error: {e}")
             return []
@@ -291,6 +298,10 @@ class SearchEngine:
                     raw_list = data if isinstance(data, list) else data.get("jobs", [])
                     if raw_list:
                         all_found.extend(self._parse_active_jobs_results(raw_list))
+            except httpx.TimeoutException:
+                logger.debug(f"Active Jobs timeout for {title}")
+            except httpx.HTTPStatusError as e:
+                logger.debug(f"Active Jobs HTTP error for {title}: {e.response.status_code}")
             except Exception as e:
                 logger.debug(f"Active Jobs query failed for {title}: {e}")
             

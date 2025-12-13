@@ -2,6 +2,7 @@ import httpx
 from mistralai import Mistral
 from core.config import settings
 from core.logging_config import get_logger
+from core.exceptions import OCRError, OCRTimeoutError
 
 logger = get_logger()
 
@@ -45,8 +46,11 @@ class OCRService:
             logger.info(f"✅ OCR terminé: {len(full_text)} caractères")
             return full_text
 
+        except TimeoutError as e:
+            logger.error(f"❌ Timeout OCR Mistral")
+            return ""  # Graceful degradation
         except Exception as e:
             logger.exception(f"❌ Erreur OCR Mistral: {e}")
-            return ""
+            return ""  # Graceful degradation - ne pas bloquer le pipeline
 
 ocr_service = OCRService()

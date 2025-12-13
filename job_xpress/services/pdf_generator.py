@@ -3,6 +3,7 @@ from xhtml2pdf import pisa
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 from core.logging_config import get_logger
+from core.exceptions import PDFError, PDFGenerationError
 
 logger = get_logger()
 
