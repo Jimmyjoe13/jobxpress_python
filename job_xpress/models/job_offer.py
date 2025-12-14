@@ -13,6 +13,7 @@ class JobOffer(BaseModel):
     date_posted: Optional[str] = None
     contract_type: Optional[str] = None
     is_remote: bool = False
+    work_type: Optional[str] = None  # "Full Remote", "Hybride", "Présentiel" ou None
     
     # --- Champs pour l'IA (Nouveau) ---
     match_score: int = 0  # 0 à 100

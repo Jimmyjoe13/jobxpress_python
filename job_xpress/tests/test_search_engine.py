@@ -4,7 +4,7 @@ Tests pour le moteur de recherche.
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from models.candidate import CandidateProfile
+from models.candidate import CandidateProfile, WorkType
 from models.job_offer import JobOffer
 from services.search_engine import SearchEngine, JOB_SYNONYMS_LIST, JSEARCH_TYPES_MAP
 
@@ -51,7 +51,7 @@ class TestSearchEngine:
             email="jean@test.com",
             job_title="Growth Hacker",
             contract_type="CDI",
-            work_type="Full Remote",
+            work_type=WorkType.FULL_REMOTE,
             experience_level="Confirmé",
             location="Paris"
         )
@@ -192,7 +192,7 @@ class TestSearchStrategies:
             email="test@test.com",
             job_title="Growth Hacker",
             contract_type="CDI",
-            work_type="Full Remote",
+            work_type=WorkType.FULL_REMOTE,
             location="Paris"
         )
         
@@ -227,3 +227,134 @@ class TestSearchStrategies:
                     # Les deux sources doivent être appelées
                     assert mock_jsearch.called
                     assert mock_active.called
+
+
+class TestWorkTypeFiltering:
+    """Tests pour le filtrage par type de travail."""
+    
+    @pytest.fixture
+    def search_engine(self):
+        return SearchEngine()
+    
+    @pytest.mark.asyncio
+    async def test_full_remote_adds_filter(self, search_engine):
+        """Full Remote active le filtre remote_jobs_only."""
+        candidate = CandidateProfile(
+            first_name="Test",
+            last_name="User",
+            email="test@test.com",
+            job_title="Developer",
+            work_type=WorkType.FULL_REMOTE,
+            location="Paris"
+        )
+        
+        with patch.object(search_engine, '_call_jsearch_api', new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = []
+            
+            await search_engine._search_jsearch_strategy(candidate)
+            
+            # Vérifier que remote_jobs_only est dans les params
+            call_args = mock_call.call_args[0][0]
+            assert call_args.get("remote_jobs_only") == "true"
+    
+    @pytest.mark.asyncio
+    async def test_tous_no_remote_filter(self, search_engine):
+        """WorkType.TOUS ne filtre pas par remote."""
+        candidate = CandidateProfile(
+            first_name="Test",
+            last_name="User",
+            email="test@test.com",
+            job_title="Developer",
+            work_type=WorkType.TOUS,
+            location="Paris"
+        )
+        
+        with patch.object(search_engine, '_call_jsearch_api', new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = []
+            
+            await search_engine._search_jsearch_strategy(candidate)
+            
+            # Vérifier que remote_jobs_only n'est PAS dans les params
+            call_args = mock_call.call_args[0][0]
+            assert "remote_jobs_only" not in call_args
+    
+    @pytest.mark.asyncio
+    async def test_hybride_adds_keywords(self, search_engine):
+        """Hybride ajoute des mots-clés à la requête."""
+        candidate = CandidateProfile(
+            first_name="Test",
+            last_name="User",
+            email="test@test.com",
+            job_title="Developer",
+            work_type=WorkType.HYBRIDE,
+            location="Paris"
+        )
+        
+        # Retourner des résultats pour éviter les tentatives de sauvetage
+        mock_job = JobOffer(
+            title="Developer",
+            company="Corp",
+            description="Test",
+            url="https://example.com"
+        )
+        
+        with patch.object(search_engine, '_call_jsearch_api', new_callable=AsyncMock) as mock_call:
+            mock_call.return_value = [mock_job] * 5  # Assez de résultats
+            
+            await search_engine._search_jsearch_strategy(candidate)
+            
+            # Vérifier que le mot-clé Hybride est dans la query de la première tentative
+            first_call_args = mock_call.call_args_list[0][0][0]
+            assert "Hybride" in first_call_args.get("query", "")
+    
+    def test_parse_jsearch_detects_remote(self, search_engine):
+        """Le parsing détecte correctement les offres remote."""
+        raw_jobs = [
+            {
+                "job_title": "Developer",
+                "employer_name": "Corp",
+                "job_description": "Description",
+                "job_apply_link": "https://example.com",
+                "job_is_remote": True
+            }
+        ]
+        
+        jobs = search_engine._parse_jsearch_results(raw_jobs)
+        
+        assert len(jobs) == 1
+        assert jobs[0].work_type == "Full Remote"
+        assert jobs[0].is_remote is True
+    
+    def test_parse_jsearch_detects_hybride(self, search_engine):
+        """Le parsing détecte les offres hybrides via description."""
+        raw_jobs = [
+            {
+                "job_title": "Developer",
+                "employer_name": "Corp",
+                "job_description": "Poste hybride avec 2 jours de télétravail",
+                "job_apply_link": "https://example.com",
+                "job_is_remote": False
+            }
+        ]
+        
+        jobs = search_engine._parse_jsearch_results(raw_jobs)
+        
+        assert len(jobs) == 1
+        assert jobs[0].work_type == "Hybride"
+    
+    def test_parse_jsearch_detects_presentiel(self, search_engine):
+        """Le parsing détecte les offres présentiel par défaut."""
+        raw_jobs = [
+            {
+                "job_title": "Developer",
+                "employer_name": "Corp",
+                "job_description": "Poste en bureau à Paris",
+                "job_apply_link": "https://example.com",
+                "job_is_remote": False
+            }
+        ]
+        
+        jobs = search_engine._parse_jsearch_results(raw_jobs)
+        
+        assert len(jobs) == 1
+        assert jobs[0].work_type == "Présentiel"

@@ -58,6 +58,7 @@ def sample_tally_payload() -> dict:
 @pytest.fixture
 def sample_candidate_data() -> dict:
     """Données de candidat pour tests directs."""
+    from models.candidate import WorkType
     return {
         "first_name": "Marie",
         "last_name": "Martin",
@@ -65,7 +66,7 @@ def sample_candidate_data() -> dict:
         "phone": "0687654321",
         "job_title": "Data Analyst",
         "contract_type": "CDI",
-        "work_type": "Hybride",
+        "work_type": WorkType.HYBRIDE,
         "experience_level": "Confirmé",
         "location": "Lyon"
     }

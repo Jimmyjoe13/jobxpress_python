@@ -6,7 +6,7 @@ from core.config import settings
 from core.logging_config import get_logger
 from core.retry import resilient_get, CircuitBreaker
 from core.exceptions import SearchError, SearchTimeoutError, SearchAPIError
-from models.candidate import CandidateProfile
+from models.candidate import CandidateProfile, WorkType
 from models.job_offer import JobOffer
 
 # Logger structuré
@@ -163,8 +163,20 @@ class SearchEngine:
             "country": "fr"
         }
         
-        if candidate.work_type == "Full Remote":
-            base_params["remote_jobs_only"] = "true"
+        # Filtrage par type de travail (amélioré)
+        match candidate.work_type:
+            case WorkType.FULL_REMOTE:
+                base_params["remote_jobs_only"] = "true"
+            case WorkType.HYBRIDE:
+                # Ajouter un mot-clé hybride à la requête
+                query_expert += ' ("Hybride" OR "Hybrid" OR "Télétravail partiel")'
+                base_params["query"] = query_expert
+            case WorkType.PRESENTIEL:
+                # Pas de filtre remote, mais on peut exclure les remote-only
+                base_params["remote_jobs_only"] = "false"
+            case WorkType.TOUS | _:
+                # Aucun filtre = recherche tous les types
+                pass
 
         logger.debug(f"JSearch Query: {query_expert}")
         
@@ -234,6 +246,19 @@ class SearchEngine:
         clean = []
         for item in raw_jobs:
             if not isinstance(item, dict): continue
+            
+            # Détection du work_type à partir des données
+            is_remote = item.get("job_is_remote") is True
+            description = (item.get("job_description") or "").lower()
+            
+            # Logique de détection du work_type
+            if is_remote:
+                work_type = "Full Remote"
+            elif any(kw in description for kw in ["hybride", "hybrid", "télétravail partiel", "2 jours", "3 jours"]):
+                work_type = "Hybride"
+            else:
+                work_type = "Présentiel"
+            
             clean.append(JobOffer(
                 title=item.get("job_title", "Sans titre"),
                 company=item.get("employer_name", "Entreprise inconnue"),
@@ -241,7 +266,8 @@ class SearchEngine:
                 description=item.get("job_description", "")[:1000],
                 url=item.get("job_apply_link") or item.get("job_google_link") or "#",
                 contract_type=item.get("job_employment_type"),
-                is_remote=item.get("job_is_remote") is True
+                is_remote=is_remote,
+                work_type=work_type
             ))
         return clean
 
@@ -274,7 +300,14 @@ class SearchEngine:
         else:
             final_titles = titles_to_try
 
-        loc_filter = "Remote" if candidate.work_type == "Full Remote" else candidate.location
+        # Filtrage localisation selon le type de travail
+        match candidate.work_type:
+            case WorkType.FULL_REMOTE:
+                loc_filter = "Remote"
+            case WorkType.HYBRIDE:
+                loc_filter = f"{candidate.location} Hybrid"
+            case _:
+                loc_filter = candidate.location
         logger.debug(f"Active Jobs: Test {final_titles} à {loc_filter}")
         
         all_found = []

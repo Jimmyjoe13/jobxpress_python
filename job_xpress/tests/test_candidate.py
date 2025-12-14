@@ -10,7 +10,8 @@ from models.candidate import (
     sanitize_text,
     EXPERIENCE_MAP,
     CONTRACT_MAP,
-    WORK_TYPE_MAP
+    WORK_TYPE_MAP,
+    WorkType
 )
 
 
@@ -148,7 +149,7 @@ class TestCandidateProfileValidation:
         
         assert candidate.location == "France"
         assert candidate.contract_type == "Non spécifié"
-        assert candidate.work_type == "Présentiel"
+        assert candidate.work_type == WorkType.TOUS  # Défaut: recherche tous les types
         assert candidate.cv_text == ""
     
     def test_cv_url_validation(self):
@@ -259,3 +260,53 @@ class TestEdgeCases:
         # Vérifier que le nom contient des caractères Unicode
         assert len(candidate.first_name) > 0
         assert "lo" in candidate.first_name.lower()  # Partie commune
+
+
+class TestWorkTypeEnum:
+    """Tests pour le nouvel Enum WorkType."""
+    
+    def test_all_values_exist(self):
+        """Vérifie que les 4 valeurs de l'enum existent."""
+        assert WorkType.FULL_REMOTE.value == "Full Remote"
+        assert WorkType.HYBRIDE.value == "Hybride"
+        assert WorkType.PRESENTIEL.value == "Présentiel"
+        assert WorkType.TOUS.value == "Tous"
+    
+    def test_from_tally_id_full_remote(self):
+        """Vérifie la conversion de l'ID Tally Full Remote."""
+        assert WorkType.from_tally_id("29694558-89d8-4dfa-973b-19506de2a1ad") == WorkType.FULL_REMOTE
+    
+    def test_from_tally_id_hybride(self):
+        """Vérifie la conversion de l'ID Tally Hybride."""
+        assert WorkType.from_tally_id("74591379-f02b-4565-93f8-53d2251ec6ab") == WorkType.HYBRIDE
+    
+    def test_from_tally_id_presentiel(self):
+        """Vérifie la conversion de l'ID Tally Présentiel."""
+        assert WorkType.from_tally_id("4f646aeb-c80a-4acf-b772-786f64834a8e") == WorkType.PRESENTIEL
+    
+    def test_from_tally_id_none_returns_tous(self):
+        """IMPORTANT: Aucune sélection retourne TOUS (recherche tous les types)."""
+        assert WorkType.from_tally_id(None) == WorkType.TOUS
+    
+    def test_from_tally_id_unknown_returns_tous(self):
+        """Un ID inconnu retourne TOUS."""
+        assert WorkType.from_tally_id("unknown-id") == WorkType.TOUS
+    
+    def test_from_tally_id_empty_string_returns_tous(self):
+        """Une chaîne vide retourne TOUS."""
+        assert WorkType.from_tally_id("") == WorkType.TOUS
+    
+    def test_enum_is_string_compatible(self):
+        """Vérifie que l'enum est compatible avec les strings (héritage str)."""
+        assert WorkType.FULL_REMOTE == "Full Remote"
+        assert WorkType.HYBRIDE == "Hybride"
+    
+    def test_candidate_default_work_type_is_tous(self):
+        """Vérifie que le work_type par défaut d'un candidat est TOUS."""
+        candidate = CandidateProfile(
+            first_name="Test",
+            last_name="User",
+            email="test@test.com",
+            job_title="Developer"
+        )
+        assert candidate.work_type == WorkType.TOUS

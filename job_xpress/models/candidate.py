@@ -3,11 +3,41 @@ Modèles de données pour les candidats avec validation renforcée.
 Inclut la protection contre les injections et la sanitization des entrées.
 """
 import re
+from enum import Enum
 from typing import List, Optional, Any
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
-# --- 1. Dictionnaires de Mapping (Tally IDs -> Valeurs lisibles) ---
+# --- 1. Enum WorkType pour le type d'emploi ---
+
+class WorkType(str, Enum):
+    """
+    Type de travail souhaité par le candidat.
+    TOUS est la valeur par défaut quand aucune préférence n'est spécifiée.
+    """
+    FULL_REMOTE = "Full Remote"
+    HYBRIDE = "Hybride"
+    PRESENTIEL = "Présentiel"
+    TOUS = "Tous"  # Recherche tous les types (défaut)
+    
+    @classmethod
+    def from_tally_id(cls, tally_id: Optional[str]) -> "WorkType":
+        """
+        Convertit l'ID Tally en WorkType.
+        Retourne TOUS si l'ID est None ou inconnu (comportement optionnel).
+        """
+        if not tally_id:
+            return cls.TOUS
+        
+        mapping = {
+            "29694558-89d8-4dfa-973b-19506de2a1ad": cls.FULL_REMOTE,
+            "74591379-f02b-4565-93f8-53d2251ec6ab": cls.HYBRIDE,
+            "4f646aeb-c80a-4acf-b772-786f64834a8e": cls.PRESENTIEL,
+        }
+        return mapping.get(tally_id, cls.TOUS)
+
+
+# --- 2. Dictionnaires de Mapping (Tally IDs -> Valeurs lisibles) ---
 
 EXPERIENCE_MAP = {
     "df23bccc-d7ea-4f63-a91b-cff4f63b5369": "Junior",
@@ -90,7 +120,7 @@ class CandidateProfile(BaseModel):
     phone: Optional[str] = Field(None, max_length=20, description="Numéro de téléphone FR")
     job_title: str = Field(..., min_length=2, max_length=200, description="Poste recherché")
     contract_type: str = Field(default="Non spécifié", max_length=50)
-    work_type: str = Field(default="Présentiel", max_length=50)
+    work_type: WorkType = Field(default=WorkType.TOUS, description="Type de travail souhaité")
     experience_level: str = Field(default="Non spécifié", max_length=50)
     location: str = Field(default="France", max_length=100, description="Localisation souhaitée")
     cv_url: Optional[str] = Field(None, max_length=500, description="URL du CV uploadé")
@@ -206,7 +236,8 @@ class CandidateProfile(BaseModel):
         # Conversion en valeurs lisibles
         contract_clean = CONTRACT_MAP.get(contract_id, "Non spécifié") if contract_id else "Non spécifié"
         exp_clean = EXPERIENCE_MAP.get(exp_id, "Non spécifié") if exp_id else "Non spécifié"
-        work_clean = WORK_TYPE_MAP.get(work_id, "Présentiel") if work_id else "Présentiel"
+        # Utilise l'Enum WorkType - retourne TOUS si aucune sélection
+        work_type_enum = WorkType.from_tally_id(work_id)
 
         return cls(
             first_name=fields_dict.get("question_l6NAep") or "Inconnu",
@@ -215,7 +246,7 @@ class CandidateProfile(BaseModel):
             phone=fields_dict.get("question_RDz4Mp"),
             job_title=fields_dict.get("question_a26zVy") or "Non spécifié",
             contract_type=contract_clean,
-            work_type=work_clean,
+            work_type=work_type_enum,
             experience_level=exp_clean,
             location=fields_dict.get("question_4K2egY") or "France",
             cv_url=cv_url,

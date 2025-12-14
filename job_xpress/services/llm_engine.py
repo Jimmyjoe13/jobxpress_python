@@ -6,7 +6,7 @@ from core.config import settings
 from core.logging_config import get_logger
 from core.retry import resilient_post, CircuitBreaker
 from core.exceptions import LLMError, LLMTimeoutError, LLMResponseError, LLMQuotaError
-from models.candidate import CandidateProfile
+from models.candidate import CandidateProfile, WorkType
 from models.job_offer import JobOffer
 from services.web_search import web_search
 
@@ -167,9 +167,23 @@ class LLMEngine:
         if candidate.location.lower() in (offer.location or "").lower():
             score += 15
         
-        # +10 si remote et candidat veut remote
-        if offer.is_remote and candidate.work_type == "Full Remote":
-            score += 10
+        # Scoring work_type amélioré avec toutes les combinaisons
+        offer_work_type = offer.work_type or ("Full Remote" if offer.is_remote else None)
+        match (candidate.work_type, offer_work_type):
+            case (WorkType.FULL_REMOTE, "Full Remote"):
+                score += 15  # Match parfait
+            case (WorkType.HYBRIDE, "Hybride"):
+                score += 15  # Match parfait
+            case (WorkType.HYBRIDE, "Full Remote"):
+                score += 10  # Compatible (remote ok pour hybride)
+            case (WorkType.PRESENTIEL, None) | (WorkType.PRESENTIEL, "Présentiel"):
+                score += 10  # Présumé présentiel
+            case (WorkType.TOUS, _):
+                score += 5  # Neutre, pas de préférence
+            case (WorkType.FULL_REMOTE, "Présentiel") | (WorkType.FULL_REMOTE, None):
+                score -= 10  # Pénalité: incompatible
+            case _:
+                pass  # Autres combinaisons: neutre
         
         # Détection école basique (mots-clés)
         school_keywords = ["formation", "école", "cfa", "campus", "academy", "bootcamp"]
