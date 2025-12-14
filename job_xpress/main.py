@@ -220,8 +220,9 @@ async def process_application_task(payload: TallyWebhookPayload):
             logger.warning("❌ Aucune offre trouvée. Fin du traitement.")
             return
 
-        # 3. ANALYSE
-        valid_jobs = []
+        # 3. ANALYSE - Avec garantie minimum d'offres
+        MIN_OFFERS_TO_SEND = 5  # Garantir au moins 5 offres à envoyer
+        all_analyzed_jobs = []  # Toutes les offres analysées
         BATCH_SIZE = 5
 
         for i in range(0, total_found, BATCH_SIZE):
@@ -229,18 +230,27 @@ async def process_application_task(payload: TallyWebhookPayload):
             logger.info(f"🧠 Analyse lot {i+1}-{i+len(batch)}...")
 
             analyzed_batch = await llm_engine.analyze_offers_parallel(candidate, batch)
+            all_analyzed_jobs.extend(analyzed_batch)
+            
+            # Log informatif
+            high_matches = [j for j in analyzed_batch if j.match_score > 0]
+            logger.info(f"   -> {len(high_matches)} offre(s) avec score > 0")
 
-            # Seuil à 1 pour garder les "non-écoles"
-            new_matches = [j for j in analyzed_batch if j.match_score > 0]
-            valid_jobs.extend(new_matches)
+        # Séparer les offres valides des offres à score 0
+        valid_jobs = [j for j in all_analyzed_jobs if j.match_score > 0]
+        zero_score_jobs = [j for j in all_analyzed_jobs if j.match_score == 0]
 
-            logger.info(f"   -> {len(new_matches)} offre(s) conservée(s)")
+        # Garantir un minimum d'offres
+        if len(valid_jobs) < MIN_OFFERS_TO_SEND and zero_score_jobs:
+            needed = MIN_OFFERS_TO_SEND - len(valid_jobs)
+            valid_jobs.extend(zero_score_jobs[:needed])
+            logger.info(f"📦 Ajout de {needed} offre(s) supplémentaire(s) (score 0)")
 
         if not valid_jobs:
-            logger.warning("⚠️ Aucune offre retenue (que des écoles)")
+            logger.warning("⚠️ Aucune offre retenue du tout")
             return
 
-        # Tri final
+        # Tri final par score
         valid_jobs.sort(key=lambda x: x.match_score, reverse=True)
 
         logger.info("📊 PODIUM FINAL:")
