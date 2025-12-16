@@ -38,6 +38,10 @@ class DatabaseService:
                 "job_title": candidate.job_title
             }
             
+            # Ajouter user_id si l'utilisateur est connecté
+            if candidate.user_id:
+                candidate_data["user_id"] = candidate.user_id
+            
             # On upsert (mise à jour si l'email existe déjà, sinon création)
             res_candidate = self.client.table("candidates").upsert(
                 candidate_data, on_conflict="email"

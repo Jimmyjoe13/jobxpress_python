@@ -126,6 +126,7 @@ class CandidateProfile(BaseModel):
     cv_url: Optional[str] = Field(None, max_length=500, description="URL du CV uploadé")
     cv_text: Optional[str] = Field(default="", description="Texte extrait du CV (OCR)")
     key_skills: List[str] = Field(default_factory=list, description="Compétences clés")
+    user_id: Optional[str] = Field(None, description="ID de l'utilisateur connecté (auth.users.id)")
     
     @field_validator('first_name', 'last_name', mode='before')
     @classmethod

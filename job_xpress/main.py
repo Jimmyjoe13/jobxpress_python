@@ -13,6 +13,7 @@ import time
 import httpx
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -89,6 +90,22 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- CORS CONFIGURATION (pour le frontend) ---
+origins = [
+    "http://localhost:3000",           # Next.js dev
+    "http://127.0.0.1:3000",
+    "https://*.netlify.app",           # Netlify preview
+    "https://jobxpress.netlify.app",   # Production (à adapter)
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # En dev, on autorise tout. À restreindre en production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- ENREGISTREMENT DES HANDLERS D'EXCEPTIONS ---
 register_exception_handlers(app)
@@ -321,6 +338,175 @@ async def receive_tally_webhook(
         # Fallback: on traite quand même
         background_tasks.add_task(process_application_task, payload)
         return {"status": "received_fallback"}
+
+
+# ===========================================
+# API V2 - FRONTEND SAAS
+# ===========================================
+
+from pydantic import BaseModel, EmailStr
+from typing import Optional
+import uuid
+
+class DirectApplicationRequest(BaseModel):
+    """
+    Requête directe depuis le frontend SaaS (remplace le webhook Tally).
+    """
+    first_name: str
+    last_name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    job_title: str
+    contract_type: str
+    work_type: str = "Tous"
+    experience_level: str
+    location: str
+    cv_url: Optional[str] = None
+    user_id: Optional[str] = None  # ID de l'utilisateur connecté (auth.users.id)
+
+
+async def process_direct_application(candidate: CandidateProfile, event_id: str):
+    """
+    Traitement d'une candidature directe (même logique que le webhook).
+    """
+    logger.info(f"🚀 Démarrage traitement Direct Event ID: {event_id}")
+
+    try:
+        logger.info(f"👤 Candidat: {candidate.first_name} {candidate.last_name} ({candidate.email})")
+
+        # --- OCR ---
+        if candidate.cv_url:
+            candidate.cv_text = await ocr_service.extract_text_from_cv(candidate.cv_url)
+        else:
+            logger.warning("⚠️ Pas de CV fourni")
+
+        # Recherche d'offres
+        raw_jobs = await search_engine.find_jobs(candidate)
+        total_found = len(raw_jobs)
+        logger.info(f"🔍 {total_found} offres trouvées")
+
+        if not raw_jobs:
+            logger.warning("❌ Aucune offre trouvée. Fin du traitement.")
+            return
+
+        # Analyse IA
+        MIN_OFFERS_TO_SEND = 5
+        all_analyzed_jobs = []
+        BATCH_SIZE = 5
+
+        for i in range(0, total_found, BATCH_SIZE):
+            batch = raw_jobs[i : i + BATCH_SIZE]
+            logger.info(f"🧠 Analyse lot {i+1}-{i+len(batch)}...")
+            analyzed_batch = await llm_engine.analyze_offers_parallel(candidate, batch)
+            all_analyzed_jobs.extend(analyzed_batch)
+            high_matches = [j for j in analyzed_batch if j.match_score > 0]
+            logger.info(f"   -> {len(high_matches)} offre(s) avec score > 0")
+
+        valid_jobs = [j for j in all_analyzed_jobs if j.match_score > 0]
+        zero_score_jobs = [j for j in all_analyzed_jobs if j.match_score == 0]
+
+        if len(valid_jobs) < MIN_OFFERS_TO_SEND and zero_score_jobs:
+            needed = MIN_OFFERS_TO_SEND - len(valid_jobs)
+            valid_jobs.extend(zero_score_jobs[:needed])
+            logger.info(f"📦 Ajout de {needed} offre(s) supplémentaire(s) (score 0)")
+
+        if not valid_jobs:
+            logger.warning("⚠️ Aucune offre retenue du tout")
+            return
+
+        valid_jobs.sort(key=lambda x: x.match_score, reverse=True)
+
+        logger.info("📊 PODIUM FINAL:")
+        for j in valid_jobs[:3]:
+            logger.info(f"   🥇 {j.match_score}% - {j.title} ({j.company})")
+
+        # Génération livrables
+        best_offer = valid_jobs[0]
+        other_offers = valid_jobs[1:]
+        logger.info(f"🏆 GAGNANT: {best_offer.title} chez {best_offer.company}")
+
+        letter_data = await llm_engine.generate_cover_letter(candidate, best_offer)
+        pdf_path = pdf_generator.create_application_pdf(
+            candidate, best_offer, letter_data.get("html_content", "")
+        )
+
+        if pdf_path:
+            db_service.save_application(candidate, best_offer, pdf_path)
+            email_service.send_application_email(candidate, best_offer, other_offers, pdf_path)
+            logger.info(f"✅ Cycle terminé avec succès pour {candidate.email}")
+
+    except Exception as e:
+        logger.exception(f"❌ CRASH Background Task: {str(e)}")
+
+
+@app.post("/api/v2/apply")
+@limiter.limit("10/minute")
+async def apply_direct(
+    request: Request,
+    data: DirectApplicationRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    Endpoint API v2 - Soumission directe depuis le frontend SaaS.
+    
+    Remplace le webhook Tally pour offrir une expérience intégrée.
+    """
+    try:
+        # Clé de cache pour déduplication
+        cache_key = f"email_dedup:{data.email}"
+
+        # Vérification doublon
+        if cache_service.exists(cache_key):
+            logger.warning(f"⛔ Doublon bloqué pour {data.email}")
+            return JSONResponse(
+                status_code=429,
+                content={"status": "ignored", "reason": "rate_limited", "retry_after": COOLDOWN_SECONDS}
+            )
+
+        # Enregistrer dans le cache
+        cache_service.set(cache_key, "processed", ttl_seconds=COOLDOWN_SECONDS)
+
+        # Créer le profil candidat
+        from models.candidate import WorkType
+        
+        work_type_map = {
+            "Full Remote": WorkType.FULL_REMOTE,
+            "Hybride": WorkType.HYBRIDE,
+            "Présentiel": WorkType.PRESENTIEL,
+            "Tous": WorkType.TOUS,
+        }
+        
+        candidate = CandidateProfile(
+            first_name=data.first_name,
+            last_name=data.last_name,
+            email=data.email,
+            phone=data.phone,
+            job_title=data.job_title,
+            contract_type=data.contract_type,
+            work_type=work_type_map.get(data.work_type, WorkType.TOUS),
+            experience_level=data.experience_level,
+            location=data.location,
+            cv_url=data.cv_url,
+            cv_text="",
+            user_id=data.user_id  # Lien vers l'utilisateur connecté
+        )
+
+        # Générer un event_id unique
+        event_id = str(uuid.uuid4())
+
+        # Lancer le traitement en arrière-plan
+        background_tasks.add_task(process_direct_application, candidate, event_id)
+
+        logger.info(f"📨 Candidature directe reçue pour {data.email}")
+        return {
+            "status": "received",
+            "message": "Processing started",
+            "event_id": event_id
+        }
+
+    except Exception as e:
+        logger.exception(f"⚠️ Erreur API v2: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ===========================================
