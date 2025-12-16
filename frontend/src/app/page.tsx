@@ -63,9 +63,9 @@ export default function Home() {
               <a href="#how-it-works" className="text-slate-300 hover:text-white transition-colors text-sm font-medium">
                 Comment ça marche
               </a>
-              <a href="#pricing" className="text-slate-300 hover:text-white transition-colors text-sm font-medium">
+              <Link href="/pricing" className="text-slate-300 hover:text-white transition-colors text-sm font-medium">
                 Tarifs
-              </a>
+              </Link>
             </nav>
 
             {/* Auth Buttons */}
@@ -103,6 +103,9 @@ export default function Home() {
                 <a href="#how-it-works" className="text-slate-300 hover:text-white transition-colors font-medium py-2">
                   Comment ça marche
                 </a>
+                <Link href="/pricing" className="text-slate-300 hover:text-white transition-colors font-medium py-2">
+                  Tarifs
+                </Link>
                 <div className="flex flex-col gap-3 pt-4 border-t border-slate-700/50">
                   <Link href="/login" className="text-center py-3 text-slate-300 hover:text-white border border-slate-700 rounded-xl">
                     Connexion
@@ -372,9 +375,9 @@ export default function Home() {
 
             {/* Links */}
             <div className="flex items-center gap-8 text-sm text-slate-400">
-              <a href="#" className="hover:text-white transition-colors">Confidentialité</a>
-              <a href="#" className="hover:text-white transition-colors">Conditions</a>
-              <a href="#" className="hover:text-white transition-colors">Contact</a>
+              <Link href="/privacy" className="hover:text-white transition-colors">Confidentialité</Link>
+              <Link href="/terms" className="hover:text-white transition-colors">Conditions</Link>
+              <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
             </div>
 
             {/* Copyright */}
