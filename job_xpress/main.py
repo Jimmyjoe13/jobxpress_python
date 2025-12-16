@@ -93,18 +93,17 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- CORS CONFIGURATION (pour le frontend) ---
 origins = [
-    "http://localhost:3000",           # Next.js dev
-    "http://127.0.0.1:3000",
-    "https://*.netlify.app",           # Netlify preview
-    "https://jobxpress.netlify.app",   # Production (à adapter)
+    "http://localhost:3000",                    # Next.js dev
+    "http://127.0.0.1:3000",                    # Next.js dev alt
+    "https://rocket-jobxpress.netlify.app",    # Production Netlify
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En dev, on autorise tout. À restreindre en production
+    allow_origins=origins,  # ✅ Origines explicites (plus de wildcard)
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS", "HEAD"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 # --- ENREGISTREMENT DES HANDLERS D'EXCEPTIONS ---
