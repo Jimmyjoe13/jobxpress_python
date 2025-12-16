@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { FileText, TrendingUp, Clock, ArrowRight, ExternalLink, Star, Zap, Target, Sparkles, Loader2 } from "lucide-react"
+import { FileText, TrendingUp, Clock, ArrowRight, ExternalLink, Star, Zap, Target, Sparkles } from "lucide-react"
+import { DashboardSkeleton } from "@/components/ui/skeleton"
 
 interface UserData {
   firstName: string
@@ -27,7 +28,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const loadData = async () => {
+      // Simulate minimum loading time for better UX
+      const minLoadTime = new Promise(resolve => setTimeout(resolve, 800))
+      
       if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        await minLoadTime
         setUser({ firstName: "Utilisateur", email: "", userId: null })
         setIsLoading(false)
         return
@@ -72,6 +77,8 @@ export default function DashboardPage() {
         } else {
           setUser({ firstName: "Utilisateur", email: "", userId: null })
         }
+        
+        await minLoadTime
       } catch (err) {
         console.error("Error loading data:", err)
         setUser({ firstName: "Utilisateur", email: "", userId: null })
@@ -83,14 +90,7 @@ export default function DashboardPage() {
   }, [])
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">Chargement...</p>
-        </div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   const firstName = user?.firstName || "Utilisateur"
@@ -131,8 +131,8 @@ export default function DashboardPage() {
       {/* Quick Actions Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {/* New Application Card */}
-        <div className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-indigo-500/30 transition-all hover:-translate-y-1">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 transition-shadow">
+        <div className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-indigo-500/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 group-hover:scale-105 transition-all">
             <FileText className="w-7 h-7 text-white" />
           </div>
           <h3 className="text-lg font-semibold text-white mb-2">
@@ -143,7 +143,7 @@ export default function DashboardPage() {
           </p>
           <Link 
             href="/dashboard/apply"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all text-sm group/btn"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all text-sm group/btn hover:scale-105"
           >
             Commencer
             <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
@@ -151,8 +151,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats Card */}
-        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-emerald-500/30 transition-all hover:-translate-y-1">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/25">
+        <div className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/10">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/25 group-hover:shadow-emerald-500/40 group-hover:scale-105 transition-all">
             <TrendingUp className="w-7 h-7 text-white" />
           </div>
           <h3 className="text-lg font-semibold text-white mb-2">
@@ -168,8 +168,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Last Activity Card */}
-        <div className="sm:col-span-2 lg:col-span-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-purple-500/30 transition-all hover:-translate-y-1">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4 shadow-lg shadow-purple-500/25">
+        <div className="group sm:col-span-2 lg:col-span-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-purple-500/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4 shadow-lg shadow-purple-500/25 group-hover:shadow-purple-500/40 group-hover:scale-105 transition-all">
             <Clock className="w-7 h-7 text-white" />
           </div>
           <h3 className="text-lg font-semibold text-white mb-2">
@@ -214,7 +214,7 @@ export default function DashboardPage() {
               </div>
             </div>
             {applications.length > 0 && (
-              <a href="#" className="text-sm text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+              <a href="#" className="text-sm text-indigo-400 hover:text-indigo-300 font-medium transition-colors hover:underline">
                 Voir tout
               </a>
             )}
@@ -224,14 +224,15 @@ export default function DashboardPage() {
         <div className="p-6">
           {applications.length > 0 ? (
             <div className="space-y-3">
-              {applications.map((app) => (
+              {applications.map((app, index) => (
                 <div
                   key={app.id}
-                  className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-slate-800 transition-colors group border border-transparent hover:border-slate-700/50"
+                  className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-slate-800 transition-all duration-200 group border border-transparent hover:border-slate-700/50 cursor-pointer"
+                  style={{ animationDelay: `${index * 50}ms` }}
                 >
                   <div className="flex-1 min-w-0 mr-4">
                     <div className="flex items-center gap-3 mb-1">
-                      <h4 className="font-semibold text-white truncate">
+                      <h4 className="font-semibold text-white truncate group-hover:text-indigo-400 transition-colors">
                         {app.job_title}
                       </h4>
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getScoreColor(app.match_score)}`}>
@@ -254,6 +255,7 @@ export default function DashboardPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <ExternalLink className="w-4 h-4" />
                       </a>
@@ -273,7 +275,7 @@ export default function DashboardPage() {
               </p>
               <Link 
                 href="/dashboard/apply"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:scale-105"
               >
                 Lancer une recherche
                 <ArrowRight className="w-4 h-4" />

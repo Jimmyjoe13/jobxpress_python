@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     
     # Base de données
     SUPABASE_URL: str = ""
-    SUPABASE_KEY: str = ""
+    SUPABASE_KEY: str = ""  # Clé 'anon' pour le frontend
+    SUPABASE_SERVICE_KEY: str = ""  # Clé 'service_role' pour le backend (bypass RLS)
     
     # IA & Search
     DEEPSEEK_API_KEY: str = ""

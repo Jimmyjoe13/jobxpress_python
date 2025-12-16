@@ -19,6 +19,8 @@ import {
   Mail,
   Loader2
 } from "lucide-react"
+import { Confetti } from "@/components/ui/confetti"
+import { useToast } from "@/components/ui/toast"
 
 const STEPS = [
   { title: "Informations", icon: User },
@@ -157,23 +159,46 @@ export default function ApplyPage() {
 
     try {
       let cvUrl = ""
-      if (formData.cvFile && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-        try {
-          const { createClient } = await import("@/lib/supabase/client")
-          const supabase = createClient()
-          
-          const fileName = `${Date.now()}_${formData.cvFile.name}`
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("cvs")
-            .upload(fileName, formData.cvFile)
+      
+      // Upload du CV si présent
+      if (formData.cvFile) {
+        console.log("📤 Upload CV:", formData.cvFile.name)
+        
+        if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+          try {
+            const { createClient } = await import("@/lib/supabase/client")
+            const supabase = createClient()
+            
+            // Nom de fichier unique avec timestamp
+            const sanitizedName = formData.cvFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+            const fileName = `${Date.now()}_${sanitizedName}`
+            
+            console.log("📁 Nom fichier:", fileName)
+            
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from("cvs")
+              .upload(fileName, formData.cvFile, {
+                cacheControl: '3600',
+                upsert: false
+              })
 
-          if (!uploadError && uploadData) {
-            const { data: urlData } = supabase.storage.from("cvs").getPublicUrl(uploadData.path)
-            cvUrl = urlData.publicUrl
+            if (uploadError) {
+              console.error("❌ Erreur upload CV:", uploadError.message)
+              // On continue quand même, le CV n'est pas obligatoire
+            } else if (uploadData) {
+              const { data: urlData } = supabase.storage.from("cvs").getPublicUrl(uploadData.path)
+              cvUrl = urlData.publicUrl
+              console.log("✅ CV uploadé:", cvUrl)
+            }
+          } catch (err) {
+            console.error("❌ Exception upload CV:", err)
+            // On continue sans bloquer
           }
-        } catch (err) {
-          console.error("CV upload failed:", err)
+        } else {
+          console.warn("⚠️ Supabase non configuré - CV non uploadé")
         }
+      } else {
+        console.log("ℹ️ Pas de CV fourni")
       }
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
@@ -192,6 +217,8 @@ export default function ApplyPage() {
         user_id: userId,
       }
 
+      console.log("📨 Envoi candidature:", { ...payload, cv_url: cvUrl ? "[URL]" : null })
+
       const response = await fetch(`${apiUrl}/api/v2/apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -203,9 +230,10 @@ export default function ApplyPage() {
         throw new Error(data.detail || "Erreur lors de l'envoi")
       }
 
+      console.log("✅ Candidature envoyée avec succès")
       setIsSuccess(true)
     } catch (err) {
-      console.error("Submit error:", err)
+      console.error("❌ Erreur soumission:", err)
       setError(err instanceof Error ? err.message : "Une erreur est survenue")
     } finally {
       setIsSubmitting(false)
@@ -215,8 +243,9 @@ export default function ApplyPage() {
   if (isSuccess) {
     return (
       <div className="max-w-2xl mx-auto animate-fade-in">
+        <Confetti active={isSuccess} />
         <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-12 text-center">
-          <div className="w-20 h-20 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+          <div className="w-20 h-20 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg animate-bounce">
             <CheckCircle className="w-10 h-10 text-emerald-400" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-3">

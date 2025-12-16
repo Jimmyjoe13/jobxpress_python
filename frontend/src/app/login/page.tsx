@@ -4,9 +4,11 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Sparkles, ArrowLeft, Mail, Lock, Eye, EyeOff } from "lucide-react"
+import { useToast } from "@/components/ui/toast"
 
 export default function LoginPage() {
   const router = useRouter()
+  const { showToast } = useToast()
   
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -21,6 +23,7 @@ export default function LoginPage() {
 
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       setError("Supabase n'est pas configuré.")
+      showToast("Supabase n'est pas configuré", "error")
       setIsLoading(false)
       return
     }
@@ -33,12 +36,15 @@ export default function LoginPage() {
 
       if (error) {
         setError("Email ou mot de passe incorrect")
+        showToast("Identifiants incorrects", "error")
         return
       }
 
+      showToast("Connexion réussie !", "success")
       router.push("/dashboard")
     } catch {
       setError("Une erreur est survenue")
+      showToast("Une erreur est survenue", "error")
     } finally {
       setIsLoading(false)
     }

@@ -3,6 +3,8 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Sparkles, ArrowLeft, CheckCircle, Mail, Lock, User, Eye, EyeOff } from "lucide-react"
+import { useToast } from "@/components/ui/toast"
+import { Confetti } from "@/components/ui/confetti"
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -79,9 +81,10 @@ export default function RegisterPage() {
   if (success) {
     return (
       <div className="min-h-screen mesh-gradient flex items-center justify-center p-6 relative z-10">
+        <Confetti active={success} />
         <div className="w-full max-w-md animate-slide-up">
           <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 text-center shadow-2xl">
-            <div className="w-20 h-20 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <div className="w-20 h-20 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 animate-bounce">
               <CheckCircle className="w-10 h-10 text-emerald-400" />
             </div>
             <h2 className="text-2xl font-bold text-white mb-3">

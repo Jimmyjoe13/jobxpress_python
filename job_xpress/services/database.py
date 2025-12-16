@@ -10,26 +10,32 @@ logger = get_logger()
 class DatabaseService:
     def __init__(self):
         self.url = settings.SUPABASE_URL
-        self.key = settings.SUPABASE_KEY
+        # Utiliser la service_role key pour bypass RLS (prioritaire)
+        # Sinon fallback sur SUPABASE_KEY
+        self.key = settings.SUPABASE_SERVICE_KEY or settings.SUPABASE_KEY
         self.client: Client = None
         
         if self.url and self.key:
             try:
                 self.client = create_client(self.url, self.key)
-                logger.info("✅ Connexion Supabase établie")
+                key_type = "service_role" if settings.SUPABASE_SERVICE_KEY else "anon"
+                logger.info(f"✅ Connexion Supabase établie (clé: {key_type})")
             except Exception as e:
                 logger.error(f"⚠️ Erreur connexion Supabase: {e}")
+        else:
+            logger.warning("⚠️ Variables Supabase non configurées (SUPABASE_URL ou clé manquante)")
 
     def save_application(self, candidate: CandidateProfile, offer: JobOffer, pdf_path: str):
         """
         Sauvegarde le candidat et sa candidature.
+        Utilise la clé service_role pour bypass les politiques RLS.
         """
         if not self.client:
-            logger.warning("⚠️ Supabase non configuré")
+            logger.warning("⚠️ Supabase non configuré - sauvegarde ignorée")
             return
 
         try:
-            # 1. Insérer ou Récupérer le Candidat (Upsert sur l'email)
+            # 1. Préparer les données du candidat
             candidate_data = {
                 "email": candidate.email,
                 "first_name": candidate.first_name,
@@ -41,8 +47,11 @@ class DatabaseService:
             # Ajouter user_id si l'utilisateur est connecté
             if candidate.user_id:
                 candidate_data["user_id"] = candidate.user_id
+                logger.info(f"📎 Liaison avec user_id: {candidate.user_id}")
             
-            # On upsert (mise à jour si l'email existe déjà, sinon création)
+            logger.info(f"💾 Sauvegarde candidat: {candidate.email}")
+            
+            # 2. Upsert le candidat (mise à jour si l'email existe déjà)
             res_candidate = self.client.table("candidates").upsert(
                 candidate_data, on_conflict="email"
             ).execute()
@@ -50,12 +59,18 @@ class DatabaseService:
             # Récupération de l'ID du candidat
             if res_candidate.data:
                 candidate_id = res_candidate.data[0]['id']
+                logger.info(f"✅ Candidat enregistré/mis à jour (ID: {candidate_id})")
             else:
-                # Fallback si upsert ne renvoie rien (rare)
+                # Fallback: récupérer l'ID existant
                 res = self.client.table("candidates").select("id").eq("email", candidate.email).execute()
-                candidate_id = res.data[0]['id']
+                if res.data:
+                    candidate_id = res.data[0]['id']
+                    logger.info(f"📋 Candidat existant récupéré (ID: {candidate_id})")
+                else:
+                    logger.error("❌ Impossible de créer ou récupérer le candidat")
+                    return
 
-            # 2. Enregistrer la Candidature
+            # 3. Enregistrer la Candidature
             app_data = {
                 "candidate_id": candidate_id,
                 "company_name": offer.company,
@@ -67,9 +82,20 @@ class DatabaseService:
             }
             
             self.client.table("applications").insert(app_data).execute()
-            logger.info(f"💾 Sauvegarde Supabase: {candidate.email} -> {offer.company}")
+            logger.info(f"💾 Application enregistrée: {candidate.email} -> {offer.company}")
 
         except Exception as e:
-            logger.exception(f"❌ Erreur Supabase: {e}")
+            # Log détaillé de l'erreur
+            error_details = str(e)
+            if hasattr(e, 'args') and e.args:
+                error_details = str(e.args[0]) if e.args else str(e)
+            
+            logger.error(f"❌ Erreur Supabase: {error_details}")
+            
+            # Log de debug supplémentaire
+            if "row-level security" in error_details.lower():
+                logger.error("🔐 Conseil: Utilisez SUPABASE_SERVICE_KEY (pas SUPABASE_KEY) pour bypass RLS")
+            
+            # Ne pas relancer l'exception pour ne pas bloquer le workflow email
 
 db_service = DatabaseService()
