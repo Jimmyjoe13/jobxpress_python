@@ -1,70 +1,74 @@
 "use client"
 
-import * as React from "react"
-import { cn } from "@/lib/utils"
-import { Check } from "lucide-react"
-
-interface Step {
-  title: string
-  description?: string
-}
-
 interface StepperProps {
-  steps: Step[]
+  steps: { title: string; description?: string }[]
   currentStep: number
-  className?: string
 }
 
-export function Stepper({ steps, currentStep, className }: StepperProps) {
+export function Stepper({ steps, currentStep }: StepperProps) {
   return (
-    <div className={cn("w-full", className)}>
-      <div className="flex items-center justify-between">
+    <div className="w-full">
+      {/* Desktop Stepper */}
+      <div className="hidden sm:flex items-center justify-between">
         {steps.map((step, index) => (
-          <React.Fragment key={index}>
+          <div key={index} className="flex-1 flex items-center">
             {/* Step Circle */}
             <div className="flex flex-col items-center">
               <div
-                className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all",
-                  index < currentStep
-                    ? "bg-green-500 text-white"
-                    : index === currentStep
-                    ? "bg-blue-600 text-white ring-4 ring-blue-100"
-                    : "bg-gray-200 text-gray-500"
-                )}
+                className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-bold transition-all duration-300
+                  ${
+                    index < currentStep
+                      ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30"
+                      : index === currentStep
+                      ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30 scale-110"
+                      : "bg-slate-800 text-slate-500 border border-slate-700"
+                  }`}
               >
                 {index < currentStep ? (
-                  <Check className="w-5 h-5" />
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
                 ) : (
                   index + 1
                 )}
               </div>
-              <span
-                className={cn(
-                  "mt-2 text-sm font-medium hidden sm:block",
-                  index <= currentStep ? "text-gray-900" : "text-gray-400"
-                )}
-              >
+              <span className={`mt-2 text-xs font-medium transition-colors ${
+                index <= currentStep ? "text-white" : "text-slate-500"
+              }`}>
                 {step.title}
               </span>
-              {step.description && (
-                <span className="text-xs text-gray-400 hidden md:block">
-                  {step.description}
-                </span>
-              )}
             </div>
 
             {/* Connector Line */}
             {index < steps.length - 1 && (
-              <div
-                className={cn(
-                  "flex-1 h-1 mx-2 sm:mx-4 rounded",
-                  index < currentStep ? "bg-green-500" : "bg-gray-200"
-                )}
-              />
+              <div className="flex-1 mx-3 h-1 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className={`h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500 ${
+                    index < currentStep ? "w-full" : "w-0"
+                  }`}
+                />
+              </div>
             )}
-          </React.Fragment>
+          </div>
         ))}
+      </div>
+
+      {/* Mobile Stepper */}
+      <div className="sm:hidden">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-medium text-white">
+            Étape {currentStep + 1} sur {steps.length}
+          </span>
+          <span className="text-sm text-slate-400">
+            {steps[currentStep].title}
+          </span>
+        </div>
+        <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500"
+            style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+          />
+        </div>
       </div>
     </div>
   )

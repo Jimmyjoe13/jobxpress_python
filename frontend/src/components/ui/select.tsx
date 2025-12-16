@@ -1,57 +1,69 @@
 "use client"
 
-import * as React from "react"
-import { cn } from "@/lib/utils"
+import { forwardRef } from "react"
+import { ChevronDown } from "lucide-react"
 
-export interface SelectProps
-  extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  label?: string
-  error?: string
-  options: { value: string; label: string }[]
+interface SelectOption {
+  value: string
+  label: string
 }
 
-const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, label, error, id, options, ...props }, ref) => {
-    const selectId = id || React.useId()
-    
+interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+  label?: string
+  options: SelectOption[]
+  error?: string
+  placeholder?: string
+}
+
+const Select = forwardRef<HTMLSelectElement, SelectProps>(
+  ({ className = "", label, options, error, placeholder = "Sélectionner...", ...props }, ref) => {
     return (
       <div className="w-full">
         {label && (
-          <label
-            htmlFor={selectId}
-            className="block text-sm font-medium text-gray-700 mb-1.5"
-          >
+          <label className="block text-sm font-medium text-slate-300 mb-2">
             {label}
           </label>
         )}
-        <select
-          id={selectId}
-          className={cn(
-            "flex h-11 w-full rounded-lg border bg-white px-4 py-2 text-sm transition-all appearance-none cursor-pointer",
-            "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
-            "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-50",
-            error
-              ? "border-red-500 focus:ring-red-500"
-              : "border-gray-300 hover:border-gray-400",
-            className
-          )}
-          ref={ref}
-          {...props}
-        >
-          <option value="">Sélectionnez...</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            ref={ref}
+            className={`
+              w-full px-4 py-3 
+              appearance-none
+              bg-slate-800/50 
+              border border-slate-700 
+              rounded-xl 
+              text-white 
+              focus:outline-none 
+              focus:ring-2 
+              focus:ring-indigo-500/50 
+              focus:border-indigo-500
+              transition-all duration-200
+              cursor-pointer
+              ${error ? 'border-red-500 focus:ring-red-500/50 focus:border-red-500' : ''}
+              ${className}
+            `}
+            {...props}
+          >
+            <option value="" className="bg-slate-800 text-slate-500">{placeholder}</option>
+            {options.map((option) => (
+              <option key={option.value} value={option.value} className="bg-slate-800 text-white">
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+            <ChevronDown className="w-5 h-5" />
+          </div>
+        </div>
         {error && (
-          <p className="mt-1.5 text-sm text-red-600">{error}</p>
+          <p className="mt-2 text-sm text-red-400">{error}</p>
         )}
       </div>
     )
   }
 )
+
 Select.displayName = "Select"
 
 export { Select }

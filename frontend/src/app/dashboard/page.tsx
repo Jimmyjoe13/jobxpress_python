@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
-import { FileText, TrendingUp, Clock, ArrowRight, Loader2, ExternalLink, Star } from "lucide-react"
+import { FileText, TrendingUp, Clock, ArrowRight, ExternalLink, Star, Zap, Target, Sparkles, Loader2 } from "lucide-react"
 
 interface UserData {
   firstName: string
@@ -29,7 +27,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const loadData = async () => {
-      // Check if Supabase is configured
       if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         setUser({ firstName: "Utilisateur", email: "", userId: null })
         setIsLoading(false)
@@ -42,7 +39,6 @@ export default function DashboardPage() {
         const { data: { user: authUser } } = await supabase.auth.getUser()
         
         if (authUser) {
-          // Récupérer le profil depuis user_profiles
           const { data: profile } = await supabase
             .from('user_profiles')
             .select('first_name, last_name')
@@ -55,7 +51,6 @@ export default function DashboardPage() {
             userId: authUser.id
           })
 
-          // Récupérer les candidatures via la table candidates -> applications
           const { data: candidate } = await supabase
             .from('candidates')
             .select('id')
@@ -89,8 +84,11 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Chargement...</p>
+        </div>
       </div>
     )
   }
@@ -98,7 +96,6 @@ export default function DashboardPage() {
   const firstName = user?.firstName || "Utilisateur"
   const applicationCount = applications.length
 
-  // Formater la date
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
     return date.toLocaleDateString('fr-FR', { 
@@ -108,126 +105,147 @@ export default function DashboardPage() {
     })
   }
 
-  // Couleur du score
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600 bg-green-100'
-    if (score >= 60) return 'text-blue-600 bg-blue-100'
-    if (score >= 40) return 'text-yellow-600 bg-yellow-100'
-    return 'text-gray-600 bg-gray-100'
+    if (score >= 80) return 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30'
+    if (score >= 60) return 'text-indigo-400 bg-indigo-500/20 border-indigo-500/30'
+    if (score >= 40) return 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30'
+    return 'text-slate-400 bg-slate-500/20 border-slate-500/30'
   }
 
   return (
     <div className="animate-fade-in">
       {/* Welcome Header */}
       <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-sm mb-3">
+          <Zap className="w-3.5 h-3.5" />
+          <span>Tableau de bord</span>
+        </div>
+        <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
           Bonjour, {firstName} 👋
         </h1>
-        <p className="text-gray-600">
-          Bienvenue sur votre tableau de bord JobXpress
+        <p className="text-slate-400 text-lg">
+          Bienvenue sur votre espace JobXpress
         </p>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <Card className="hover:shadow-lg transition-shadow border-0 shadow-md">
-          <CardContent className="pt-6">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
-              <FileText className="w-6 h-6 text-blue-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Nouvelle candidature
-            </h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Lancez une nouvelle recherche d&apos;emploi automatisée
-            </p>
-            <Link href="/dashboard/apply">
-              <Button className="group">
-                Commencer
-                <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        {/* New Application Card */}
+        <div className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-indigo-500/30 transition-all hover:-translate-y-1">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 transition-shadow">
+            <FileText className="w-7 h-7 text-white" />
+          </div>
+          <h3 className="text-lg font-semibold text-white mb-2">
+            Nouvelle candidature
+          </h3>
+          <p className="text-slate-400 text-sm mb-5">
+            Lancez une nouvelle recherche d&apos;emploi automatisée avec l&apos;IA
+          </p>
+          <Link 
+            href="/dashboard/apply"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all text-sm group/btn"
+          >
+            Commencer
+            <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+          </Link>
+        </div>
 
-        <Card className="hover:shadow-lg transition-shadow border-0 shadow-md">
-          <CardContent className="pt-6">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4">
-              <TrendingUp className="w-6 h-6 text-green-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Statistiques
-            </h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Suivez vos candidatures et analysez vos résultats
-            </p>
-            <div className="text-2xl font-bold text-gray-900">{applicationCount}</div>
-            <p className="text-sm text-gray-500">candidature{applicationCount > 1 ? 's' : ''} générée{applicationCount > 1 ? 's' : ''}</p>
-          </CardContent>
-        </Card>
+        {/* Stats Card */}
+        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-emerald-500/30 transition-all hover:-translate-y-1">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/25">
+            <TrendingUp className="w-7 h-7 text-white" />
+          </div>
+          <h3 className="text-lg font-semibold text-white mb-2">
+            Statistiques
+          </h3>
+          <p className="text-slate-400 text-sm mb-4">
+            Suivez vos candidatures
+          </p>
+          <div className="flex items-end gap-2">
+            <span className="text-4xl font-bold text-gradient">{applicationCount}</span>
+            <span className="text-slate-500 pb-1">candidature{applicationCount > 1 ? 's' : ''}</span>
+          </div>
+        </div>
 
-        <Card className="hover:shadow-lg transition-shadow border-0 shadow-md sm:col-span-2 lg:col-span-1">
-          <CardContent className="pt-6">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
-              <Clock className="w-6 h-6 text-purple-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Dernière activité
-            </h3>
-            {applications[0] ? (
-              <>
-                <p className="text-gray-600 text-sm mb-2 truncate">
-                  {applications[0].job_title}
-                </p>
-                <span className="text-sm text-gray-400">
-                  {formatDate(applications[0].created_at)}
-                </span>
-              </>
-            ) : (
-              <>
-                <p className="text-gray-600 text-sm mb-4">
-                  Aucune candidature pour le moment
-                </p>
-                <span className="text-sm text-gray-400">
-                  Lancez votre première recherche !
-                </span>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {/* Last Activity Card */}
+        <div className="sm:col-span-2 lg:col-span-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-purple-500/30 transition-all hover:-translate-y-1">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4 shadow-lg shadow-purple-500/25">
+            <Clock className="w-7 h-7 text-white" />
+          </div>
+          <h3 className="text-lg font-semibold text-white mb-2">
+            Dernière activité
+          </h3>
+          {applications[0] ? (
+            <>
+              <p className="text-white font-medium truncate mb-1">
+                {applications[0].job_title}
+              </p>
+              <p className="text-slate-400 text-sm truncate mb-2">
+                {applications[0].company_name}
+              </p>
+              <span className="text-slate-500 text-sm">
+                {formatDate(applications[0].created_at)}
+              </span>
+            </>
+          ) : (
+            <>
+              <p className="text-slate-400 text-sm mb-2">
+                Aucune candidature pour le moment
+              </p>
+              <span className="text-sm text-slate-500">
+                Lancez votre première recherche !
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Recent Applications */}
-      <Card className="border-0 shadow-md">
-        <CardHeader>
-          <CardTitle>Dernières candidatures</CardTitle>
-          <CardDescription>
-            Historique de vos recherches d&apos;emploi récentes
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-slate-700/50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                <Target className="w-5 h-5 text-indigo-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">Dernières candidatures</h2>
+                <p className="text-sm text-slate-400">Historique de vos recherches</p>
+              </div>
+            </div>
+            {applications.length > 0 && (
+              <a href="#" className="text-sm text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+                Voir tout
+              </a>
+            )}
+          </div>
+        </div>
+        
+        <div className="p-6">
           {applications.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {applications.map((app) => (
                 <div
                   key={app.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                  className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-slate-800 transition-colors group border border-transparent hover:border-slate-700/50"
                 >
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 mr-4">
                     <div className="flex items-center gap-3 mb-1">
-                      <h4 className="font-semibold text-gray-900 truncate">
+                      <h4 className="font-semibold text-white truncate">
                         {app.job_title}
                       </h4>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getScoreColor(app.match_score)}`}>
-                        <Star className="w-3 h-3 inline mr-1" />
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getScoreColor(app.match_score)}`}>
+                        <Star className="w-3 h-3" />
                         {app.match_score}%
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 truncate">{app.company_name}</p>
-                    <p className="text-xs text-gray-400 mt-1">{formatDate(app.created_at)}</p>
+                    <p className="text-sm text-slate-400 truncate">{app.company_name}</p>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full capitalize">
+                  <div className="flex items-center gap-3">
+                    <span className="hidden sm:inline-block text-xs text-slate-500">
+                      {formatDate(app.created_at)}
+                    </span>
+                    <span className="px-2.5 py-1 bg-indigo-500/10 text-indigo-400 text-xs rounded-lg font-medium capitalize border border-indigo-500/20">
                       {app.status}
                     </span>
                     {app.job_url && (
@@ -235,9 +253,9 @@ export default function DashboardPage() {
                         href={app.job_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                        className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                       >
-                        <ExternalLink className="w-4 h-4 text-blue-600" />
+                        <ExternalLink className="w-4 h-4" />
                       </a>
                     )}
                   </div>
@@ -245,19 +263,25 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 text-gray-500">
-              <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium mb-2">Aucune candidature</p>
-              <p className="text-sm mb-4">
-                Commencez par lancer votre première recherche d&apos;emploi
+            <div className="text-center py-16">
+              <div className="w-20 h-20 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-6 border border-slate-700/50">
+                <Sparkles className="w-10 h-10 text-slate-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">Aucune candidature</h3>
+              <p className="text-slate-400 mb-6 max-w-sm mx-auto">
+                Commencez par lancer votre première recherche d&apos;emploi automatisée
               </p>
-              <Link href="/dashboard/apply">
-                <Button variant="outline">Lancer une recherche</Button>
+              <Link 
+                href="/dashboard/apply"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
+              >
+                Lancer une recherche
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

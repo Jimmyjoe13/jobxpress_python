@@ -1,102 +1,131 @@
 "use client"
 
-import * as React from "react"
+import { useCallback, useState } from "react"
 import { useDropzone } from "react-dropzone"
-import { cn } from "@/lib/utils"
-import { Upload, File, X } from "lucide-react"
+import { Upload, FileText, X, CheckCircle } from "lucide-react"
 
-export interface FileUploadProps {
+interface FileUploadProps {
   onFileSelect: (file: File) => void
-  accept?: Record<string, string[]>
-  maxSize?: number
-  className?: string
-  label?: string
-  error?: string
-  currentFile?: File | null
   onFileRemove?: () => void
+  currentFile?: File | null
+  label?: string
+  accept?: string
+  maxSize?: number
 }
 
 export function FileUpload({
   onFileSelect,
-  accept = {
-    "application/pdf": [".pdf"],
-    "application/msword": [".doc"],
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-  },
-  maxSize = 10 * 1024 * 1024, // 10MB
-  className,
-  label = "Déposez votre CV ici",
-  error,
-  currentFile,
   onFileRemove,
+  currentFile,
+  label = "Déposez votre CV ici",
+  accept = ".pdf,.doc,.docx",
+  maxSize = 10 * 1024 * 1024, // 10MB
 }: FileUploadProps) {
-  const [isDragging, setIsDragging] = React.useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (acceptedFiles) => {
+  const onDrop = useCallback(
+    (acceptedFiles: File[], rejectedFiles: unknown[]) => {
+      setError(null)
+
+      if (rejectedFiles.length > 0) {
+        setError("Fichier non valide. Utilisez PDF, DOC ou DOCX (max 10MB)")
+        return
+      }
+
       if (acceptedFiles.length > 0) {
         onFileSelect(acceptedFiles[0])
       }
-      setIsDragging(false)
     },
-    onDragEnter: () => setIsDragging(true),
-    onDragLeave: () => setIsDragging(false),
-    accept,
+    [onFileSelect]
+  )
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "application/pdf": [".pdf"],
+      "application/msword": [".doc"],
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+    },
     maxSize,
     multiple: false,
   })
 
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setError(null)
+    onFileRemove?.()
+  }
+
+  // Format file size
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
   return (
-    <div className={cn("w-full", className)}>
-      {currentFile ? (
-        <div className="flex items-center justify-between p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-          <div className="flex items-center gap-3">
-            <File className="w-8 h-8 text-blue-600" />
-            <div>
-              <p className="font-medium text-gray-900">{currentFile.name}</p>
-              <p className="text-sm text-gray-500">
-                {(currentFile.size / 1024 / 1024).toFixed(2)} MB
+    <div className="w-full">
+      <div
+        {...getRootProps()}
+        className={`
+          relative p-8 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-300
+          ${isDragActive 
+            ? "border-indigo-500 bg-indigo-500/10" 
+            : currentFile 
+              ? "border-emerald-500/50 bg-emerald-500/5" 
+              : "border-slate-700 hover:border-indigo-500/50 hover:bg-slate-800/50"
+          }
+        `}
+      >
+        <input {...getInputProps()} />
+
+        <div className="flex flex-col items-center text-center">
+          {currentFile ? (
+            <>
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 flex items-center justify-center mb-4">
+                <CheckCircle className="w-8 h-8 text-emerald-400" />
+              </div>
+              <div className="flex items-center gap-2 mb-1">
+                <FileText className="w-4 h-4 text-slate-400" />
+                <span className="text-white font-medium truncate max-w-[200px]">
+                  {currentFile.name}
+                </span>
+              </div>
+              <span className="text-sm text-slate-500 mb-4">
+                {formatSize(currentFile.size)}
+              </span>
+              <button
+                onClick={handleRemove}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Supprimer
+              </button>
+            </>
+          ) : (
+            <>
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-all ${
+                isDragActive 
+                  ? "bg-indigo-500/20 scale-110" 
+                  : "bg-slate-800"
+              }`}>
+                <Upload className={`w-8 h-8 ${isDragActive ? "text-indigo-400" : "text-slate-500"}`} />
+              </div>
+              <p className="text-white font-medium mb-1">{label}</p>
+              <p className="text-sm text-slate-500 mb-4">
+                ou cliquez pour sélectionner
               </p>
-            </div>
-          </div>
-          {onFileRemove && (
-            <button
-              type="button"
-              onClick={onFileRemove}
-              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+              <p className="text-xs text-slate-600">
+                PDF, DOC, DOCX • Max 10MB
+              </p>
+            </>
           )}
         </div>
-      ) : (
-        <div
-          {...getRootProps()}
-          className={cn(
-            "flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg cursor-pointer transition-all",
-            isDragActive || isDragging
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 hover:border-blue-400 hover:bg-gray-50",
-            error && "border-red-500 bg-red-50"
-          )}
-        >
-          <input {...getInputProps()} />
-          <Upload
-            className={cn(
-              "w-12 h-12 mb-4",
-              isDragActive || isDragging ? "text-blue-600" : "text-gray-400"
-            )}
-          />
-          <p className="text-lg font-medium text-gray-700 mb-1">{label}</p>
-          <p className="text-sm text-gray-500">
-            ou cliquez pour sélectionner un fichier
-          </p>
-          <p className="text-xs text-gray-400 mt-2">
-            PDF, DOC, DOCX (max. 10 MB)
-          </p>
-        </div>
+      </div>
+
+      {error && (
+        <p className="mt-3 text-sm text-red-400 text-center">{error}</p>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>
   )
 }

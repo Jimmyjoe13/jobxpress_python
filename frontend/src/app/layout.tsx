@@ -1,17 +1,10 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
 import "./globals.css"
 
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-inter",
-})
-
 export const metadata: Metadata = {
-  title: "JobXpress - Assistant de Candidature IA",
-  description: "Automatisez votre recherche d'emploi avec l'intelligence artificielle. Trouvez les meilleures offres et générez des lettres de motivation personnalisées.",
-  keywords: ["emploi", "candidature", "IA", "lettre de motivation", "recherche emploi"],
+  title: "JobXpress - Automatisez votre recherche d'emploi avec l'IA",
+  description: "JobXpress trouve les meilleures offres pour vous, analyse leur pertinence et génère des lettres de motivation personnalisées en quelques minutes.",
+  keywords: ["emploi", "IA", "candidature", "lettre de motivation", "recherche d'emploi", "automatisation"],
 }
 
 export default function RootLayout({
@@ -20,10 +13,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="fr" className={inter.variable}>
-      <body className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 antialiased">
-        {children}
-      </body>
+    <html lang="fr">
+      <body>{children}</body>
     </html>
   )
 }

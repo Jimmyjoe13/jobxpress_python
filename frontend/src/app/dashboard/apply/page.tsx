@@ -1,23 +1,30 @@
 "use client"
 
-// Force dynamic rendering to avoid prerendering issues with Supabase
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
-import { FileUpload } from "@/components/ui/file-upload"
-import { Stepper } from "@/components/ui/stepper"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
-import { ArrowLeft, ArrowRight, Sparkles, CheckCircle, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { 
+  ArrowLeft, 
+  ArrowRight, 
+  Sparkles, 
+  CheckCircle, 
+  User, 
+  Briefcase, 
+  Upload as UploadIcon,
+  FileCheck,
+  MapPin,
+  Phone,
+  Mail,
+  Loader2
+} from "lucide-react"
 
 const STEPS = [
-  { title: "Informations", description: "Vos coordonnées" },
-  { title: "Recherche", description: "Le poste souhaité" },
-  { title: "CV", description: "Votre parcours" },
-  { title: "Récapitulatif", description: "Vérification" },
+  { title: "Informations", icon: User },
+  { title: "Recherche", icon: Briefcase },
+  { title: "CV", icon: UploadIcon },
+  { title: "Confirmation", icon: FileCheck },
 ]
 
 const CONTRACT_OPTIONS = [
@@ -75,13 +82,9 @@ export default function ApplyPage() {
     cvFile: null,
   })
 
-  // Load user data on mount (only if Supabase is configured)
   useEffect(() => {
     const loadUserData = async () => {
-      // Skip if Supabase is not configured
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-        return
-      }
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return
       
       try {
         const { createClient } = await import("@/lib/supabase/client")
@@ -89,7 +92,6 @@ export default function ApplyPage() {
         const { data: { user } } = await supabase.auth.getUser()
         
         if (user) {
-          // Récupérer le profil complet depuis user_profiles
           const { data: profile } = await supabase
             .from('user_profiles')
             .select('first_name, last_name, phone')
@@ -103,7 +105,6 @@ export default function ApplyPage() {
             email: user.email || prev.email,
             phone: profile?.phone || prev.phone,
           }))
-          // Sauvegarder l'ID utilisateur pour la liaison
           setUserId(user.id)
         }
       } catch (err) {
@@ -118,40 +119,35 @@ export default function ApplyPage() {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  const handleSelectChange = (name: string) => (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setFormData(prev => ({ ...prev, [name]: e.target.value }))
-  }
-
-  const handleFileSelect = (file: File) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
     setFormData(prev => ({ ...prev, cvFile: file }))
-  }
-
-  const handleFileRemove = () => {
-    setFormData(prev => ({ ...prev, cvFile: null }))
   }
 
   const nextStep = () => {
     if (currentStep < STEPS.length - 1) {
-      setCurrentStep(prev => prev + 1)
+      setCurrentStep(currentStep + 1)
     }
   }
 
   const prevStep = () => {
     if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1)
+      setCurrentStep(currentStep - 1)
     }
   }
 
-  const validateStep = (step: number): boolean => {
-    switch (step) {
+  const validateStep = () => {
+    switch (currentStep) {
       case 0:
-        return !!(formData.firstName && formData.lastName && formData.email)
+        return formData.firstName && formData.lastName && formData.email
       case 1:
-        return !!(formData.jobTitle && formData.location && formData.contractType && formData.experienceLevel)
+        return formData.jobTitle && formData.location && formData.contractType && formData.experienceLevel
       case 2:
-        return !!formData.cvFile
-      default:
+        return true // CV is optional
+      case 3:
         return true
+      default:
+        return false
     }
   }
 
@@ -160,7 +156,6 @@ export default function ApplyPage() {
     setError(null)
 
     try {
-      // 1. Upload CV to Supabase Storage (if configured)
       let cvUrl = ""
       if (formData.cvFile && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         try {
@@ -172,13 +167,8 @@ export default function ApplyPage() {
             .from("cvs")
             .upload(fileName, formData.cvFile)
 
-          if (uploadError) {
-            console.error("Upload error:", uploadError)
-            // Continue without CV upload for now
-          } else if (uploadData) {
-            const { data: urlData } = supabase.storage
-              .from("cvs")
-              .getPublicUrl(uploadData.path)
+          if (!uploadError && uploadData) {
+            const { data: urlData } = supabase.storage.from("cvs").getPublicUrl(uploadData.path)
             cvUrl = urlData.publicUrl
           }
         } catch (err) {
@@ -186,7 +176,6 @@ export default function ApplyPage() {
         }
       }
 
-      // 2. Send data to backend API
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
       
       const payload = {
@@ -200,20 +189,18 @@ export default function ApplyPage() {
         experience_level: formData.experienceLevel,
         location: formData.location,
         cv_url: cvUrl || null,
-        user_id: userId,  // Lien vers l'utilisateur connecté
+        user_id: userId,
       }
 
       const response = await fetch(`${apiUrl}/api/v2/apply`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || "Erreur lors de la soumission")
+        const data = await response.json()
+        throw new Error(data.detail || "Erreur lors de l'envoi")
       }
 
       setIsSuccess(true)
@@ -228,40 +215,44 @@ export default function ApplyPage() {
   if (isSuccess) {
     return (
       <div className="max-w-2xl mx-auto animate-fade-in">
-        <Card className="border-0 shadow-xl">
-          <CardContent className="pt-12 pb-12 text-center">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="w-10 h-10 text-green-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Candidature envoyée ! 🎉
-            </h2>
-            <p className="text-gray-600 mb-8 max-w-md mx-auto">
-              Notre IA analyse maintenant les offres d&apos;emploi correspondant à votre profil. 
-              Vous recevrez un email avec les meilleures opportunités et vos lettres de motivation personnalisées.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button onClick={() => router.push("/dashboard")}>
-                Retour au tableau de bord
-              </Button>
-              <Button variant="outline" onClick={() => {
+        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-12 text-center">
+          <div className="w-20 h-20 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <CheckCircle className="w-10 h-10 text-emerald-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">
+            Candidature envoyée ! 🎉
+          </h2>
+          <p className="text-slate-400 mb-8 max-w-md mx-auto">
+            Notre IA analyse maintenant les offres d&apos;emploi correspondant à votre profil. 
+            Vous recevrez un email avec les meilleures opportunités.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button 
+              onClick={() => router.push("/dashboard")}
+              className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
+            >
+              Retour au tableau de bord
+            </button>
+            <button 
+              onClick={() => {
                 setIsSuccess(false)
                 setCurrentStep(0)
-                setFormData({
-                  ...formData,
+                setFormData(prev => ({
+                  ...prev,
                   jobTitle: "",
                   location: "",
                   contractType: "",
                   workType: "Tous",
                   experienceLevel: "",
                   cvFile: null,
-                })
-              }}>
-                Nouvelle recherche
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                }))
+              }}
+              className="px-6 py-3 border border-slate-600 text-white font-semibold rounded-xl hover:bg-slate-800 transition-all"
+            >
+              Nouvelle recherche
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
@@ -270,244 +261,343 @@ export default function ApplyPage() {
     <div className="max-w-2xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-          Nouvelle candidature
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-4 transition-colors group">
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+          Retour
+        </Link>
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-sm mb-3 ml-4">
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Nouvelle recherche</span>
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+          Lancez votre candidature
         </h1>
-        <p className="text-gray-600">
+        <p className="text-slate-400">
           Remplissez le formulaire pour lancer votre recherche d&apos;emploi automatisée
         </p>
       </div>
 
       {/* Stepper */}
       <div className="mb-8">
-        <Stepper steps={STEPS} currentStep={currentStep} />
+        <div className="flex items-center justify-between">
+          {STEPS.map((step, index) => (
+            <div key={index} className="flex items-center flex-1">
+              <div className="flex flex-col items-center">
+                <div
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all
+                    ${index < currentStep
+                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                      : index === currentStep
+                      ? "bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/30"
+                      : "bg-slate-800 text-slate-500 border border-slate-700"
+                    }`}
+                >
+                  {index < currentStep ? (
+                    <CheckCircle className="w-5 h-5" />
+                  ) : (
+                    <step.icon className="w-5 h-5" />
+                  )}
+                </div>
+                <span className={`mt-2 text-xs font-medium hidden sm:block ${
+                  index <= currentStep ? "text-white" : "text-slate-500"
+                }`}>
+                  {step.title}
+                </span>
+              </div>
+              {index < STEPS.length - 1 && (
+                <div className="flex-1 mx-2 h-0.5 bg-slate-800">
+                  <div
+                    className={`h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500 ${
+                      index < currentStep ? "w-full" : "w-0"
+                    }`}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Form Card */}
-      <Card className="border-0 shadow-xl">
-        <CardHeader>
-          <CardTitle>{STEPS[currentStep].title}</CardTitle>
-          <CardDescription>{STEPS[currentStep].description}</CardDescription>
-        </CardHeader>
+      <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 sm:p-8">
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+            {error}
+          </div>
+        )}
 
-        <CardContent className="space-y-6">
-          {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Step 1: Personal Information */}
-          {currentStep === 0 && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  name="firstName"
-                  label="Prénom *"
-                  placeholder="Jean"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
-                  required
-                />
-                <Input
-                  name="lastName"
-                  label="Nom *"
-                  placeholder="Dupont"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <Input
-                type="email"
-                name="email"
-                label="Email *"
-                placeholder="vous@exemple.com"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-              />
-              <Input
-                type="tel"
-                name="phone"
-                label="Téléphone"
-                placeholder="+33 6 12 34 56 78"
-                value={formData.phone}
-                onChange={handleInputChange}
-              />
-            </div>
-          )}
-
-          {/* Step 2: Job Search Preferences */}
-          {currentStep === 1 && (
-            <div className="space-y-4">
-              <Input
-                name="jobTitle"
-                label="Poste recherché *"
-                placeholder="ex: Développeur Full Stack, Chef de projet..."
-                value={formData.jobTitle}
-                onChange={handleInputChange}
-                required
-              />
-              <Input
-                name="location"
-                label="Localisation souhaitée *"
-                placeholder="ex: Paris, Lyon, France..."
-                value={formData.location}
-                onChange={handleInputChange}
-                required
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <Select
-                  label="Type de contrat *"
-                  options={CONTRACT_OPTIONS}
-                  value={formData.contractType}
-                  onChange={handleSelectChange("contractType")}
-                  required
-                />
-                <Select
-                  label="Niveau d'expérience *"
-                  options={EXPERIENCE_OPTIONS}
-                  value={formData.experienceLevel}
-                  onChange={handleSelectChange("experienceLevel")}
-                  required
-                />
-              </div>
-              <Select
-                label="Mode de travail"
-                options={WORK_TYPE_OPTIONS}
-                value={formData.workType}
-                onChange={handleSelectChange("workType")}
-              />
-            </div>
-          )}
-
-          {/* Step 3: CV Upload */}
-          {currentStep === 2 && (
-            <div className="space-y-4">
-              <FileUpload
-                label="Déposez votre CV ici"
-                onFileSelect={handleFileSelect}
-                onFileRemove={handleFileRemove}
-                currentFile={formData.cvFile}
-              />
-              <p className="text-sm text-gray-500">
-                Votre CV sera analysé par notre IA pour extraire vos compétences et expériences.
-                Cela permet de mieux matcher les offres d&apos;emploi.
-              </p>
-            </div>
-          )}
-
-          {/* Step 4: Summary */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <div className="bg-gray-50 rounded-xl p-6 space-y-4">
-                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-blue-600" />
-                  Récapitulatif de votre candidature
-                </h4>
-                
-                <div className="grid gap-3 text-sm">
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-500">Nom complet</span>
-                    <span className="font-medium">{formData.firstName} {formData.lastName}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-500">Email</span>
-                    <span className="font-medium">{formData.email}</span>
-                  </div>
-                  {formData.phone && (
-                    <div className="flex justify-between py-2 border-b border-gray-200">
-                      <span className="text-gray-500">Téléphone</span>
-                      <span className="font-medium">{formData.phone}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-500">Poste recherché</span>
-                    <span className="font-medium">{formData.jobTitle}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-500">Localisation</span>
-                    <span className="font-medium">{formData.location}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-500">Type de contrat</span>
-                    <span className="font-medium">{formData.contractType}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-500">Niveau d&apos;expérience</span>
-                    <span className="font-medium">{formData.experienceLevel}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-500">Mode de travail</span>
-                    <span className="font-medium">{formData.workType}</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-gray-500">CV</span>
-                    <span className="font-medium text-green-600">
-                      {formData.cvFile ? `✓ ${formData.cvFile.name}` : "Non fourni"}
-                    </span>
-                  </div>
+        {/* Step 0: Personal Info */}
+        {currentStep === 0 && (
+          <div className="space-y-5">
+            <h2 className="text-xl font-semibold text-white mb-6">Vos informations</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Prénom *</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                  <input
+                    type="text"
+                    name="firstName"
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    placeholder="Jean"
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                    required
+                  />
                 </div>
               </div>
-
-              <div className="bg-blue-50 rounded-xl p-4 text-sm text-blue-800">
-                <strong>💡 Ce qui va se passer :</strong>
-                <ul className="mt-2 space-y-1 list-disc list-inside">
-                  <li>Notre IA va rechercher les meilleures offres correspondant à votre profil</li>
-                  <li>Chaque offre sera analysée et scorée selon vos compétences</li>
-                  <li>Une lettre de motivation personnalisée sera générée pour le meilleur match</li>
-                  <li>Vous recevrez le tout par email dans quelques minutes</li>
-                </ul>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Nom *</label>
+                <input
+                  type="text"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleInputChange}
+                  placeholder="Dupont"
+                  className="w-full px-4 py-3.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                  required
+                />
               </div>
             </div>
-          )}
-
-          {/* Navigation Buttons */}
-          <div className="flex justify-between pt-6 border-t border-gray-100">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={prevStep}
-              disabled={currentStep === 0}
-              className={currentStep === 0 ? "invisible" : ""}
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Précédent
-            </Button>
-
-            {currentStep < STEPS.length - 1 ? (
-              <Button
-                type="button"
-                onClick={nextStep}
-                disabled={!validateStep(currentStep)}
-              >
-                Suivant
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Envoi en cours...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Lancer la recherche
-                  </>
-                )}
-              </Button>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Email *</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="vous@exemple.com"
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Téléphone</label>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  placeholder="+33 6 12 34 56 78"
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                />
+              </div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        )}
+
+        {/* Step 1: Job Search */}
+        {currentStep === 1 && (
+          <div className="space-y-5">
+            <h2 className="text-xl font-semibold text-white mb-6">Votre recherche</h2>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Poste recherché *</label>
+              <div className="relative">
+                <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                <input
+                  type="text"
+                  name="jobTitle"
+                  value={formData.jobTitle}
+                  onChange={handleInputChange}
+                  placeholder="Développeur Full Stack, Data Analyst..."
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Localisation *</label>
+              <div className="relative">
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                <input
+                  type="text"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleInputChange}
+                  placeholder="Paris, Lyon, France..."
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Type de contrat *</label>
+                <select
+                  name="contractType"
+                  value={formData.contractType}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-3.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                  required
+                >
+                  <option value="" className="bg-slate-800">Sélectionner...</option>
+                  {CONTRACT_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value} className="bg-slate-800">{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Expérience *</label>
+                <select
+                  name="experienceLevel"
+                  value={formData.experienceLevel}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-3.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                  required
+                >
+                  <option value="" className="bg-slate-800">Sélectionner...</option>
+                  {EXPERIENCE_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value} className="bg-slate-800">{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Mode de travail</label>
+              <select
+                name="workType"
+                value={formData.workType}
+                onChange={handleInputChange}
+                className="w-full px-4 py-3.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+              >
+                {WORK_TYPE_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value} className="bg-slate-800">{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: CV Upload */}
+        {currentStep === 2 && (
+          <div className="space-y-5">
+            <h2 className="text-xl font-semibold text-white mb-6">Votre CV</h2>
+            <div className="border-2 border-dashed border-slate-700 rounded-2xl p-8 text-center hover:border-indigo-500/50 transition-colors">
+              <input
+                type="file"
+                id="cv-upload"
+                accept=".pdf,.doc,.docx"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <label htmlFor="cv-upload" className="cursor-pointer">
+                {formData.cvFile ? (
+                  <div>
+                    <div className="w-16 h-16 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle className="w-8 h-8 text-emerald-400" />
+                    </div>
+                    <p className="text-white font-medium mb-1">{formData.cvFile.name}</p>
+                    <p className="text-sm text-slate-500 mb-4">
+                      {(formData.cvFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                    <span className="text-sm text-indigo-400 hover:text-indigo-300">
+                      Changer de fichier
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <UploadIcon className="w-8 h-8 text-slate-500" />
+                    </div>
+                    <p className="text-white font-medium mb-1">Déposez votre CV ici</p>
+                    <p className="text-sm text-slate-500 mb-4">ou cliquez pour sélectionner</p>
+                    <span className="text-xs text-slate-600">PDF, DOC, DOCX • Max 10MB</span>
+                  </div>
+                )}
+              </label>
+            </div>
+            <p className="text-sm text-slate-400 text-center">
+              Le CV est optionnel mais recommandé pour de meilleurs résultats
+            </p>
+          </div>
+        )}
+
+        {/* Step 3: Recap */}
+        {currentStep === 3 && (
+          <div className="space-y-5">
+            <h2 className="text-xl font-semibold text-white mb-6">Récapitulatif</h2>
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                <h3 className="text-sm font-medium text-slate-400 mb-3">Informations personnelles</h3>
+                <div className="space-y-2 text-sm">
+                  <p><span className="text-slate-500">Nom:</span> <span className="text-white">{formData.firstName} {formData.lastName}</span></p>
+                  <p><span className="text-slate-500">Email:</span> <span className="text-white">{formData.email}</span></p>
+                  {formData.phone && <p><span className="text-slate-500">Tél:</span> <span className="text-white">{formData.phone}</span></p>}
+                </div>
+              </div>
+              <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                <h3 className="text-sm font-medium text-slate-400 mb-3">Recherche</h3>
+                <div className="space-y-2 text-sm">
+                  <p><span className="text-slate-500">Poste:</span> <span className="text-white">{formData.jobTitle}</span></p>
+                  <p><span className="text-slate-500">Lieu:</span> <span className="text-white">{formData.location}</span></p>
+                  <p><span className="text-slate-500">Contrat:</span> <span className="text-white">{formData.contractType}</span></p>
+                  <p><span className="text-slate-500">Expérience:</span> <span className="text-white">{formData.experienceLevel}</span></p>
+                  <p><span className="text-slate-500">Mode:</span> <span className="text-white">{formData.workType}</span></p>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                <h3 className="text-sm font-medium text-slate-400 mb-3">CV</h3>
+                <p className="text-sm">
+                  {formData.cvFile ? (
+                    <span className="text-emerald-400 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" />
+                      {formData.cvFile.name}
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">Non fourni</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation Buttons */}
+        <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-700/50">
+          <button
+            onClick={prevStep}
+            disabled={currentStep === 0}
+            className="flex items-center gap-2 px-5 py-2.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Précédent
+          </button>
+          
+          {currentStep < STEPS.length - 1 ? (
+            <button
+              onClick={nextStep}
+              disabled={!validateStep()}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Suivant
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Envoi...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  Lancer la recherche
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
