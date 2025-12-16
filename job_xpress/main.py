@@ -65,6 +65,18 @@ async def lifespan(app: FastAPI):
     # Nettoyage initial du cache
     cache_service.cleanup_expired()
     
+    # Récupération des tâches orphelines (crash recovery)
+    orphans = cache_service.get_orphan_tasks(timeout_seconds=600)  # 10 min
+    for orphan in orphans:
+        logger.warning(f"🔄 Reprise tâche orpheline ID={orphan['id']} (retries={orphan['retries']})")
+        if orphan['retries'] < 3:  # Max 3 tentatives
+            cache_service.reset_task(orphan['id'])
+        else:
+            cache_service.mark_task_failed(orphan['id'], "Max retries exceeded after crash recovery")
+    
+    if orphans:
+        logger.info(f"📋 {len(orphans)} tâche(s) orpheline(s) traitée(s)")
+    
     yield
     
     # Nettoyage final
@@ -208,13 +220,38 @@ async def health_check_deep():
     }
 
 
-async def process_application_task(payload: TallyWebhookPayload):
+@app.get("/health/tasks")
+async def health_check_tasks():
+    """
+    Endpoint de monitoring des tâches en file d'attente.
+    Affiche les statistiques des tâches (pending, processing, done, failed).
+    """
+    task_stats = cache_service.get_task_stats()
+    cache_stats = cache_service.get_stats()
+    
+    return {
+        "tasks": task_stats,
+        "cache": cache_stats,
+        "orphan_timeout_seconds": 600,
+        "max_retries": 3
+    }
+
+
+async def process_application_task(payload: TallyWebhookPayload, task_id: int = None):
     """
     Tâche de traitement d'une candidature.
     Exécutée en arrière-plan après réception du webhook.
+    
+    Args:
+        payload: Données du webhook Tally
+        task_id: ID de la tâche persistée (optionnel, pour tracking)
     """
     event_id = payload.eventId
-    logger.info(f"🚀 Démarrage traitement Event ID: {event_id}")
+    logger.info(f"🚀 Démarrage traitement Event ID: {event_id}" + (f" (Task ID: {task_id})" if task_id else ""))
+
+    # Marquer la tâche comme en cours de traitement
+    if task_id:
+        cache_service.claim_task(task_id)
 
     try:
         # 1. PROFIL
@@ -234,6 +271,8 @@ async def process_application_task(payload: TallyWebhookPayload):
 
         if not raw_jobs:
             logger.warning("❌ Aucune offre trouvée. Fin du traitement.")
+            if task_id:
+                cache_service.mark_task_done(task_id)  # Pas d'erreur, juste pas d'offres
             return
 
         # 3. ANALYSE - Avec garantie minimum d'offres
@@ -264,6 +303,8 @@ async def process_application_task(payload: TallyWebhookPayload):
 
         if not valid_jobs:
             logger.warning("⚠️ Aucune offre retenue du tout")
+            if task_id:
+                cache_service.mark_task_done(task_id)
             return
 
         # Tri final par score
@@ -288,8 +329,16 @@ async def process_application_task(payload: TallyWebhookPayload):
             email_service.send_application_email(candidate, best_offer, other_offers, pdf_path)
             logger.info(f"✅ Cycle terminé avec succès pour {candidate.email}")
 
+        # Marquer la tâche comme terminée
+        if task_id:
+            cache_service.mark_task_done(task_id)
+            logger.info(f"✅ Tâche {task_id} marquée comme terminée")
+
     except Exception as e:
         logger.exception(f"❌ CRASH Background Task: {str(e)}")
+        # Marquer la tâche comme échouée
+        if task_id:
+            cache_service.mark_task_failed(task_id, str(e))
         # En production, Sentry capture automatiquement l'exception
 
 
@@ -306,7 +355,10 @@ async def receive_tally_webhook(
     Protection:
     - Rate limiting: 10 requêtes/minute par IP
     - Anti-doublon: 5 minutes de cooldown par email
+    - Persistance: le payload est sauvegardé AVANT traitement
     """
+    import json as json_module
+    
     try:
         # Extraction de l'email pour déduplication
         fields = {f.key: f.value for f in payload.data.fields}
@@ -326,16 +378,23 @@ async def receive_tally_webhook(
         # Enregistrer dans le cache avec TTL
         cache_service.set(cache_key, "processed", ttl_seconds=COOLDOWN_SECONDS)
 
-        # Lancement du traitement
-        background_tasks.add_task(process_application_task, payload)
+        # --- PERSISTANCE AVANT TRAITEMENT ---
+        task_id = cache_service.enqueue_task(
+            task_type="tally_webhook",
+            payload=json_module.dumps(payload.model_dump())
+        )
+        logger.info(f"📥 Tâche persistée en DB (Task ID: {task_id})")
+
+        # Lancement du traitement avec le task_id
+        background_tasks.add_task(process_application_task, payload, task_id)
 
         logger.info(f"📨 Webhook reçu pour {candidate_email}")
-        return {"status": "received", "message": "Processing started", "event_id": payload.eventId}
+        return {"status": "received", "message": "Processing started", "event_id": payload.eventId, "task_id": task_id}
 
     except Exception as e:
         logger.exception(f"⚠️ Erreur webhook: {e}")
-        # Fallback: on traite quand même
-        background_tasks.add_task(process_application_task, payload)
+        # Fallback: on traite quand même (sans tracking)
+        background_tasks.add_task(process_application_task, payload, None)
         return {"status": "received_fallback"}
 
 
@@ -364,11 +423,20 @@ class DirectApplicationRequest(BaseModel):
     user_id: Optional[str] = None  # ID de l'utilisateur connecté (auth.users.id)
 
 
-async def process_direct_application(candidate: CandidateProfile, event_id: str):
+async def process_direct_application(candidate: CandidateProfile, event_id: str, task_id: int = None):
     """
     Traitement d'une candidature directe (même logique que le webhook).
+    
+    Args:
+        candidate: Profil du candidat
+        event_id: ID unique de l'événement
+        task_id: ID de la tâche persistée (optionnel, pour tracking)
     """
-    logger.info(f"🚀 Démarrage traitement Direct Event ID: {event_id}")
+    logger.info(f"🚀 Démarrage traitement Direct Event ID: {event_id}" + (f" (Task ID: {task_id})" if task_id else ""))
+
+    # Marquer la tâche comme en cours de traitement
+    if task_id:
+        cache_service.claim_task(task_id)
 
     try:
         logger.info(f"👤 Candidat: {candidate.first_name} {candidate.last_name} ({candidate.email})")
@@ -386,6 +454,8 @@ async def process_direct_application(candidate: CandidateProfile, event_id: str)
 
         if not raw_jobs:
             logger.warning("❌ Aucune offre trouvée. Fin du traitement.")
+            if task_id:
+                cache_service.mark_task_done(task_id)
             return
 
         # Analyse IA
@@ -411,6 +481,8 @@ async def process_direct_application(candidate: CandidateProfile, event_id: str)
 
         if not valid_jobs:
             logger.warning("⚠️ Aucune offre retenue du tout")
+            if task_id:
+                cache_service.mark_task_done(task_id)
             return
 
         valid_jobs.sort(key=lambda x: x.match_score, reverse=True)
@@ -434,8 +506,15 @@ async def process_direct_application(candidate: CandidateProfile, event_id: str)
             email_service.send_application_email(candidate, best_offer, other_offers, pdf_path)
             logger.info(f"✅ Cycle terminé avec succès pour {candidate.email}")
 
+        # Marquer la tâche comme terminée
+        if task_id:
+            cache_service.mark_task_done(task_id)
+            logger.info(f"✅ Tâche {task_id} marquée comme terminée")
+
     except Exception as e:
         logger.exception(f"❌ CRASH Background Task: {str(e)}")
+        if task_id:
+            cache_service.mark_task_failed(task_id, str(e))
 
 
 @app.post("/api/v2/apply")
@@ -493,14 +572,39 @@ async def apply_direct(
         # Générer un event_id unique
         event_id = str(uuid.uuid4())
 
-        # Lancer le traitement en arrière-plan
-        background_tasks.add_task(process_direct_application, candidate, event_id)
+        # --- PERSISTANCE AVANT TRAITEMENT ---
+        import json as json_module
+        task_payload = {
+            "event_id": event_id,
+            "candidate": {
+                "first_name": data.first_name,
+                "last_name": data.last_name,
+                "email": data.email,
+                "phone": data.phone,
+                "job_title": data.job_title,
+                "contract_type": data.contract_type,
+                "work_type": data.work_type,
+                "experience_level": data.experience_level,
+                "location": data.location,
+                "cv_url": data.cv_url,
+                "user_id": data.user_id
+            }
+        }
+        task_id = cache_service.enqueue_task(
+            task_type="direct_application",
+            payload=json_module.dumps(task_payload)
+        )
+        logger.info(f"📥 Tâche persistée en DB (Task ID: {task_id})")
+
+        # Lancer le traitement en arrière-plan avec le task_id
+        background_tasks.add_task(process_direct_application, candidate, event_id, task_id)
 
         logger.info(f"📨 Candidature directe reçue pour {data.email}")
         return {
             "status": "received",
             "message": "Processing started",
-            "event_id": event_id
+            "event_id": event_id,
+            "task_id": task_id
         }
 
     except Exception as e:

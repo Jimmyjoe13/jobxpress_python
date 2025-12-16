@@ -1,6 +1,8 @@
 import httpx
 import asyncio
 import trafilatura
+import json
+from pathlib import Path
 from typing import List, Any
 from core.config import settings
 from core.logging_config import get_logger
@@ -22,62 +24,32 @@ JSEARCH_TYPES_MAP = {
     "CDI": "FULLTIME", "CDD": "CONTRACT", "Stage": "INTERN", "Alternance": "INTERN", "Freelance": "CONTRACT"
 }
 
-# LISTE ULTRA-ÉTENDUE DE SYNONYMES (Français/Anglais + Abréviations)
-JOB_SYNONYMS_LIST = {
-    "growth hacker": [
-        "Growth Hacker", "Growth Marketer", "Traffic Manager", "Responsable Acquisition", 
-        "Head of Growth", "Digital Marketer", "Chargé de marketing digital", "SEO Manager", 
-        "Acquisition Specialist", "Demand Generation Manager", "Inbound Marketer"
-    ],
-    "business developer": [
-        "Business Developer", "BizDev", "Sales Manager", "Account Manager", 
-        "Chargé d'affaires", "Ingénieur commercial", "Commercial B2B", 
-        "Sales Development Representative", "SDR", "Business Development Representative", "BDR",
-        "Responsable commercial", "Technico-commercial", "Inside Sales", "Key Account Manager", "KAM"
-    ],
-    "développeur": [
-        "Développeur", "Developer", "Software Engineer", "Backend Developer", 
-        "Frontend Developer", "Fullstack Developer", "Ingénieur d'études", 
-        "Programmer", "Tech Lead", "DevOps", "Architecte Web", "Lead Developer"
-    ],
-    "data analyst": [
-        "Data Analyst", "Data Scientist", "Business Analyst", "Data Engineer", 
-        "Consultant Data", "Analytics Manager", "BI Analyst", "Machine Learning Engineer",
-        "Data Manager", "Chief Data Officer"
-    ],
-    "chef de projet": [
-        "Chef de projet", "Project Manager", "Product Owner", "Product Manager", 
-        "Scrum Master", "Consultant fonctionnel", "Chargé de mission", "Program Manager", 
-        "Delivery Manager", "Chef de projet digital", "Chef de projet MOA"
-    ],
-    "commercial": [
-        "Commercial", "Vendeur", "Sales Representative", "Négociateur", 
-        "Conseiller commercial", "Attaché commercial", "Directeur de clientèle",
-        "Responsable des ventes", "Agent commercial", "Sales Executive"
-    ],
-    "marketing": [
-        "Assistant Marketing", "Chargé de marketing", "Chef de produit", 
-        "Brand Manager", "Responsable Marketing", "Communication Officer",
-        "Social Media Manager", "Community Manager", "Content Manager", "Marketing Manager"
-    ],
-    "rh": [
-        "Chargé de recrutement", "Talent Acquisition", "Assistant RH", 
-        "Ressources Humaines", "HR Manager", "Gestionnaire Paie", 
-        "Recruteur", "HRBP", "Responsable RH", "Directeur des Ressources Humaines"
-    ],
-    "assistant": [
-        "Assistant", "Office Manager", "Secrétaire", "Assistant de direction",
-        "Assistant administratif", "Assistant polyvalent", "Clerc", "Assistant de gestion"
-    ],
-    "finance": [
-        "Contrôleur de gestion", "Comptable", "Auditeur", "Directeur Financier",
-        "DAF", "Trésorier", "Analyste financier", "Comptable fournisseurs", "Comptable clients"
-    ],
-    "communication": [
-        "Chargé de communication", "Responsable communication", "Attaché de presse",
-        "Directeur de la communication", "Chargé de relations publiques"
-    ]
-}
+
+def _load_job_synonyms() -> dict:
+    """
+    Charge les synonymes de jobs depuis le fichier JSON externe.
+    
+    Permet de modifier les synonymes sans redéployer le code.
+    Fallback sur un dictionnaire vide si le fichier n'existe pas.
+    """
+    synonyms_path = Path(__file__).parent.parent / "data" / "job_synonyms.json"
+    
+    if synonyms_path.exists():
+        try:
+            with open(synonyms_path, "r", encoding="utf-8") as f:
+                synonyms = json.load(f)
+                logger.info(f"📚 {len(synonyms)} catégories de synonymes chargées depuis {synonyms_path.name}")
+                return synonyms
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"⚠️ Erreur chargement synonymes: {e}")
+            return {}
+    
+    logger.warning(f"⚠️ Fichier synonymes non trouvé: {synonyms_path}")
+    return {}
+
+
+# Chargement des synonymes au démarrage du module
+JOB_SYNONYMS_LIST = _load_job_synonyms()
 
 class SearchEngine:
     URL_JSEARCH = "https://jsearch.p.rapidapi.com/search"

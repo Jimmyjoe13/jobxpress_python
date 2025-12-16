@@ -2,12 +2,14 @@ import httpx
 import json
 import asyncio
 from typing import List, Dict, Any
+from pydantic import ValidationError
 from core.config import settings
 from core.logging_config import get_logger
 from core.retry import resilient_post, CircuitBreaker
 from core.exceptions import LLMError, LLMTimeoutError, LLMResponseError, LLMQuotaError
 from models.candidate import CandidateProfile, WorkType
 from models.job_offer import JobOffer
+from models.llm_schemas import LLMScoreResponse
 from services.web_search import web_search
 
 # Logger structuré
@@ -107,28 +109,27 @@ class LLMEngine:
                     timeout=60.0 
                 )
                 response.raise_for_status()
-                data = json.loads(response.json()['choices'][0]['message']['content'])
+                raw_content = response.json()['choices'][0]['message']['content']
                 
-                # --- CALCUL DU SCORE PONDÉRÉ ---
-                # On applique nos propres poids pour contrôler la décision
-                w_tech = 0.4      # 40% Compétences
-                w_struct = 0.3    # 30% Contrat/Lieu
-                w_exp = 0.3       # 30% Expérience
-
-                s_tech = data.get("score_technical", 0)
-                s_struct = data.get("score_structural", 0)
-                s_exp = data.get("score_experience", 0)
-
-                # Score final arrondi
-                final_score = int((s_tech * w_tech) + (s_struct * w_struct) + (s_exp * w_exp))
+                # --- VALIDATION PYDANTIC ---
+                # Garantit que la réponse LLM est conforme au schéma attendu
+                try:
+                    score_data = LLMScoreResponse.model_validate_json(raw_content)
+                except ValidationError as ve:
+                    logger.warning(f"⚠️ Validation Pydantic échouée pour '{offer.title}': {ve.error_count()} erreurs")
+                    logger.debug(f"Détails validation: {ve.errors()}")
+                    return self._fallback_scoring(candidate, offer)
                 
-                # Si c'est une école, on force 0 (sécurité ultime)
-                if data.get("is_school_scheme") is True:
-                    final_score = 0
+                # --- CALCUL DU SCORE PONDÉRÉ via le modèle ---
+                final_score = score_data.calculate_weighted_score(
+                    w_tech=0.4,   # 40% Compétences
+                    w_struct=0.3, # 30% Contrat/Lieu
+                    w_exp=0.3     # 30% Expérience
+                )
 
                 offer.match_score = final_score
                 # On stocke les détails pour l'affichage dans l'email
-                offer.ai_analysis = data 
+                offer.ai_analysis = score_data.model_dump() 
                 
             except httpx.TimeoutException as e:
                 logger.warning(f"⚠️ Timeout IA sur '{offer.title}'")

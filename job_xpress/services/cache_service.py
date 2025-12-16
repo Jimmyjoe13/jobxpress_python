@@ -238,6 +238,104 @@ class CacheService:
                 """, (error, task_id))
         except Exception as e:
             logger.error(f"Mark task failed error: {e}")
+    
+    def claim_task(self, task_id: int) -> bool:
+        """
+        Marque une tâche comme en cours de traitement.
+        Utilise le pattern "work stealing" pour éviter les doublons.
+        
+        Returns:
+            True si la tâche a été claim avec succès, False sinon
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute("""
+                    UPDATE pending_tasks 
+                    SET status = 'processing', processed_at = ?
+                    WHERE id = ? AND status = 'pending'
+                """, (time.time(), task_id))
+                success = cursor.rowcount > 0
+                if success:
+                    logger.info(f"🔒 Tâche {task_id} claim pour traitement")
+                return success
+        except Exception as e:
+            logger.error(f"Claim task error: {e}")
+            return False
+    
+    def get_orphan_tasks(self, timeout_seconds: int = 600) -> list:
+        """
+        Récupère les tâches orphelines (en 'processing' depuis trop longtemps).
+        
+        Ces tâches sont probablement issues d'un crash serveur.
+        
+        Args:
+            timeout_seconds: Délai après lequel une tâche 'processing' est considérée orpheline (défaut: 10 min)
+        
+        Returns:
+            Liste des tâches orphelines
+        """
+        cutoff_time = time.time() - timeout_seconds
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT id, task_type, payload, retries, processed_at
+                    FROM pending_tasks 
+                    WHERE status = 'processing' AND processed_at < ?
+                    ORDER BY id
+                """, (cutoff_time,))
+                orphans = [dict(row) for row in cursor.fetchall()]
+                if orphans:
+                    logger.warning(f"🔍 {len(orphans)} tâche(s) orpheline(s) détectée(s)")
+                return orphans
+        except Exception as e:
+            logger.error(f"Get orphan tasks error: {e}")
+            return []
+    
+    def reset_task(self, task_id: int) -> bool:
+        """
+        Remet une tâche en 'pending' pour re-traitement.
+        
+        Utilisé pour les tâches orphelines ou les retries manuels.
+        
+        Returns:
+            True si la tâche a été reset avec succès
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute("""
+                    UPDATE pending_tasks 
+                    SET status = 'pending', processed_at = NULL, retries = retries + 1
+                    WHERE id = ?
+                """, (task_id,))
+                success = cursor.rowcount > 0
+                if success:
+                    logger.info(f"🔄 Tâche {task_id} remise en queue")
+                return success
+        except Exception as e:
+            logger.error(f"Reset task error: {e}")
+            return False
+    
+    def get_task_stats(self) -> dict:
+        """Retourne des statistiques sur les tâches."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT 
+                        status,
+                        COUNT(*) as count
+                    FROM pending_tasks
+                    GROUP BY status
+                """)
+                stats = {row['status']: row['count'] for row in cursor.fetchall()}
+                return {
+                    "pending": stats.get('pending', 0),
+                    "processing": stats.get('processing', 0),
+                    "done": stats.get('done', 0),
+                    "failed": stats.get('failed', 0)
+                }
+        except Exception as e:
+            logger.error(f"Task stats error: {e}")
+            return {"pending": 0, "processing": 0, "done": 0, "failed": 0}
 
 
 # Instance globale du cache
