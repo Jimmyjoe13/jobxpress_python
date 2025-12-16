@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { FileText, TrendingUp, Clock, ArrowRight, ExternalLink, Star, Zap, Target, Sparkles } from "lucide-react"
 import { DashboardSkeleton } from "@/components/ui/skeleton"
+import { getMyApplicationsFlat, type Application } from "@/lib/api"
 
 interface UserData {
   firstName: string
@@ -11,20 +12,11 @@ interface UserData {
   userId: string | null
 }
 
-interface Application {
-  id: string
-  company_name: string
-  job_title: string
-  job_url: string
-  match_score: number
-  status: string
-  created_at: string
-}
-
 export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null)
   const [applications, setApplications] = useState<Application[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [dataSource, setDataSource] = useState<'api' | 'supabase' | 'none'>('none')
 
   useEffect(() => {
     const loadData = async () => {
@@ -44,6 +36,7 @@ export default function DashboardPage() {
         const { data: { user: authUser } } = await supabase.auth.getUser()
         
         if (authUser) {
+          // Récupérer le profil utilisateur
           const { data: profile } = await supabase
             .from('user_profiles')
             .select('first_name, last_name')
@@ -56,22 +49,40 @@ export default function DashboardPage() {
             userId: authUser.id
           })
 
-          const { data: candidate } = await supabase
-            .from('candidates')
-            .select('id')
-            .eq('user_id', authUser.id)
-            .single()
+          // Tentative 1: Utiliser l'API backend authentifiée
+          try {
+            const apiApps = await getMyApplicationsFlat()
+            if (apiApps.length > 0) {
+              setApplications(apiApps)
+              setDataSource('api')
+              console.log('📡 Applications chargées via API backend')
+            } else {
+              // Pas d'erreur mais pas de données, essayer Supabase direct
+              throw new Error('No data from API')
+            }
+          } catch (apiError) {
+            console.log('⚠️ API backend indisponible, fallback Supabase direct:', apiError)
+            
+            // Tentative 2: Fallback sur Supabase direct
+            const { data: candidate } = await supabase
+              .from('candidates')
+              .select('id')
+              .eq('user_id', authUser.id)
+              .single()
 
-          if (candidate) {
-            const { data: apps } = await supabase
-              .from('applications')
-              .select('*')
-              .eq('candidate_id', candidate.id)
-              .order('created_at', { ascending: false })
-              .limit(10)
+            if (candidate) {
+              const { data: apps } = await supabase
+                .from('applications')
+                .select('*')
+                .eq('candidate_id', candidate.id)
+                .order('created_at', { ascending: false })
+                .limit(10)
 
-            if (apps) {
-              setApplications(apps)
+              if (apps) {
+                setApplications(apps)
+                setDataSource('supabase')
+                console.log('🔌 Applications chargées via Supabase direct')
+              }
             }
           }
         } else {

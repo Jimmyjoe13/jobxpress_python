@@ -12,7 +12,7 @@ import asyncio
 import time
 import httpx
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -610,6 +610,57 @@ async def apply_direct(
     except Exception as e:
         logger.exception(f"⚠️ Erreur API v2: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===========================================
+# API V2 - ENDPOINTS AUTHENTIFIÉS
+# ===========================================
+
+from core.auth import get_required_token, get_current_user_id, get_optional_token
+
+
+@app.get("/api/v2/applications")
+async def get_my_applications(
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Récupère les candidatures de l'utilisateur authentifié.
+    
+    Nécessite un token JWT Supabase valide dans l'en-tête Authorization.
+    Respecte les politiques RLS de Supabase.
+    
+    Returns:
+        Liste des candidatures de l'utilisateur
+    """
+    logger.info(f"📋 Récupération candidatures pour user_id: {user_id}")
+    
+    applications = db_service.get_user_applications(
+        user_id=user_id,
+        access_token=token
+    )
+    
+    return {
+        "user_id": user_id,
+        "count": len(applications),
+        "applications": applications
+    }
+
+
+@app.get("/api/v2/me")
+async def get_current_user(
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Retourne les informations de l'utilisateur authentifié.
+    
+    Utile pour vérifier que l'authentification fonctionne.
+    """
+    return {
+        "user_id": user_id,
+        "authenticated": True
+    }
 
 
 # ===========================================

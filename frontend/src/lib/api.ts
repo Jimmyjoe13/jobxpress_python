@@ -1,4 +1,15 @@
+/**
+ * JobXpress API Client
+ * 
+ * Ce module gère toutes les communications avec l'API backend,
+ * y compris l'authentification JWT via Supabase.
+ */
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+// ============================================
+// TYPES
+// ============================================
 
 export interface CandidateData {
   first_name: string
@@ -11,6 +22,7 @@ export interface CandidateData {
   experience_level: string
   location: string
   cv_url?: string
+  user_id?: string  // ID utilisateur Supabase (si connecté)
 }
 
 export interface JobOffer {
@@ -27,10 +39,22 @@ export interface JobOffer {
   ai_analysis?: Record<string, unknown>
 }
 
+export interface Application {
+  id: string
+  company_name: string
+  job_title: string
+  job_url: string
+  match_score: number
+  status: string
+  created_at: string
+  pdf_path?: string
+}
+
 export interface ApplicationResult {
   status: string
   message: string
   event_id: string
+  task_id?: number
 }
 
 export interface HealthCheck {
@@ -40,61 +64,204 @@ export interface HealthCheck {
   environment: string
 }
 
+export interface UserApplicationsResponse {
+  user_id: string
+  count: number
+  applications: Array<{
+    id: string
+    email: string
+    first_name: string
+    last_name: string
+    applications: Application[]
+  }>
+}
+
+export interface ApiError {
+  detail: string
+  status?: number
+}
+
+// ============================================
+// HELPERS
+// ============================================
+
 /**
- * Submit a job application
+ * Récupère le token JWT de l'utilisateur connecté via Supabase
  */
-export async function submitApplication(data: CandidateData): Promise<ApplicationResult> {
-  const response = await fetch(`${API_BASE_URL}/api/v2/apply`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
+export async function getAuthToken(): Promise<string | null> {
+  // Vérifier si Supabase est configuré
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return null
+  }
+
+  try {
+    const { createClient } = await import("@/lib/supabase/client")
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token || null
+  } catch (error) {
+    console.error('Erreur récupération token:', error)
+    return null
+  }
+}
+
+/**
+ * Effectue une requête API avec authentification optionnelle
+ */
+async function apiRequest<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  requireAuth: boolean = false
+): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options.headers as Record<string, string>
+  }
+
+  // Ajouter le token si disponible
+  const token = await getAuthToken()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  } else if (requireAuth) {
+    throw new Error('Authentification requise')
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Erreur lors de la soumission')
+    if (response.status === 401) {
+      throw new Error('Session expirée, veuillez vous reconnecter')
+    }
+    if (response.status === 429) {
+      const data = await response.json()
+      throw new Error(`Trop de requêtes. Réessayez dans ${data.retry_after || 60} secondes`)
+    }
+    const error = await response.json().catch(() => ({ detail: 'Erreur serveur' }))
+    throw new Error(error.detail || `Erreur ${response.status}`)
   }
 
   return response.json()
+}
+
+// ============================================
+// API PUBLIQUE (pas d'auth requise)
+// ============================================
+
+/**
+ * Submit a job application
+ * Note: Passe le user_id si l'utilisateur est connecté
+ */
+export async function submitApplication(data: CandidateData): Promise<ApplicationResult> {
+  // Récupérer l'ID utilisateur si connecté
+  let userId: string | undefined = data.user_id
+  
+  if (!userId) {
+    try {
+      const { createClient } = await import("@/lib/supabase/client")
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      userId = user?.id
+    } catch {
+      // Pas de problème, l'utilisateur n'est peut-être pas connecté
+    }
+  }
+
+  return apiRequest<ApplicationResult>('/api/v2/apply', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...data,
+      user_id: userId
+    }),
+  })
 }
 
 /**
  * Check API health status
  */
 export async function checkHealth(): Promise<HealthCheck> {
-  const response = await fetch(`${API_BASE_URL}/health`)
-  
-  if (!response.ok) {
-    throw new Error('API indisponible')
-  }
-
-  return response.json()
+  return apiRequest<HealthCheck>('/health')
 }
 
 /**
- * Get user's applications history
+ * Check task queue status
  */
-export async function getApplications(userId: string): Promise<JobOffer[]> {
-  const response = await fetch(`${API_BASE_URL}/api/v2/applications?user_id=${userId}`)
-  
-  if (!response.ok) {
-    throw new Error('Erreur lors de la récupération des candidatures')
-  }
-
-  return response.json()
+export async function checkTasksHealth(): Promise<{
+  tasks: { pending: number; processing: number; done: number; failed: number }
+  cache: { total: number; active: number; expired: number }
+}> {
+  return apiRequest('/health/tasks')
 }
+
+// ============================================
+// API AUTHENTIFIÉE (JWT requis)
+// ============================================
+
+/**
+ * Get current user info (test d'authentification)
+ */
+export async function getCurrentUser(): Promise<{ user_id: string; authenticated: boolean }> {
+  return apiRequest('/api/v2/me', {}, true)
+}
+
+/**
+ * Get user's applications history via API authentifiée
+ * 
+ * Utilise le JWT pour respecter les RLS Supabase côté backend.
+ */
+export async function getMyApplications(): Promise<UserApplicationsResponse> {
+  return apiRequest<UserApplicationsResponse>('/api/v2/applications', {}, true)
+}
+
+/**
+ * Récupère les candidatures avec extraction des données plates
+ * (Wrapper pratique pour l'UI)
+ */
+export async function getMyApplicationsFlat(): Promise<Application[]> {
+  try {
+    const response = await getMyApplications()
+    
+    // Extraire toutes les applications de tous les candidats
+    const allApplications: Application[] = []
+    for (const candidate of response.applications) {
+      if (candidate.applications) {
+        allApplications.push(...candidate.applications)
+      }
+    }
+    
+    // Trier par date décroissante
+    return allApplications.sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+  } catch (error) {
+    console.error('Erreur récupération applications:', error)
+    return []
+  }
+}
+
+// ============================================
+// UPLOAD (à implémenter côté backend)
+// ============================================
 
 /**
  * Upload CV file and get URL
+ * Note: Cet endpoint n'existe pas encore côté backend
  */
 export async function uploadCV(file: File): Promise<string> {
   const formData = new FormData()
   formData.append('file', file)
 
+  const token = await getAuthToken()
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const response = await fetch(`${API_BASE_URL}/api/v2/upload-cv`, {
     method: 'POST',
+    headers,
     body: formData,
   })
 
@@ -104,4 +271,29 @@ export async function uploadCV(file: File): Promise<string> {
 
   const result = await response.json()
   return result.url
+}
+
+// ============================================
+// LEGACY (rétrocompatibilité)
+// ============================================
+
+/**
+ * @deprecated Use getMyApplications() instead
+ */
+export async function getApplications(userId: string): Promise<JobOffer[]> {
+  console.warn('getApplications() is deprecated. Use getMyApplications() instead.')
+  try {
+    const apps = await getMyApplicationsFlat()
+    return apps.map(app => ({
+      title: app.job_title,
+      company: app.company_name,
+      location: '',
+      description: '',
+      url: app.job_url,
+      is_remote: false,
+      match_score: app.match_score
+    }))
+  } catch {
+    return []
+  }
 }
