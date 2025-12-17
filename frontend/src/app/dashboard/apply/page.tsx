@@ -5,22 +5,29 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { 
-  ArrowLeft, 
-  ArrowRight, 
-  Sparkles, 
-  CheckCircle, 
-  User, 
-  Briefcase, 
+import { motion, AnimatePresence } from "framer-motion"
+import type { Variants } from "framer-motion"
+import {
+  ArrowLeft,
+  ArrowRight,
+  Sparkles,
+  CheckCircle,
+  User,
+  Briefcase,
   Upload as UploadIcon,
   FileCheck,
   MapPin,
   Phone,
   Mail,
-  Loader2
+  Loader2,
 } from "lucide-react"
 import { Confetti } from "@/components/ui/confetti"
-import { useToast } from "@/components/ui/toast"
+
+const stepVariants: Variants = {
+  hidden: { opacity: 0, x: 20 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.3, type: "tween" } },
+  exit: { opacity: 0, x: -20, transition: { duration: 0.2 } },
+}
 
 const STEPS = [
   { title: "Informations", icon: User },
@@ -242,31 +249,60 @@ export default function ApplyPage() {
 
   if (isSuccess) {
     return (
-      <div className="max-w-2xl mx-auto animate-fade-in">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-2xl mx-auto"
+      >
         <Confetti active={isSuccess} />
         <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-12 text-center">
-          <div className="w-20 h-20 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg animate-bounce">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+            className="w-20 h-20 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg"
+          >
             <CheckCircle className="w-10 h-10 text-emerald-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-3">
+          </motion.div>
+          <motion.h2
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="text-2xl font-bold text-white mb-3"
+          >
             Candidature envoyée ! 🎉
-          </h2>
-          <p className="text-slate-400 mb-8 max-w-md mx-auto">
-            Notre IA analyse maintenant les offres d&apos;emploi correspondant à votre profil. 
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="text-slate-400 mb-8 max-w-md mx-auto"
+          >
+            Notre IA analyse maintenant les offres d&apos;emploi correspondant à votre profil.
             Vous recevrez un email avec les meilleures opportunités.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button 
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="flex flex-col sm:flex-row gap-3 justify-center"
+          >
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => router.push("/dashboard")}
               className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all"
             >
               Retour au tableau de bord
-            </button>
-            <button 
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => {
                 setIsSuccess(false)
                 setCurrentStep(0)
-                setFormData(prev => ({
+                setFormData((prev) => ({
                   ...prev,
                   jobTitle: "",
                   location: "",
@@ -279,15 +315,20 @@ export default function ApplyPage() {
               className="px-6 py-3 border border-slate-600 text-white font-semibold rounded-xl hover:bg-slate-800 transition-all"
             >
               Nouvelle recherche
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
     )
   }
 
   return (
-    <div className="max-w-2xl mx-auto animate-fade-in">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="max-w-2xl mx-auto"
+    >
       {/* Header */}
       <div className="mb-8">
         <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-4 transition-colors group">
@@ -627,6 +668,6 @@ export default function ApplyPage() {
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
