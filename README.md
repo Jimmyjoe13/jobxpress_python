@@ -1,4 +1,4 @@
-# 🚀 JobXpress v1.1.0 - L'Assistant de Candidature IA
+# 🚀 JobXpress v2.0.0 - L'Assistant de Candidature IA
 
 JobXpress est une application d'automatisation intelligente (Growth Engineering) conçue pour révolutionner la recherche d'emploi.
 
@@ -27,6 +27,7 @@ Elle transforme un simple formulaire de candidature en un pipeline complet : rec
 - **Filtre Anti-École** : Vérification de l'e-réputation (DuckDuckGo)
 - **Fallback Heuristique** : Mode dégradé automatique si l'IA est indisponible
 - **Génération de Lettres** : Lettres de motivation personnalisées
+- **JobyJoba** : Coach IA pour préparer les entretiens
 
 ### 📤 Livrables
 
@@ -34,9 +35,17 @@ Elle transforme un simple formulaire de candidature en un pipeline complet : rec
 - **Email Enrichi** : Top 1 + autres opportunités via **Brevo API**
 - **Sauvegarde Supabase** : Historique des candidatures
 
+### 👤 Gestion de Profil (v2.0.0)
+
+- **Profil Complet** : Informations personnelles et professionnelles
+- **Upload Avatar** : Photo de profil avec preview et crop
+- **Upload CV** : CV par défaut pour les candidatures
+- **Préférences** : Type de contrat, mode de travail, compétences clés
+- **Crédits** : Système de crédits avec plans FREE et PRO
+
 ---
 
-## 🛡️ Robustesse & Fiabilité (v1.1.0)
+## 🛡️ Robustesse & Fiabilité (v2.0.0)
 
 ### Résilience
 
@@ -74,7 +83,7 @@ Elle transforme un simple formulaire de candidature en un pipeline complet : rec
 ## 🛠️ Stack Technique
 
 ```
-Python 3.10+
+Backend (Python 3.10+)
 ├── Framework API    : FastAPI
 ├── IA / LLM         : DeepSeek API
 ├── OCR CV           : Mistral OCR
@@ -85,7 +94,63 @@ Python 3.10+
 ├── PDF              : xhtml2pdf
 ├── Robustesse       : tenacity, slowapi, sentry-sdk
 └── Tests            : pytest, pytest-asyncio
+
+Frontend (Next.js 14+)
+├── Framework        : Next.js 14 (App Router)
+├── Styling          : Tailwind CSS + Design System Dark
+├── Animations       : Framer Motion
+├── Auth             : Supabase Auth
+├── State            : React Hooks
+└── Components       : Radix UI + Custom
 ```
+
+---
+
+## 📊 API V2 - Endpoints
+
+### Authentification (JWT Supabase)
+
+| Méthode | Endpoint          | Description                |
+| ------- | ----------------- | -------------------------- |
+| `GET`   | `/api/v2/me`      | Infos utilisateur connecté |
+| `GET`   | `/api/v2/credits` | État des crédits           |
+
+### Profil Utilisateur
+
+| Méthode  | Endpoint                 | Description                 |
+| -------- | ------------------------ | --------------------------- |
+| `GET`    | `/api/v2/profile`        | Récupérer le profil complet |
+| `PUT`    | `/api/v2/profile`        | Mettre à jour le profil     |
+| `POST`   | `/api/v2/profile/avatar` | Upload avatar               |
+| `DELETE` | `/api/v2/profile/avatar` | Supprimer avatar            |
+| `POST`   | `/api/v2/profile/cv`     | Upload CV par défaut        |
+| `DELETE` | `/api/v2/profile/cv`     | Supprimer CV                |
+
+### Workflow Candidature (Human-in-the-Loop)
+
+| Méthode | Endpoint                            | Description             |
+| ------- | ----------------------------------- | ----------------------- |
+| `POST`  | `/api/v2/search/start`              | Lancer une recherche    |
+| `GET`   | `/api/v2/applications/{id}/results` | Polling résultats       |
+| `POST`  | `/api/v2/applications/{id}/select`  | Sélectionner des offres |
+| `GET`   | `/api/v2/applications`              | Historique candidatures |
+
+### Notifications & Chat
+
+| Méthode | Endpoint                          | Description                   |
+| ------- | --------------------------------- | ----------------------------- |
+| `GET`   | `/api/v2/notifications`           | Liste des notifications       |
+| `PUT`   | `/api/v2/notifications/{id}/read` | Marquer comme lue             |
+| `POST`  | `/api/v2/chat/{app_id}`           | Envoyer un message à JobyJoba |
+
+### Health & Monitoring
+
+| Méthode | Endpoint        | Description                      |
+| ------- | --------------- | -------------------------------- |
+| `GET`   | `/`             | Health check simple              |
+| `HEAD`  | `/`             | Health check pour load balancers |
+| `GET`   | `/health`       | Health check approfondi          |
+| `GET`   | `/health/tasks` | Statistiques des tâches          |
 
 ---
 
@@ -94,14 +159,13 @@ Python 3.10+
 ### 1. Prérequis
 
 - Python 3.10 ou supérieur
+- Node.js 18 ou supérieur
 - Comptes API : Supabase, DeepSeek, RapidAPI, Brevo, Mistral
 
-### 2. Installation
+### 2. Installation Backend
 
 ```bash
-# Cloner le projet
-git clone https://github.com/votre-repo/jobxpress.git
-cd jobxpress/job_xpress
+cd job_xpress
 
 # Environnement virtuel
 python -m venv venv
@@ -112,17 +176,27 @@ source venv/bin/activate  # Mac/Linux
 pip install -r requirements.txt
 ```
 
-### 3. Configuration
+### 3. Installation Frontend
 
-Copiez `.env.example` vers `.env` et remplissez vos clés :
+```bash
+cd frontend
+
+# Dépendances
+npm install
+```
+
+### 4. Configuration
+
+#### Backend (.env)
 
 ```env
 # Environnement
-ENVIRONMENT=development  # development, staging, production
+ENVIRONMENT=development
 
 # Base de Données
 SUPABASE_URL=https://votre-projet.supabase.co
 SUPABASE_KEY=votre-cle-anon
+SUPABASE_SERVICE_KEY=votre-service-role-key
 
 # IA & Recherche
 DEEPSEEK_API_KEY=sk-votre-cle
@@ -133,124 +207,107 @@ RAPIDAPI_KEY=votre-cle-rapidapi
 BREVO_API_KEY=xkeysib-votre-cle
 SENDER_EMAIL=votre.email@valide.com
 
-# Robustesse (optionnel)
+# Robustesse
 REQUEST_TIMEOUT=30
 MAX_RETRIES=3
 LOG_LEVEL=INFO
-SENTRY_DSN=  # Production uniquement
 ```
 
-### 4. Lancement
+#### Frontend (.env)
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_SUPABASE_URL=https://votre-projet.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=votre-cle-anon
+```
+
+### 5. Migrations Supabase
+
+Exécutez les migrations dans Supabase SQL Editor :
+
+1. `migrations/002_applications_v2.sql` - Tables de base
+2. `migrations/005_notifications_chat.sql` - Notifications
+3. `migrations/007_user_profile_extended.sql` - Profil étendu
+
+### 6. Lancement
 
 ```bash
-# Développement
+# Backend (depuis job_xpress/)
 python main.py
 
-# Production
-uvicorn main:app --host 0.0.0.0 --port 8000
+# Frontend (depuis frontend/)
+npm run dev
 ```
-
-Le serveur démarrera sur `http://127.0.0.1:8000`
-
----
-
-## 🧪 Tests
-
-```bash
-# Lancer tous les tests
-python -m pytest tests/ -v
-
-# Tests avec coverage
-python -m pytest tests/ --cov=. --cov-report=html
-
-# Tests spécifiques
-python -m pytest tests/test_exceptions.py -v
-python -m pytest tests/test_api.py -v
-```
-
-**Couverture actuelle : 87 tests**
 
 ---
 
 ## 📂 Structure du Projet
 
 ```
-job_xpress/
-├── core/
-│   ├── config.py           # Configuration & variables d'environnement
-│   ├── exceptions.py       # Hiérarchie d'exceptions personnalisées
-│   ├── error_handlers.py   # Handlers d'erreurs FastAPI
-│   ├── logging_config.py   # Système de logging structuré
-│   └── retry.py            # Patterns de retry & circuit breaker
-├── models/
-│   ├── candidate.py        # Modèle candidat avec validation
-│   └── job_offer.py        # Modèle offre d'emploi
-├── services/
-│   ├── cache_service.py    # Cache SQLite persistant
-│   ├── database.py         # Connecteur Supabase
-│   ├── email_service.py    # Envoi emails Brevo
-│   ├── llm_engine.py       # Moteur IA DeepSeek
-│   ├── ocr_service.py      # OCR Mistral
-│   ├── pdf_generator.py    # Génération PDF
-│   ├── search_engine.py    # Recherche multi-sources
-│   └── web_search.py       # Vérification e-réputation
-├── tests/
-│   ├── conftest.py         # Fixtures pytest
-│   ├── test_api.py         # Tests endpoints
-│   ├── test_cache_service.py
-│   ├── test_candidate.py
-│   ├── test_exceptions.py
-│   └── test_search_engine.py
-├── output/                 # PDF générés
-├── logs/                   # Logs (si configuré)
-├── main.py                 # Point d'entrée FastAPI
-├── requirements.txt        # Dépendances
-├── pytest.ini              # Configuration pytest
-└── .env.example            # Template de configuration
+jobxpress_python/
+├── job_xpress/                 # Backend Python
+│   ├── api/
+│   │   ├── v2_endpoints.py     # Endpoints V2 Human-in-the-Loop
+│   │   ├── profile_endpoints.py # Endpoints profil utilisateur
+│   │   └── notifications_chat.py
+│   ├── core/
+│   │   ├── config.py           # Configuration
+│   │   ├── auth.py             # Auth JWT Supabase
+│   │   └── exceptions.py       # Exceptions personnalisées
+│   ├── models/
+│   │   ├── candidate.py        # Modèle candidat
+│   │   ├── user_profile.py     # Modèle profil (NEW)
+│   │   └── application_v2.py   # Modèle candidature V2
+│   ├── services/
+│   │   ├── database.py         # Supabase client
+│   │   ├── billing.py          # Gestion crédits
+│   │   ├── llm_engine.py       # IA DeepSeek
+│   │   └── search_engine_v2.py # Recherche V2
+│   ├── migrations/             # Migrations SQL Supabase
+│   └── main.py                 # Point d'entrée FastAPI
+│
+└── frontend/                   # Frontend Next.js
+    ├── src/
+    │   ├── app/
+    │   │   ├── dashboard/
+    │   │   │   ├── profile/    # Page profil (NEW)
+    │   │   │   ├── apply/      # Nouvelle candidature
+    │   │   │   └── settings/   # Paramètres
+    │   │   └── layout.tsx
+    │   ├── components/
+    │   │   ├── ui/             # Composants UI
+    │   │   │   ├── avatar-upload.tsx  # Upload avatar (NEW)
+    │   │   │   ├── skill-tags.tsx     # Tags compétences (NEW)
+    │   │   │   └── ...
+    │   │   └── profile/        # Composants profil (NEW)
+    │   │       └── cv-section.tsx
+    │   └── lib/
+    │       ├── api.ts          # Client API
+    │       ├── hooks/          # Custom hooks
+    │       │   └── useUserProfile.ts  # Hook profil (NEW)
+    │       └── supabase/       # Client Supabase
+    └── package.json
 ```
 
 ---
 
-## 🌍 Déploiement
+## 🧪 Tests
 
-### Render (Free Tier)
+```bash
+# Backend
+cd job_xpress
+python -m pytest tests/ -v
 
-1. Poussez votre code sur GitHub
-2. Créez un Web Service sur Render
-3. Configuration :
-   - **Root Directory** : `job_xpress`
-   - **Build Command** : `pip install -r requirements.txt`
-   - **Start Command** : `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Ajoutez vos variables d'environnement
-
-### Docker
-
-```dockerfile
-FROM python:3.10-slim
-WORKDIR /app
-COPY job_xpress/ .
-RUN pip install -r requirements.txt
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Frontend
+cd frontend
+npm test
 ```
-
----
-
-## 📊 Endpoints API
-
-| Méthode | Endpoint         | Description                              |
-| ------- | ---------------- | ---------------------------------------- |
-| `GET`   | `/`              | Health check simple                      |
-| `HEAD`  | `/`              | Health check pour load balancers         |
-| `GET`   | `/health`        | Health check approfondi avec dépendances |
-| `POST`  | `/webhook/tally` | Réception des webhooks Tally             |
-| `GET`   | `/docs`          | Documentation Swagger                    |
-| `GET`   | `/openapi.json`  | Schéma OpenAPI                           |
 
 ---
 
 ## 🛡️ Licence
 
-Ce projet est sous licence MIT. Libre à vous de le modifier et de l'améliorer.
+Ce projet est sous licence MIT.
 
 ---
 
