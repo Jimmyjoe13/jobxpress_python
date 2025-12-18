@@ -233,18 +233,42 @@ async def upload_avatar(
     
     try:
         # Générer un nom de fichier unique
-        ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
-        avatar_filename = f"avatars/{user_id}/{uuid.uuid4()}.{ext}"
+        ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+        if ext not in ["jpg", "jpeg", "png", "webp", "gif"]:
+            ext = "jpg"
+        avatar_filename = f"{user_id}/{uuid.uuid4()}.{ext}"
         
-        # Upload vers Supabase Storage (bucket cvs)
-        client.storage.from_("cvs").upload(
-            path=avatar_filename,
-            file=content,
-            file_options={"content-type": file.content_type, "upsert": "true"}
-        )
+        # Essayer d'abord le bucket 'avatars' (recommandé)
+        bucket_name = "avatars"
+        try:
+            client.storage.from_(bucket_name).upload(
+                path=avatar_filename,
+                file=content,
+                file_options={"content-type": file.content_type, "upsert": "true"}
+            )
+        except Exception as bucket_error:
+            # Si le bucket 'avatars' n'existe pas, essayer 'cvs' avec un sous-dossier
+            logger.warning(f"⚠️ Bucket 'avatars' non trouvé, fallback sur 'cvs': {bucket_error}")
+            bucket_name = "cvs"
+            avatar_filename = f"avatars/{avatar_filename}"
+            
+            # Pour les buckets avec restriction MIME, on peut essayer de forcer le type
+            try:
+                client.storage.from_(bucket_name).upload(
+                    path=avatar_filename,
+                    file=content,
+                    file_options={"content-type": file.content_type, "upsert": "true"}
+                )
+            except Exception as fallback_error:
+                logger.error(f"❌ Échec upload avatar (bucket {bucket_name}): {fallback_error}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Le bucket Storage ne supporte pas les images. "
+                           "Créez un bucket 'avatars' dans Supabase Storage avec les types MIME: image/jpeg, image/png, image/webp, image/gif"
+                )
         
         # Obtenir l'URL publique
-        avatar_url = client.storage.from_("cvs").get_public_url(avatar_filename)
+        avatar_url = client.storage.from_(bucket_name).get_public_url(avatar_filename)
         
         # Mettre à jour le profil
         user_client = db_service.get_user_client(token)
@@ -254,13 +278,15 @@ async def upload_avatar(
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }).eq("id", user_id).execute()
         
-        logger.info(f"📸 Avatar uploadé pour {user_id[:8]}...")
+        logger.info(f"📸 Avatar uploadé pour {user_id[:8]}... (bucket: {bucket_name})")
         
         return AvatarUploadResponse(
             avatar_url=avatar_url,
             message="Avatar uploadé avec succès"
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Erreur upload avatar: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur upload: {str(e)}")
