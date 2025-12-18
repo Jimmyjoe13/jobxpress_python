@@ -4,6 +4,8 @@ from typing import Optional, List, Dict, Any
 class JobOffer(BaseModel):
     """
     Représente une offre d'emploi standardisée + Analyse IA.
+    
+    V2: Ajout des champs pour la déduplication et le filtrage intelligent.
     """
     title: str
     company: str
@@ -15,9 +17,14 @@ class JobOffer(BaseModel):
     is_remote: bool = False
     work_type: Optional[str] = None  # "Full Remote", "Hybride", "Présentiel" ou None
     
-    # --- Champs pour l'IA (Nouveau) ---
+    # --- Champs V2 (déduplication & filtres) ---
+    source: Optional[str] = None  # "jsearch", "active_jobs", "serpapi"
+    salary_warning: bool = False  # True si salaire non mentionné
+    is_agency: bool = False  # True si cabinet de recrutement détecté
+    
+    # --- Champs pour l'IA ---
     match_score: int = 0  # 0 à 100
-    ai_analysis: Optional[Dict[str, Any]] = None # Stockera le JSON complet de l'IA
+    ai_analysis: Optional[Dict[str, Any]] = None  # JSON complet de l'analyse IA
     
     class Config:
         from_attributes = True

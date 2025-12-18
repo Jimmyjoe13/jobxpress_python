@@ -1,12 +1,15 @@
 """
 Dépendances d'authentification pour FastAPI.
 
-Fournit des fonctions pour extraire et valider les JWT Supabase
-depuis les requêtes HTTP.
+Valide les JWT Supabase avec vérification cryptographique de la signature.
+Utilise PyJWT avec l'algorithme HS256 et le secret Supabase.
 """
 from typing import Optional
 from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from jwt.exceptions import InvalidTokenError, ExpiredSignatureError, InvalidAudienceError
+from core.config import settings
 from core.logging_config import get_logger
 
 logger = get_logger()
@@ -58,47 +61,81 @@ async def get_current_user_id(
     token: str = Depends(get_required_token)
 ) -> str:
     """
-    Décode le JWT Supabase pour extraire l'ID utilisateur.
+    Valide le JWT Supabase et extrait l'ID utilisateur.
     
-    Note: Cette fonction fait confiance au JWT sans le valider
-    côté serveur (Supabase le valide via RLS). Pour une validation
-    complète, utilisez le endpoint /auth/v1/user de Supabase.
+    Effectue une validation cryptographique complète:
+    - Vérifie la signature avec SUPABASE_JWT_SECRET
+    - Vérifie l'expiration du token
+    - Vérifie l'audience (authenticated)
     
     Returns:
-        ID de l'utilisateur (sub claim du JWT)
+        ID de l'utilisateur (claim 'sub' du JWT)
     
     Raises:
         HTTPException 401 si token invalide
+        HTTPException 500 si JWT_SECRET non configuré
     """
-    import base64
-    import json
+    # Vérification de la configuration
+    if not settings.SUPABASE_JWT_SECRET:
+        logger.error("❌ SUPABASE_JWT_SECRET non configuré - Validation JWT impossible")
+        raise HTTPException(
+            status_code=500,
+            detail="Configuration serveur incomplète (JWT_SECRET manquant)"
+        )
     
     try:
-        # Le JWT est composé de 3 parties séparées par des points
-        parts = token.split('.')
-        if len(parts) != 3:
-            raise ValueError("Format JWT invalide")
+        # Décodage avec validation cryptographique
+        payload = jwt.decode(
+            token,
+            settings.SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated",
+            options={
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_aud": True,
+                "require": ["sub", "exp", "aud"]
+            }
+        )
         
-        # Décoder le payload (2ème partie)
-        # Ajouter le padding si nécessaire
-        payload_b64 = parts[1]
-        padding = 4 - len(payload_b64) % 4
-        if padding != 4:
-            payload_b64 += '=' * padding
-        
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
-        
-        # Le claim 'sub' contient l'ID utilisateur Supabase
-        user_id = payload.get('sub')
+        user_id = payload.get("sub")
         if not user_id:
-            raise ValueError("Claim 'sub' manquant dans le JWT")
+            raise HTTPException(
+                status_code=401,
+                detail="Token invalide: claim 'sub' manquant",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
         
         return user_id
     
-    except Exception as e:
-        logger.warning(f"⚠️ Erreur décodage JWT: {e}")
+    except ExpiredSignatureError:
+        logger.warning("⚠️ Token JWT expiré")
         raise HTTPException(
             status_code=401,
-            detail="Token invalide ou expiré",
+            detail="Token expiré, veuillez vous reconnecter",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    except InvalidAudienceError:
+        logger.warning("⚠️ Audience JWT invalide")
+        raise HTTPException(
+            status_code=401,
+            detail="Token invalide: audience incorrecte",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    except InvalidTokenError as e:
+        logger.warning(f"⚠️ Token JWT invalide: {type(e).__name__}")
+        raise HTTPException(
+            status_code=401,
+            detail="Token invalide ou malformé",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    except Exception as e:
+        logger.error(f"❌ Erreur inattendue validation JWT: {e}")
+        raise HTTPException(
+            status_code=401,
+            detail="Erreur de validation du token",
             headers={"WWW-Authenticate": "Bearer"}
         )

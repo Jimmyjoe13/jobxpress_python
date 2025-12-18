@@ -103,16 +103,13 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# --- CORS CONFIGURATION (pour le frontend) ---
-origins = [
-    "http://localhost:3000",                    # Next.js dev
-    "http://127.0.0.1:3000",                    # Next.js dev alt
-    "https://rocket-jobxpress.netlify.app",    # Production Netlify
-]
+# --- CORS CONFIGURATION (configurable via env) ---
+origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+logger.info(f"🔒 CORS Origins: {origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # ✅ Origines explicites (plus de wildcard)
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS", "HEAD"],
     allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
@@ -120,6 +117,11 @@ app.add_middleware(
 
 # --- ENREGISTREMENT DES HANDLERS D'EXCEPTIONS ---
 register_exception_handlers(app)
+
+# --- ENREGISTREMENT DES ROUTERS V2 ---
+from api.v2_endpoints import router as v2_router
+app.include_router(v2_router)
+logger.info("✅ API V2 Human-in-the-Loop enregistrée")
 
 # --- CONFIGURATION DEDUPLICATION ---
 COOLDOWN_SECONDS = 300  # 5 minutes

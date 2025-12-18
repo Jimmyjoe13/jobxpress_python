@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""  # Clé 'anon' pour le frontend
     SUPABASE_SERVICE_KEY: str = ""  # Clé 'service_role' pour le backend (bypass RLS)
+    SUPABASE_JWT_SECRET: str = ""  # JWT signing secret (Settings > API > JWT Settings)
+    
+    # CORS - Liste d'origines séparées par des virgules
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    
+    # SerpAPI (Google Jobs)
+    SERPAPI_KEY: str = ""
     
     # IA & Search
     DEEPSEEK_API_KEY: str = ""
