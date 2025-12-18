@@ -345,30 +345,7 @@ export async function uploadCV(file: File): Promise<string> {
   return result.url
 }
 
-// ============================================
-// LEGACY (rétrocompatibilité)
-// ============================================
 
-/**
- * @deprecated Use getMyApplications() instead
- */
-export async function getApplications(userId: string): Promise<JobOffer[]> {
-  console.warn('getApplications() is deprecated. Use getMyApplications() instead.')
-  try {
-    const apps = await getMyApplicationsFlat()
-    return apps.map(app => ({
-      title: app.job_title,
-      company: app.company_name,
-      location: '',
-      description: '',
-      url: app.job_url,
-      is_remote: false,
-      match_score: app.match_score
-    }))
-  } catch {
-    return []
-  }
-}
 
 // ============================================
 // API V2 - HUMAN-IN-THE-LOOP WORKFLOW
