@@ -137,17 +137,20 @@ async def accept_jobyjoba_offer(
     Accepte l'offre JobyJoba et crée une session de chat.
     Coût: 1 crédit
     """
-    client = db_service.get_user_client(token)
-    if not client:
+    # Utiliser admin client pour éviter les problèmes d'encodage UTF-8
+    admin_client = db_service.admin_client
+    user_client = db_service.get_user_client(token)
+    
+    if not admin_client or not user_client:
         raise HTTPException(status_code=500, detail="Erreur connexion base de données")
     
-    # Vérifier que la notification existe et est de type offer_jobyjoba
-    notif_result = client.table("notifications").select("*").eq("id", notification_id).single().execute()
+    # Vérifier que la notification existe et appartient à l'utilisateur
+    notif_result = admin_client.table("notifications").select("*").eq("id", notification_id).eq("user_id", user_id).limit(1).execute()
     
-    if not notif_result.data:
+    if not notif_result.data or len(notif_result.data) == 0:
         raise HTTPException(status_code=404, detail="Notification non trouvée")
     
-    notif = notif_result.data
+    notif = notif_result.data[0]
     if notif["type"] != "offer_jobyjoba":
         raise HTTPException(status_code=400, detail="Cette notification n'est pas une offre JobyJoba")
     
@@ -164,8 +167,8 @@ async def accept_jobyjoba_offer(
         )
     
     # Vérifier qu'il n'y a pas déjà une session active
-    existing = client.table("chat_sessions").select("id").eq("application_id", application_id).eq("status", "active").execute()
-    if existing.data:
+    existing = admin_client.table("chat_sessions").select("id").eq("application_id", application_id).eq("status", "active").limit(1).execute()
+    if existing.data and len(existing.data) > 0:
         return {
             "session_id": existing.data[0]["id"],
             "message": "Session existante trouvée",
@@ -176,11 +179,12 @@ async def accept_jobyjoba_offer(
     await billing_service.debit_credit(user_id, token, 1, "jobyjoba_session")
     
     # Récupérer le contexte de l'application
-    app_result = client.table("applications_v2").select("*").eq("id", application_id).single().execute()
-    app_data = app_result.data
+    app_result = admin_client.table("applications_v2").select("*").eq("id", application_id).limit(1).execute()
     
-    if not app_data:
+    if not app_result.data or len(app_result.data) == 0:
         raise HTTPException(status_code=404, detail="Application non trouvée")
+    
+    app_data = app_result.data[0]
     
     # Créer le message de bienvenue
     final_choice = app_data.get("final_choice", {})
@@ -210,7 +214,7 @@ async def accept_jobyjoba_offer(
     session_id = session_result.data[0]["id"]
     
     # Marquer la notification comme lue
-    client.table("notifications").update({
+    admin_client.table("notifications").update({
         "read": True,
         "updated_at": datetime.now(timezone.utc).isoformat()
     }).eq("id", notification_id).execute()
@@ -236,16 +240,16 @@ async def get_chat_session(
     user_id: str = Depends(get_current_user_id)
 ):
     """Récupère la session de chat pour une application."""
-    client = db_service.get_user_client(token)
-    if not client:
+    admin_client = db_service.admin_client
+    if not admin_client:
         raise HTTPException(status_code=500, detail="Erreur connexion base de données")
     
-    result = client.table("chat_sessions").select("*").eq("application_id", application_id).single().execute()
+    result = admin_client.table("chat_sessions").select("*").eq("application_id", application_id).eq("user_id", user_id).limit(1).execute()
     
-    if not result.data:
+    if not result.data or len(result.data) == 0:
         raise HTTPException(status_code=404, detail="Session de chat non trouvée")
     
-    session = result.data
+    session = result.data[0]
     remaining = session["max_messages"] - session["message_count"]
     
     return ChatSessionResponse(
@@ -271,12 +275,12 @@ async def send_chat_message(
         raise HTTPException(status_code=500, detail="Erreur connexion base de données")
     
     # Récupérer la session
-    session_result = client.table("chat_sessions").select("*").eq("application_id", request.application_id).single().execute()
+    session_result = admin_client.table("chat_sessions").select("*").eq("application_id", request.application_id).eq("user_id", user_id).limit(1).execute()
     
-    if not session_result.data:
+    if not session_result.data or len(session_result.data) == 0:
         raise HTTPException(status_code=404, detail="Session de chat non trouvée. Acceptez d'abord l'offre JobyJoba.")
     
-    session = session_result.data
+    session = session_result.data[0]
     
     # Vérifier le statut et les messages restants
     if session["status"] != "active":
@@ -296,8 +300,8 @@ async def send_chat_message(
         )
     
     # Récupérer le contexte de l'application
-    app_result = client.table("applications_v2").select("*").eq("id", request.application_id).single().execute()
-    app_data = app_result.data or {}
+    app_result = admin_client.table("applications_v2").select("*").eq("id", request.application_id).limit(1).execute()
+    app_data = app_result.data[0] if app_result.data else {}
     
     final_choice = app_data.get("final_choice", {})
     
