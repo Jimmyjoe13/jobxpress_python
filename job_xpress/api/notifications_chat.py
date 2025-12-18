@@ -310,7 +310,7 @@ async def send_chat_message(
         "company": final_choice.get("company"),
         "location": app_data.get("location"),
         "contract_type": app_data.get("contract_type"),
-        "cv_text": "",  # TODO: Récupérer depuis l'OCR si stocké
+        "cv_text": app_data.get("cv_text", ""),  # Texte OCR du CV stocké en base
         "cover_letter": app_data.get("cover_letter_html", "")
     }
     

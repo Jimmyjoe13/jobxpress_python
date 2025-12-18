@@ -72,7 +72,7 @@ class JobResultItem(BaseModel):
     id: str = Field(..., description="ID interne pour sélection")
     title: str
     company: str
-    location: str
+    location: str = Field("Non spécifié", description="Localisation de l'offre")
     url: str
     date_posted: Optional[str] = None
     is_remote: bool = False

@@ -27,6 +27,36 @@ RETRY_CONFIG = dict(
 )
 
 
+def _should_retry_rate_limit(exception):
+    """Vérifie si l'erreur est un rate limit 429."""
+    return (
+        isinstance(exception, httpx.HTTPStatusError) 
+        and exception.response.status_code == 429
+    )
+
+
+def _get_retry_after(exception):
+    """Extrait le délai d'attente du header Retry-After si disponible."""
+    if isinstance(exception, httpx.HTTPStatusError):
+        retry_after = exception.response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return int(retry_after)
+            except ValueError:
+                pass
+    return 5  # Défaut: 5 secondes
+
+
+# Configuration spécifique pour les erreurs 429 (rate limit)
+# Moins de tentatives mais délai plus long
+RETRY_CONFIG_RATE_LIMIT = dict(
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(multiplier=3, min=5, max=30),
+    retry=retry_if_exception_type(httpx.HTTPStatusError),
+    before_sleep=before_sleep_log(logger, logging.WARNING)
+)
+
+
 @retry(**RETRY_CONFIG)
 async def resilient_get(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
     """

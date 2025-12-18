@@ -234,10 +234,18 @@ async def run_analysis_task(
         # 1.5 OCR du CV si disponible
         if cv_url:
             try:
-                from services.ocr import ocr_service
+                from services.ocr_service import ocr_service
                 cv_text = await ocr_service.extract_text_from_cv(cv_url)
                 candidate.cv_text = cv_text
                 logger.info(f"📄 CV extrait: {len(cv_text)} caractères")
+                
+                # Sauvegarder le cv_text en base pour JobyJoba
+                if cv_text:
+                    client.table("applications_v2").update({
+                        "cv_text": cv_text[:10000],  # Limiter à 10k caractères
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }).eq("id", app_id).execute()
+                    logger.info(f"💾 CV sauvegardé en base pour JobyJoba")
             except Exception as ocr_error:
                 logger.warning(f"⚠️ Erreur OCR CV: {ocr_error}")
         else:
