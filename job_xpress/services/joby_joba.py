@@ -5,11 +5,11 @@ Ce service gère les conversations avec l'assistant IA qui aide
 les candidats à préparer leurs entretiens d'embauche.
 """
 
+import httpx
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from core.config import settings
 from core.logging_config import get_logger
-from core.retry import resilient_post
 
 logger = get_logger()
 
@@ -133,33 +133,31 @@ class JobyJobaService:
             # Ajouter le nouveau message
             messages.append({"role": "user", "content": user_message})
             
-            # Appel API DeepSeek
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
+            # Appel API DeepSeek avec httpx
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.API_URL,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "deepseek-chat",
+                        "messages": messages,
+                        "temperature": 0.7,
+                        "max_tokens": 500,
+                        "stream": False
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
             
-            payload = {
-                "model": "deepseek-chat",
-                "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 500,
-                "stream": False
-            }
-            
-            response = await resilient_post(
-                self.API_URL,
-                json_data=payload,
-                headers=headers,
-                timeout=30.0
-            )
-            
-            if response and "choices" in response:
-                assistant_response = response["choices"][0]["message"]["content"]
+            if data and "choices" in data:
+                assistant_response = data["choices"][0]["message"]["content"]
                 logger.info(f"💬 JobyJoba a répondu ({len(assistant_response)} chars)")
                 return assistant_response
             else:
-                logger.warning(f"⚠️ Réponse API invalide: {response}")
+                logger.warning(f"⚠️ Réponse API invalide: {data}")
                 return "Oups, j'ai eu un petit souci technique. Reformule ta question ! 🔄"
                 
         except Exception as e:
