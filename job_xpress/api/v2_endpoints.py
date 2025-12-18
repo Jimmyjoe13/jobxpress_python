@@ -216,6 +216,8 @@ async def run_analysis_task(
         
         # Construire le profil candidat
         candidate_email = app_data.get("candidate_email")
+        cv_url = app_data.get("cv_url")
+        
         candidate = CandidateProfile(
             first_name=app_data.get("candidate_first_name") or "Candidat",
             last_name=app_data.get("candidate_last_name") or "",
@@ -224,10 +226,22 @@ async def run_analysis_task(
             job_title=app_data.get("job_title", "Non spécifié"),
             contract_type=app_data.get("contract_type", "CDI"),
             location=app_data.get("location", "France"),
-            cv_url=app_data.get("cv_url")
+            cv_url=cv_url
         )
         
         logger.info(f"👤 Candidat: {candidate.first_name} {candidate.last_name} ({candidate.email})")
+        
+        # 1.5 OCR du CV si disponible
+        if cv_url:
+            try:
+                from services.ocr import ocr_service
+                cv_text = await ocr_service.extract_text_from_cv(cv_url)
+                candidate.cv_text = cv_text
+                logger.info(f"📄 CV extrait: {len(cv_text)} caractères")
+            except Exception as ocr_error:
+                logger.warning(f"⚠️ Erreur OCR CV: {ocr_error}")
+        else:
+            logger.warning("⚠️ Pas de CV fourni")
         
         # 2. Convertir en JobOffer et analyser
         offers = [JobOffer(**job) for job in selected_jobs]
