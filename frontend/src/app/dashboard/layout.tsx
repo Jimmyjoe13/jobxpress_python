@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Bell
 } from "lucide-react"
+import { CreditsBadge } from "@/components/ui/credits-badge"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -135,6 +136,10 @@ export default function DashboardLayout({
                 <p className="text-xs text-slate-500 truncate">{userEmail || "Plan Gratuit"}</p>
               </div>
             </div>
+            {/* Credits Badge */}
+            <div className="mb-4 px-2">
+              <CreditsBadge showPlan className="w-full justify-center" />
+            </div>
             <button 
               onClick={handleLogout}
               className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all text-sm font-medium"
@@ -179,6 +184,7 @@ export default function DashboardLayout({
               </h2>
             </div>
             <div className="flex items-center gap-4">
+              <CreditsBadge />
               <button className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors relative">
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full" />

@@ -82,6 +82,78 @@ export interface ApiError {
 }
 
 // ============================================
+// TYPES V2 - HUMAN-IN-THE-LOOP
+// ============================================
+
+export interface UserCredits {
+  credits: number
+  plan: 'FREE' | 'PRO'
+  plan_name: string
+  next_reset_at: string | null
+}
+
+export interface JobFilters {
+  min_salary?: number
+  remote_only: boolean
+  exclude_agencies: boolean
+  max_days_old: number
+}
+
+export interface SearchStartRequest {
+  job_title: string
+  location: string
+  contract_type: string
+  work_type: string
+  experience_level: string
+  filters?: JobFilters
+  cv_url?: string
+}
+
+export interface SearchStartResponse {
+  application_id: string
+  status: 'SEARCHING' | 'WAITING_SELECTION' | 'FAILED'
+  message: string
+  credits_remaining: number
+}
+
+export interface JobResultItem {
+  id: string
+  title: string
+  company: string
+  location: string
+  url: string
+  date_posted?: string
+  is_remote: boolean
+  work_type?: string
+  salary_warning: boolean
+  is_agency: boolean
+  source?: string
+}
+
+export interface ApplicationResults {
+  application_id: string
+  status: string
+  total_found: number
+  jobs: JobResultItem[]
+  message: string
+}
+
+export interface SelectJobsResponse {
+  status: string
+  message: string
+  selected_count: number
+}
+
+export interface ApplicationV2 {
+  id: string
+  status: string
+  job_title: string
+  location: string
+  created_at: string
+  updated_at: string
+}
+
+// ============================================
 // HELPERS
 // ============================================
 
@@ -296,4 +368,55 @@ export async function getApplications(userId: string): Promise<JobOffer[]> {
   } catch {
     return []
   }
+}
+
+// ============================================
+// API V2 - HUMAN-IN-THE-LOOP WORKFLOW
+// ============================================
+
+/**
+ * Get user's credits status
+ */
+export async function getCredits(): Promise<UserCredits> {
+  return apiRequest<UserCredits>('/api/v2/credits', {}, true)
+}
+
+/**
+ * Start a new job search (async)
+ * Returns an application ID for polling
+ */
+export async function startSearch(data: SearchStartRequest): Promise<SearchStartResponse> {
+  return apiRequest<SearchStartResponse>('/api/v2/search/start', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }, true)
+}
+
+/**
+ * Poll for search results
+ * Keep calling until status !== 'SEARCHING'
+ */
+export async function getSearchResults(appId: string): Promise<ApplicationResults> {
+  return apiRequest<ApplicationResults>(`/api/v2/applications/${appId}/results`, {}, true)
+}
+
+/**
+ * Select jobs from search results (1-5 jobs)
+ * Triggers AI analysis
+ */
+export async function selectJobs(appId: string, jobIds: string[]): Promise<SelectJobsResponse> {
+  return apiRequest<SelectJobsResponse>(`/api/v2/applications/${appId}/select`, {
+    method: 'POST',
+    body: JSON.stringify({ selected_job_ids: jobIds })
+  }, true)
+}
+
+/**
+ * Get user's V2 applications list
+ */
+export async function getApplicationsV2(limit: number = 20): Promise<{
+  count: number
+  applications: ApplicationV2[]
+}> {
+  return apiRequest(`/api/v2/applications?limit=${limit}`, {}, true)
 }
