@@ -71,11 +71,16 @@ async def create_application_v2(
             "work_type": request.work_type,
             "experience_level": request.experience_level,
             "job_filters": request.filters.model_dump() if request.filters else {},
-            "cv_url": request.cv_url
+            "cv_url": request.cv_url,
+            # Infos candidat pour l'email
+            "candidate_email": request.candidate_email,
+            "candidate_first_name": request.first_name,
+            "candidate_last_name": request.last_name,
+            "candidate_phone": request.phone
         }
         
         client.table("applications_v2").insert(data).execute()
-        logger.info(f"📝 Application V2 créée: {app_id[:8]}...")
+        logger.info(f"📝 Application V2 créée: {app_id[:8]}... (email: {request.candidate_email})")
         
         return app_id
         
@@ -175,57 +180,158 @@ async def run_analysis_task(
     access_token: str
 ):
     """
-    Tâche de fond: Analyse IA des offres sélectionnées.
+    Tâche de fond: Analyse IA, génération de lettre et envoi email.
+    
+    Workflow complet:
+    1. Récupérer les infos candidat depuis l'application
+    2. Analyser les offres avec l'IA
+    3. Générer la lettre de motivation
+    4. Créer le PDF
+    5. Uploader le PDF vers Supabase Storage
+    6. Envoyer l'email au candidat
+    7. Marquer comme COMPLETED
     """
     from services.llm_engine import llm_engine
+    from services.pdf_generator import pdf_generator
+    from services.email_service import email_service
     from models.job_offer import JobOffer
+    import tempfile
+    import os
     
     logger.info(f"🧠 Démarrage analyse IA pour {app_id[:8]}...")
     
+    client = db_service.admin_client
+    if not client:
+        logger.error("❌ Admin client non disponible")
+        return
+    
     try:
-        # Convertir en JobOffer
-        offers = [JobOffer(**job) for job in selected_jobs]
+        # 1. Récupérer les infos de l'application pour le candidat
+        app_result = client.table("applications_v2").select("*").eq("id", app_id).single().execute()
+        app_data = app_result.data
         
-        # Créer un profil candidat minimal pour l'analyse
-        # TODO: Récupérer le vrai profil depuis la DB
+        if not app_data:
+            logger.error(f"❌ Application {app_id} non trouvée")
+            return
+        
+        # Construire le profil candidat
+        candidate_email = app_data.get("candidate_email")
         candidate = CandidateProfile(
-            first_name="User",
-            last_name=user_id[:8],
-            email="analysis@jobxpress.fr",
-            job_title=selected_jobs[0].get("title", "Inconnu") if selected_jobs else "Inconnu",
-            contract_type="CDI",
-            location="France"
+            first_name=app_data.get("candidate_first_name") or "Candidat",
+            last_name=app_data.get("candidate_last_name") or "",
+            email=candidate_email or f"{user_id[:8]}@jobxpress.fr",
+            phone=app_data.get("candidate_phone"),
+            job_title=app_data.get("job_title", "Non spécifié"),
+            contract_type=app_data.get("contract_type", "CDI"),
+            location=app_data.get("location", "France"),
+            cv_url=app_data.get("cv_url")
         )
         
-        # Analyser les offres
+        logger.info(f"👤 Candidat: {candidate.first_name} {candidate.last_name} ({candidate.email})")
+        
+        # 2. Convertir en JobOffer et analyser
+        offers = [JobOffer(**job) for job in selected_jobs]
         analyzed_offers = await llm_engine.analyze_offers_parallel(candidate, offers)
         
-        # Trier par score et prendre la meilleure
+        # Trier par score
         analyzed_offers.sort(key=lambda x: x.match_score, reverse=True)
         best_offer = analyzed_offers[0] if analyzed_offers else None
         
-        # Mettre à jour la base
-        client = db_service.admin_client
-        if client and best_offer:
+        if not best_offer:
+            logger.warning("⚠️ Aucune offre analysée avec succès")
             client.table("applications_v2").update({
-                "status": ApplicationStatus.GENERATING_DOCS.value,
-                "selected_jobs": [o.model_dump() for o in analyzed_offers],
-                "final_choice": best_offer.model_dump(),
+                "status": ApplicationStatus.FAILED.value,
+                "error_message": "Échec de l'analyse des offres",
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }).eq("id", app_id).execute()
+            return
+        
+        logger.info(f"✅ Analyse terminée: {best_offer.title} ({best_offer.match_score}%)")
+        
+        # 3. Générer la lettre de motivation
+        letter_data = await llm_engine.generate_cover_letter(candidate, best_offer)
+        letter_html = letter_data.get("html_content", "")
+        
+        # Mettre à jour: statut GENERATING_DOCS + lettre
+        client.table("applications_v2").update({
+            "status": ApplicationStatus.GENERATING_DOCS.value,
+            "selected_jobs": [o.model_dump() for o in analyzed_offers],
+            "final_choice": best_offer.model_dump(),
+            "cover_letter_html": letter_html,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }).eq("id", app_id).execute()
+        
+        logger.info("📝 Lettre de motivation générée")
+        
+        # 4. Générer le PDF
+        pdf_path = pdf_generator.create_application_pdf(candidate, best_offer, letter_html)
+        
+        pdf_url = None
+        if pdf_path and os.path.exists(pdf_path):
+            logger.info(f"📄 PDF généré: {pdf_path}")
             
-            logger.info(f"✅ Analyse terminée: Meilleure offre = {best_offer.title} ({best_offer.match_score}%)")
-            
-            # TODO: Lancer la génération de documents
+            # 5. Uploader vers Supabase Storage
+            try:
+                pdf_filename = f"{app_id[:8]}_{candidate.first_name}_{best_offer.company}.pdf"
+                pdf_filename = pdf_filename.replace(" ", "_")
+                
+                with open(pdf_path, "rb") as f:
+                    pdf_content = f.read()
+                
+                # Upload dans le bucket cvs (ou pdfs si disponible)
+                upload_result = client.storage.from_("cvs").upload(
+                    path=f"applications/{pdf_filename}",
+                    file=pdf_content,
+                    file_options={"content-type": "application/pdf"}
+                )
+                
+                # Obtenir l'URL publique
+                pdf_url = client.storage.from_("cvs").get_public_url(f"applications/{pdf_filename}")
+                logger.info(f"☁️ PDF uploadé: {pdf_url[:50]}...")
+                
+            except Exception as upload_error:
+                logger.warning(f"⚠️ Erreur upload PDF: {upload_error}")
+                # On continue quand même avec le fichier local
+        
+        # 6. Envoyer l'email
+        if candidate_email:
+            try:
+                other_offers = analyzed_offers[1:] if len(analyzed_offers) > 1 else []
+                email_service.send_application_email(
+                    candidate=candidate,
+                    best_offer=best_offer,
+                    other_offers=other_offers,
+                    pdf_path=pdf_path
+                )
+                logger.info(f"📧 Email envoyé à {candidate_email}")
+            except Exception as email_error:
+                logger.error(f"❌ Erreur envoi email: {email_error}")
+        else:
+            logger.warning("⚠️ Pas d'email candidat - email non envoyé")
+        
+        # 7. Marquer comme COMPLETED
+        client.table("applications_v2").update({
+            "status": ApplicationStatus.COMPLETED.value,
+            "pdf_url": pdf_url or pdf_path,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }).eq("id", app_id).execute()
+        
+        logger.info(f"🎉 Workflow terminé avec succès pour {app_id[:8]}")
+        
+        # Nettoyer le fichier temporaire
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                os.remove(pdf_path)
+            except Exception:
+                pass
             
     except Exception as e:
         logger.exception(f"❌ Erreur analyse IA: {e}")
         try:
-            client = db_service.admin_client
             if client:
                 client.table("applications_v2").update({
                     "status": ApplicationStatus.FAILED.value,
-                    "error_message": f"Erreur analyse: {str(e)}",
+                    "error_message": f"Erreur: {str(e)[:200]}",
                     "updated_at": datetime.now(timezone.utc).isoformat()
                 }).eq("id", app_id).execute()
         except Exception:

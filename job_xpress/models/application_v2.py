@@ -52,6 +52,11 @@ class SearchStartRequest(BaseModel):
     experience_level: str = Field("Non spécifié", description="Junior, Confirmé ou Senior")
     filters: Optional[JobFilters] = Field(None, description="Filtres avancés optionnels")
     cv_url: Optional[str] = Field(None, max_length=500, description="URL du CV uploadé")
+    # Infos candidat pour l'email
+    candidate_email: Optional[str] = Field(None, max_length=255, description="Email du candidat")
+    first_name: Optional[str] = Field(None, max_length=100, description="Prénom")
+    last_name: Optional[str] = Field(None, max_length=100, description="Nom")
+    phone: Optional[str] = Field(None, max_length=50, description="Téléphone")
 
 
 class SearchStartResponse(BaseModel):

@@ -107,6 +107,11 @@ export interface SearchStartRequest {
   experience_level: string
   filters?: JobFilters
   cv_url?: string
+  // Infos candidat pour l'email
+  candidate_email?: string
+  first_name?: string
+  last_name?: string
+  phone?: string
 }
 
 export interface SearchStartResponse {

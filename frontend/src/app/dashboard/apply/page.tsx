@@ -235,6 +235,11 @@ export default function ApplyPage() {
         experience_level: formData.experienceLevel,
         filters,
         cv_url: formData.cvUrl || undefined,
+        // Infos candidat pour l'email
+        candidate_email: formData.email,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        phone: formData.phone || undefined,
       }
 
       const response = await startSearch(request)
