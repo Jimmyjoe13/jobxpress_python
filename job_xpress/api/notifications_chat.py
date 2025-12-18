@@ -176,7 +176,7 @@ async def accept_jobyjoba_offer(
         }
     
     # Débiter le crédit
-    await billing_service.debit_credit(user_id, token, 1, "jobyjoba_session")
+    await billing_service._debit_credits(user_id, token, 1, "jobyjoba_session")
     
     # Récupérer le contexte de l'application
     app_result = admin_client.table("applications_v2").select("*").eq("id", application_id).limit(1).execute()

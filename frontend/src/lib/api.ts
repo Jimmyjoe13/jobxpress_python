@@ -154,8 +154,15 @@ export interface ApplicationV2 {
   status: string
   job_title: string
   location: string
+  contract_type?: string
   created_at: string
   updated_at: string
+  final_choice?: {
+    title?: string
+    company?: string
+    url?: string
+    score?: number
+  }
 }
 
 // ============================================

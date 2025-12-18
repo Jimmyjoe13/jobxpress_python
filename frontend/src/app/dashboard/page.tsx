@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/ui/skeleton"
-import { getMyApplicationsFlat, type Application } from "@/lib/api"
+import { getApplicationsV2, type ApplicationV2 } from "@/lib/api"
 
 interface UserData {
   firstName: string
@@ -43,9 +43,8 @@ const itemVariants: Variants = {
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null)
-  const [applications, setApplications] = useState<Application[]>([])
+  const [applications, setApplications] = useState<ApplicationV2[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [, setDataSource] = useState<"api" | "supabase" | "none">("none")
 
   useEffect(() => {
     const loadData = async () => {
@@ -78,34 +77,13 @@ export default function DashboardPage() {
             userId: authUser.id,
           })
 
+          // Récupérer les applications V2
           try {
-            const apiApps = await getMyApplicationsFlat()
-            if (apiApps.length > 0) {
-              setApplications(apiApps)
-              setDataSource("api")
-            } else {
-              throw new Error("No data from API")
-            }
-          } catch {
-            const { data: candidate } = await supabase
-              .from("candidates")
-              .select("id")
-              .eq("user_id", authUser.id)
-              .single()
-
-            if (candidate) {
-              const { data: apps } = await supabase
-                .from("applications")
-                .select("*")
-                .eq("candidate_id", candidate.id)
-                .order("created_at", { ascending: false })
-                .limit(10)
-
-              if (apps) {
-                setApplications(apps)
-                setDataSource("supabase")
-              }
-            }
+            const response = await getApplicationsV2(10)
+            setApplications(response.applications || [])
+          } catch (err) {
+            console.error("Error loading V2 applications:", err)
+            setApplications([])
           }
         } else {
           setUser({ firstName: "Utilisateur", email: "", userId: null })
@@ -234,8 +212,12 @@ export default function DashboardPage() {
           <h3 className="text-lg font-semibold text-white mb-2">Dernière activité</h3>
           {applications[0] ? (
             <>
-              <p className="text-white font-medium truncate mb-1">{applications[0].job_title}</p>
-              <p className="text-slate-400 text-sm truncate mb-2">{applications[0].company_name}</p>
+              <p className="text-white font-medium truncate mb-1">
+                {applications[0].final_choice?.title || applications[0].job_title}
+              </p>
+              <p className="text-slate-400 text-sm truncate mb-2">
+                {applications[0].final_choice?.company || applications[0].location}
+              </p>
               <span className="text-slate-500 text-sm">{formatDate(applications[0].created_at)}</span>
             </>
           ) : (
@@ -293,16 +275,20 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0 mr-4">
                     <div className="flex items-center gap-3 mb-1">
                       <h4 className="font-semibold text-white truncate group-hover:text-indigo-400 transition-colors">
-                        {app.job_title}
+                        {app.final_choice?.title || app.job_title}
                       </h4>
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getScoreColor(app.match_score)}`}
-                      >
-                        <Star className="w-3 h-3" />
-                        {app.match_score}%
-                      </span>
+                      {app.final_choice?.score && (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getScoreColor(app.final_choice.score)}`}
+                        >
+                          <Star className="w-3 h-3" />
+                          {app.final_choice.score}%
+                        </span>
+                      )}
                     </div>
-                    <p className="text-sm text-slate-400 truncate">{app.company_name}</p>
+                    <p className="text-sm text-slate-400 truncate">
+                      {app.final_choice?.company || app.location}
+                    </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="hidden sm:inline-block text-xs text-slate-500">
@@ -311,9 +297,9 @@ export default function DashboardPage() {
                     <span className="px-2.5 py-1 bg-indigo-500/10 text-indigo-400 text-xs rounded-lg font-medium capitalize border border-indigo-500/20">
                       {app.status}
                     </span>
-                    {app.job_url && (
+                    {app.final_choice?.url && (
                       <a
-                        href={app.job_url}
+                        href={app.final_choice.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
