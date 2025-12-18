@@ -120,8 +120,11 @@ register_exception_handlers(app)
 
 # --- ENREGISTREMENT DES ROUTERS V2 ---
 from api.v2_endpoints import router as v2_router
+from api.notifications_chat import router as notifications_router
 app.include_router(v2_router)
+app.include_router(notifications_router)
 logger.info("✅ API V2 Human-in-the-Loop enregistrée")
+logger.info("✅ API Notifications & Chat enregistrée")
 
 # --- CONFIGURATION DEDUPLICATION ---
 COOLDOWN_SECONDS = 300  # 5 minutes

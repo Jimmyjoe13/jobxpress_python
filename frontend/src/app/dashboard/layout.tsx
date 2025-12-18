@@ -12,10 +12,10 @@ import {
   Menu, 
   X,
   User,
-  ChevronRight,
-  Bell
+  ChevronRight
 } from "lucide-react"
 import { CreditsBadge } from "@/components/ui/credits-badge"
+import { NotificationsPopover } from "@/components/ui/notifications-popover"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -168,10 +168,7 @@ export default function DashboardLayout({
               </div>
               <span className="font-bold text-white">JobXpress</span>
             </Link>
-            <button className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full" />
-            </button>
+            <NotificationsPopover />
           </div>
         </header>
 
@@ -185,10 +182,7 @@ export default function DashboardLayout({
             </div>
             <div className="flex items-center gap-4">
               <CreditsBadge />
-              <button className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors relative">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full" />
-              </button>
+              <NotificationsPopover />
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold cursor-pointer hover:scale-105 transition-transform">
                 {userName.charAt(0).toUpperCase()}
               </div>

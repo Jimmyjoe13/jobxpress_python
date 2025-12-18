@@ -332,6 +332,34 @@ async def run_analysis_task(
         
         logger.info(f"🎉 Workflow terminé avec succès pour {app_id[:8]}")
         
+        # 8. Créer les notifications
+        try:
+            # Notification de succès
+            client.table("notifications").insert({
+                "user_id": user_id,
+                "type": "workflow_complete",
+                "title": "🎉 Candidature envoyée !",
+                "message": f"Votre candidature pour {best_offer.title} chez {best_offer.company} a été envoyée avec succès.",
+                "application_id": app_id,
+                "action_url": f"/dashboard",
+                "action_label": "Voir le tableau de bord"
+            }).execute()
+            
+            # Offre JobyJoba
+            client.table("notifications").insert({
+                "user_id": user_id,
+                "type": "offer_jobyjoba",
+                "title": "🤖 Préparez votre entretien avec JobyJoba !",
+                "message": f"Notre coach IA peut vous aider à préparer votre entretien chez {best_offer.company}. 10 messages personnalisés pour 1 crédit.",
+                "application_id": app_id,
+                "action_url": f"/dashboard/chat/{app_id}",
+                "action_label": "Débloquer JobyJoba (1 crédit)"
+            }).execute()
+            
+            logger.info(f"🔔 Notifications créées pour {user_id[:8]}")
+        except Exception as notif_error:
+            logger.warning(f"⚠️ Erreur création notifications: {notif_error}")
+        
         # Nettoyer le fichier temporaire
         if pdf_path and os.path.exists(pdf_path):
             try:
