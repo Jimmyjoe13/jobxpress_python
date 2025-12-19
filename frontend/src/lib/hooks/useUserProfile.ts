@@ -47,6 +47,45 @@ export interface ProfileUpdateData {
   key_skills?: string[]
 }
 
+/**
+ * Interface pour les préférences de recherche extraites du profil.
+ * Utilisée pour pré-remplir le formulaire de candidature.
+ */
+export interface SearchPreferences {
+  first_name: string | null
+  last_name: string | null
+  email: string | null
+  phone: string | null
+  job_title: string | null
+  location: string
+  experience_level: string
+  preferred_contract_type: string
+  preferred_work_type: string
+  cv_url: string | null
+}
+
+/**
+ * Extrait les préférences de recherche d'un profil utilisateur.
+ * Fournit des valeurs par défaut pour les champs non renseignés.
+ * 
+ * @param profile - Le profil utilisateur complet
+ * @returns Les préférences de recherche avec valeurs par défaut
+ */
+export function extractSearchPreferences(profile: UserProfile): SearchPreferences {
+  return {
+    first_name: profile.first_name,
+    last_name: profile.last_name,
+    email: profile.email,
+    phone: profile.phone,
+    job_title: profile.job_title,
+    location: profile.location || "France",
+    experience_level: profile.experience_level || "Non spécifié",
+    preferred_contract_type: profile.preferred_contract_type || "CDI",
+    preferred_work_type: profile.preferred_work_type || "Tous",
+    cv_url: profile.cv_url,
+  }
+}
+
 interface UseUserProfileReturn {
   profile: UserProfile | null
   isLoading: boolean

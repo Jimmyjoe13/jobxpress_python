@@ -23,6 +23,7 @@ import {
   ListChecks,
   Filter,
   AlertTriangle,
+  FileText,
 } from "lucide-react"
 import { Confetti } from "@/components/ui/confetti"
 import { JobResultCard, JobResultCardSkeleton } from "@/components/jobs/job-result-card"
@@ -34,7 +35,8 @@ import {
   getCredits,
   SearchStartRequest,
   JobResultItem,
-  JobFilters
+  JobFilters,
+  getAuthToken
 } from "@/lib/api"
 
 // Steps du workflow V2
@@ -101,6 +103,7 @@ export default function ApplyPage() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set())
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
   const [userCredits, setUserCredits] = useState<number | null>(null)
+  const [profileLoaded, setProfileLoaded] = useState(false)
   
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
@@ -120,7 +123,7 @@ export default function ApplyPage() {
     remoteOnly: false,
   })
 
-  // Charger les données utilisateur
+  // Charger les données utilisateur et le profil complet
   useEffect(() => {
     const loadUserData = async () => {
       if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return
@@ -131,18 +134,75 @@ export default function ApplyPage() {
         const { data: { user } } = await supabase.auth.getUser()
         
         if (user) {
-          setFormData(prev => ({
-            ...prev,
-            firstName: user.user_metadata?.first_name || prev.firstName,
-            lastName: user.user_metadata?.last_name || prev.lastName,
-            email: user.email || prev.email,
-          }))
           setUserId(user.id)
+          
+          // Charger le profil complet depuis l'API pour pré-remplir le formulaire
+          const token = await getAuthToken()
+          if (token) {
+            try {
+              const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+              const response = await fetch(`${API_BASE_URL}/api/v2/profile`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              })
+              
+              if (response.ok) {
+                const profileData = await response.json()
+                
+                // Pré-remplir tous les champs avec les données du profil
+                const hasProfileData = profileData.job_title || profileData.location || profileData.preferred_contract_type
+                
+                setFormData(prev => ({
+                  ...prev,
+                  // Infos personnelles
+                  firstName: profileData.first_name || user.user_metadata?.first_name || prev.firstName,
+                  lastName: profileData.last_name || user.user_metadata?.last_name || prev.lastName,
+                  email: profileData.email || user.email || prev.email,
+                  phone: profileData.phone || prev.phone,
+                  // Préférences de recherche du profil
+                  jobTitle: profileData.job_title || prev.jobTitle,
+                  location: profileData.location || prev.location,
+                  contractType: profileData.preferred_contract_type || prev.contractType,
+                  workType: profileData.preferred_work_type || prev.workType,
+                  experienceLevel: profileData.experience_level || prev.experienceLevel,
+                  // CV existant du profil
+                  cvUrl: profileData.cv_url || prev.cvUrl,
+                }))
+                
+                if (hasProfileData) {
+                  setProfileLoaded(true)
+                }
+              }
+            } catch (profileErr) {
+              console.error("Error loading profile:", profileErr)
+              // Fallback: utiliser les métadonnées utilisateur Supabase
+              setFormData(prev => ({
+                ...prev,
+                firstName: user.user_metadata?.first_name || prev.firstName,
+                lastName: user.user_metadata?.last_name || prev.lastName,
+                email: user.email || prev.email,
+              }))
+            }
+          } else {
+            // Pas de token, utiliser les métadonnées utilisateur
+            setFormData(prev => ({
+              ...prev,
+              firstName: user.user_metadata?.first_name || prev.firstName,
+              lastName: user.user_metadata?.last_name || prev.lastName,
+              email: user.email || prev.email,
+            }))
+          }
         }
         
         // Charger les crédits
-        const credits = await getCredits()
-        setUserCredits(credits.credits)
+        try {
+          const credits = await getCredits()
+          setUserCredits(credits.credits)
+        } catch (creditErr) {
+          console.error("Error loading credits:", creditErr)
+        }
       } catch (err) {
         console.error("Error loading user data:", err)
       }
@@ -435,6 +495,33 @@ export default function ApplyPage() {
         </p>
       </div>
 
+      {/* Profile Loaded Banner */}
+      {profileLoaded && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-3"
+        >
+          <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+            <CheckCircle className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-emerald-400 font-medium text-sm">
+              Préférences chargées depuis votre profil
+            </p>
+            <p className="text-slate-400 text-xs mt-0.5">
+              Vos critères de recherche habituels ont été pré-remplis automatiquement
+            </p>
+          </div>
+          <Link 
+            href="/dashboard/profile" 
+            className="text-sm text-emerald-400 hover:text-emerald-300 underline hover:no-underline transition-colors whitespace-nowrap"
+          >
+            Modifier le profil
+          </Link>
+        </motion.div>
+      )}
+
       {/* Stepper */}
       <div className="mb-8 overflow-x-auto pb-2">
         <div className="flex items-center justify-between min-w-max">
@@ -720,6 +807,34 @@ export default function ApplyPage() {
               className="space-y-5"
             >
               <h2 className="text-xl font-semibold text-white mb-6">Votre CV</h2>
+              
+              {/* CV existant du profil */}
+              {formData.cvUrl && !formData.cvFile && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-xl"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-6 h-6 text-indigo-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white font-medium">CV du profil détecté</p>
+                      <p className="text-sm text-slate-400">Votre CV sera utilisé automatiquement pour cette candidature</p>
+                    </div>
+                    <a
+                      href={formData.cvUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-indigo-400 hover:text-indigo-300 underline hover:no-underline transition-colors"
+                    >
+                      Voir
+                    </a>
+                  </div>
+                </motion.div>
+              )}
+              
               <div className="border-2 border-dashed border-slate-700 rounded-2xl p-8 text-center hover:border-indigo-500/50 transition-colors">
                 <input
                   type="file"
@@ -747,7 +862,9 @@ export default function ApplyPage() {
                       <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <UploadIcon className="w-8 h-8 text-slate-500" />
                       </div>
-                      <p className="text-white font-medium mb-1">Déposez votre CV ici</p>
+                      <p className="text-white font-medium mb-1">
+                        {formData.cvUrl ? "Uploader un autre CV" : "Déposez votre CV ici"}
+                      </p>
                       <p className="text-sm text-slate-500 mb-4">ou cliquez pour sélectionner</p>
                       <span className="text-xs text-slate-600">PDF, DOC, DOCX • Max 10MB</span>
                     </div>
@@ -755,7 +872,10 @@ export default function ApplyPage() {
                 </label>
               </div>
               <p className="text-sm text-slate-400 text-center">
-                Le CV est optionnel mais recommandé pour de meilleurs résultats
+                {formData.cvUrl && !formData.cvFile 
+                  ? "Vous pouvez continuer avec votre CV existant ou en uploader un nouveau"
+                  : "Le CV est optionnel mais recommandé pour de meilleurs résultats"
+                }
               </p>
             </motion.div>
           )}
