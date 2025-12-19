@@ -164,8 +164,25 @@ class JobyJobaService:
             logger.exception(f"❌ Erreur JobyJoba: {e}")
             return "Je rencontre un problème technique. Réessaie dans quelques instants ! 🛠️"
     
-    def get_welcome_message(self, job_title: str, company: str) -> str:
-        """Message d'accueil de JobyJoba."""
+    def get_welcome_message(
+        self, 
+        job_title: str, 
+        company: str,
+        max_messages: int = 10,
+        is_daily_limit: bool = False
+    ) -> str:
+        """
+        Message d'accueil de JobyJoba, adapté selon le plan utilisateur.
+        
+        Args:
+            job_title: Titre du poste
+            company: Nom de l'entreprise
+            max_messages: Nombre de messages disponibles
+            is_daily_limit: True si limite journalière (Pro), False si par session
+        """
+        limit_text = f"**{max_messages} messages par jour**" if is_daily_limit else f"**{max_messages} messages** pour cette session"
+        pro_bonus = "\n\n💎 En tant qu'utilisateur **Pro**, tu bénéficies du quota journalier renouvelé chaque jour !" if is_daily_limit else ""
+        
         return f"""Salut ! 👋 Je suis **JobyJoba**, ton coach emploi personnel !
 
 Je vois que tu candidates pour **{job_title}** chez **{company}**. Super choix ! 🎯
@@ -177,7 +194,7 @@ J'ai analysé ton CV et ta lettre de motivation. Je suis prêt à t'aider à :
 3. 💰 **Négocier ton salaire** avec assurance
 4. ✨ **Valoriser ton parcours** efficacement
 
-Tu as **10 messages** pour cette session. Utilise-les bien !
+Tu as {limit_text}. Utilise-les bien !{pro_bonus}
 
 Par quoi veux-tu commencer ? 🚀"""
 

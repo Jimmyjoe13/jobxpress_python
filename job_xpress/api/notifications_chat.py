@@ -136,6 +136,10 @@ async def accept_jobyjoba_offer(
     """
     Accepte l'offre JobyJoba et crée une session de chat.
     Coût: 1 crédit
+    
+    Limites selon le plan:
+    - FREE/STARTER: 10 messages par session
+    - PRO: 20 messages par jour (limite journalière)
     """
     # Utiliser admin client pour éviter les problèmes d'encodage UTF-8
     admin_client = db_service.admin_client
@@ -158,13 +162,21 @@ async def accept_jobyjoba_offer(
     if not application_id:
         raise HTTPException(status_code=400, detail="Application non trouvée")
     
-    # Vérifier les crédits
-    can_use, credits = await billing_service.can_search(user_id, token)
-    if not can_use:
+    # Vérifier les crédits et récupérer le plan utilisateur
+    user_credits = await billing_service.get_user_credits(user_id, token)
+    credits = user_credits.get("credits", 0)
+    user_plan = user_credits.get("plan", "FREE")
+    
+    if credits < 1:
         raise HTTPException(
             status_code=402,
             detail=f"Crédits insuffisants. Vous avez {credits} crédit(s), il en faut 1."
         )
+    
+    # Récupérer les limites JobyJoba selon le plan
+    jobyjoba_limits = billing_service.get_jobyjoba_limit(user_plan)
+    max_messages = jobyjoba_limits["max_messages"]
+    is_daily_limit = jobyjoba_limits["is_daily_limit"]
     
     # Vérifier qu'il n'y a pas déjà une session active
     existing = admin_client.table("chat_sessions").select("id").eq("application_id", application_id).eq("status", "active").limit(1).execute()
@@ -186,11 +198,13 @@ async def accept_jobyjoba_offer(
     
     app_data = app_result.data[0]
     
-    # Créer le message de bienvenue
+    # Créer le message de bienvenue (adapté selon le plan)
     final_choice = app_data.get("final_choice", {})
     welcome_message = joby_joba_service.get_welcome_message(
         job_title=final_choice.get("title", app_data.get("job_title", "ce poste")),
-        company=final_choice.get("company", "cette entreprise")
+        company=final_choice.get("company", "cette entreprise"),
+        max_messages=max_messages,
+        is_daily_limit=is_daily_limit
     )
     
     # Créer la session de chat avec le message de bienvenue
@@ -207,7 +221,8 @@ async def accept_jobyjoba_offer(
         "application_id": application_id,
         "messages": initial_messages,
         "message_count": 0,  # Le message de bienvenue ne compte pas
-        "max_messages": 10,
+        "max_messages": max_messages,  # Dynamique selon le plan
+        "is_daily_limit": is_daily_limit,  # Pour le plan Pro
         "status": "active"
     }).execute()
     
@@ -219,12 +234,14 @@ async def accept_jobyjoba_offer(
         "updated_at": datetime.now(timezone.utc).isoformat()
     }).eq("id", notification_id).execute()
     
-    logger.info(f"🎉 Session JobyJoba créée: {session_id[:8]} pour {user_id[:8]}")
+    limit_info = "par jour" if is_daily_limit else "pour cette session"
+    logger.info(f"🎉 Session JobyJoba créée: {session_id[:8]} pour {user_id[:8]} (plan {user_plan}, {max_messages} msgs {limit_info})")
     
     return {
         "session_id": session_id,
         "message": "Session JobyJoba créée avec succès !",
-        "remaining_messages": 10,
+        "remaining_messages": max_messages,
+        "is_daily_limit": is_daily_limit,
         "welcome_message": welcome_message
     }
 

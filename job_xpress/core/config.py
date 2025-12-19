@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = ""  # Vide = pas de fichier log
     
+    # Stripe (Webhooks)
+    STRIPE_WEBHOOK_SECRET: str = ""  # Signing secret pour vérifier les webhooks
+    
     # Monitoring (Sentry)
     SENTRY_DSN: str = ""
 

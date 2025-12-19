@@ -11,7 +11,9 @@ import {
   MessageSquare,
   Sparkles,
   AlertCircle,
-  User
+  User,
+  Crown,
+  Clock
 } from "lucide-react"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
@@ -28,6 +30,8 @@ interface ChatSession {
   messages: ChatMessage[]
   remaining_messages: number
   status: string
+  is_daily_limit?: boolean  // Pro users have daily limit
+  max_messages?: number
 }
 
 async function getAuthToken(): Promise<string | null> {
@@ -54,6 +58,7 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [remainingMessages, setRemainingMessages] = useState(10)
+  const [isDailyLimit, setIsDailyLimit] = useState(false)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -85,6 +90,7 @@ export default function ChatPage() {
         setSession(data)
         setMessages(data.messages)
         setRemainingMessages(data.remaining_messages)
+        setIsDailyLimit(data.is_daily_limit || false)
       } else if (res.status === 404) {
         setError("Session non trouvée. Acceptez d'abord l'offre JobyJoba depuis vos notifications.")
       } else {
@@ -225,13 +231,27 @@ export default function ChatPage() {
           </div>
         </div>
         
-        {/* Remaining messages */}
-        <div className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-          remainingMessages <= 2 
-            ? 'bg-red-500/10 text-red-400 border border-red-500/30' 
-            : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/30'
-        }`}>
-          {remainingMessages} message{remainingMessages !== 1 ? 's' : ''} restant{remainingMessages !== 1 ? 's' : ''}
+        {/* Remaining messages - with Pro indicator */}
+        <div className="flex items-center gap-2">
+          {isDailyLimit && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded-full">
+              <Crown className="w-3 h-3 text-purple-400" />
+              <span className="text-xs font-medium text-purple-400">Pro</span>
+            </div>
+          )}
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
+            remainingMessages <= 2 
+              ? 'bg-red-500/10 text-red-400 border border-red-500/30' 
+              : isDailyLimit
+                ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/30'
+          }`}>
+            <Clock className="w-3.5 h-3.5" />
+            <span>
+              {remainingMessages} msg{remainingMessages !== 1 ? 's' : ''} 
+              {isDailyLimit ? ' / jour' : ' restant' + (remainingMessages !== 1 ? 's' : '')}
+            </span>
+          </div>
         </div>
       </div>
 

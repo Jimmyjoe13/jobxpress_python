@@ -87,9 +87,17 @@ export interface ApiError {
 
 export interface UserCredits {
   credits: number
-  plan: 'FREE' | 'PRO'
+  plan: 'FREE' | 'STARTER' | 'PRO'
   plan_name: string
   next_reset_at: string | null
+  last_reset?: string | null
+  // Nouvelles propriétés V2
+  max_credits?: number
+  reset_period_days?: number
+  jobyjoba_messages_limit?: number
+  jobyjoba_is_daily_limit?: boolean
+  has_custom_context?: boolean
+  price?: number
 }
 
 export interface JobFilters {
