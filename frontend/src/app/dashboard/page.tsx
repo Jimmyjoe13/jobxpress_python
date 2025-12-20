@@ -16,6 +16,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/ui/skeleton"
+import { UpgradeBanner } from "@/components/ui/upgrade-banner"
 import { getApplicationsV2, type ApplicationV2 } from "@/lib/api"
 
 interface UserData {
@@ -138,6 +139,14 @@ export default function DashboardPage() {
         </div>
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Bonjour, {firstName} 👋</h1>
         <p className="text-slate-400 text-lg">Bienvenue sur votre espace JobXpress</p>
+      </motion.div>
+
+      {/* Upgrade Banner for FREE users */}
+      <motion.div variants={itemVariants} className="mb-6">
+        <UpgradeBanner 
+          onDismiss={() => {}}
+          variant="auto"
+        />
       </motion.div>
 
       {/* Quick Actions Grid */}

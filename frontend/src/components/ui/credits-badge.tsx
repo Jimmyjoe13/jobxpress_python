@@ -122,7 +122,7 @@ export function CreditsBadge({
       {/* Bouton Upgrade pour les utilisateurs FREE */}
       {canUpgrade && (
         <Link 
-          href="/pricing"
+          href="/dashboard/subscription"
           className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors"
         >
           <Star className="w-3 h-3" />

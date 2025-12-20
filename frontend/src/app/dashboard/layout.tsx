@@ -12,7 +12,8 @@ import {
   Menu, 
   X,
   User,
-  ChevronRight
+  ChevronRight,
+  CreditCard
 } from "lucide-react"
 import { CreditsBadge } from "@/components/ui/credits-badge"
 import { NotificationsPopover } from "@/components/ui/notifications-popover"
@@ -21,6 +22,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Nouvelle candidature", href: "/dashboard/apply", icon: FileText },
   { name: "Mon profil", href: "/dashboard/profile", icon: User },
+  { name: "Abonnement", href: "/dashboard/subscription", icon: CreditCard },
   { name: "Paramètres", href: "/dashboard/settings", icon: Settings },
 ]
 

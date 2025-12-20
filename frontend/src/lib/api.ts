@@ -417,3 +417,59 @@ export async function getApplicationsV2(limit: number = 20): Promise<{
 }> {
   return apiRequest(`/api/v2/applications?limit=${limit}`, {}, true)
 }
+
+// ============================================
+// SUBSCRIPTION & PLANS
+// ============================================
+
+export interface PlanDetails {
+  key: string
+  credits: number
+  reset_days: number
+  name: string
+  price: number
+  jobyjoba_messages: number
+  jobyjoba_daily_limit: boolean
+  custom_context: boolean
+}
+
+export interface AvailablePlan extends PlanDetails {
+  is_current: boolean
+  is_upgrade: boolean
+  is_downgrade: boolean
+}
+
+export interface SubscriptionDetails extends UserCredits {
+  credits_progress: number
+  can_upgrade: boolean
+  has_stripe_subscription: boolean
+  upgrade_url: string | null
+  available_plans: {
+    FREE: AvailablePlan
+    STARTER: AvailablePlan
+    PRO: AvailablePlan
+  }
+}
+
+export interface PlansResponse {
+  plans: {
+    FREE: PlanDetails
+    STARTER: PlanDetails
+    PRO: PlanDetails
+  }
+}
+
+/**
+ * Get all available subscription plans (public)
+ */
+export async function getAvailablePlans(): Promise<PlansResponse> {
+  return apiRequest<PlansResponse>('/api/v2/plans')
+}
+
+/**
+ * Get current user's subscription details
+ */
+export async function getSubscriptionDetails(): Promise<SubscriptionDetails> {
+  return apiRequest<SubscriptionDetails>('/api/v2/subscription', {}, true)
+}
+

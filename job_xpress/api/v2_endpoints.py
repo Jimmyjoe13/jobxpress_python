@@ -28,7 +28,7 @@ from models.application_v2 import (
 )
 from models.candidate import CandidateProfile, WorkType
 from services.database import db_service
-from services.billing import BillingService
+from services.billing import BillingService, PLANS
 from services.search_engine_v2 import create_search_engine_v2
 
 logger = get_logger()
@@ -656,3 +656,79 @@ async def list_applications(
         "count": len(result.data) if result.data else 0,
         "applications": result.data or []
     }
+
+
+@router.get("/plans")
+async def get_available_plans():
+    """
+    Retourne tous les plans disponibles avec leurs caractéristiques.
+    
+    Endpoint public (pas d'authentification requise).
+    Utile pour afficher les options d'abonnement.
+    """
+    return {
+        "plans": {
+            plan_key: {
+                "key": plan_key,
+                **plan_config
+            }
+            for plan_key, plan_config in PLANS.items()
+        }
+    }
+
+
+@router.get("/subscription")
+async def get_subscription_details(
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Récupère les détails complets de l'abonnement de l'utilisateur.
+    
+    Retourne:
+    - Informations du plan actuel
+    - Crédits restants et progression
+    - Date du prochain reset
+    - Historique des transactions (TODO)
+    - Liens vers Stripe Customer Portal (si abonné)
+    """
+    # Récupérer les infos de crédits
+    credits_info = await billing_service.get_user_credits(user_id, token)
+    current_plan = credits_info.get("plan", "FREE")
+    plan_config = PLANS.get(current_plan, PLANS["FREE"])
+    
+    # Calculer la progression des crédits
+    credits = credits_info.get("credits", 0)
+    max_credits = plan_config.get("credits", 5)
+    credits_progress = round((credits / max_credits) * 100, 1) if max_credits > 0 else 0
+    
+    # Vérifier si l'utilisateur a un abonnement Stripe
+    client = db_service.get_user_client(token)
+    stripe_customer_id = None
+    if client:
+        try:
+            profile = client.table("user_profiles").select(
+                "stripe_customer_id"
+            ).eq("id", user_id).single().execute()
+            stripe_customer_id = profile.data.get("stripe_customer_id") if profile.data else None
+        except Exception:
+            pass
+    
+    return {
+        **credits_info,
+        "credits_progress": credits_progress,
+        "can_upgrade": current_plan == "FREE",
+        "has_stripe_subscription": stripe_customer_id is not None,
+        "upgrade_url": "https://buy.stripe.com/7sYaEY5UdavdaDU0gZ3F601" if current_plan == "FREE" else None,
+        "available_plans": {
+            plan_key: {
+                "key": plan_key,
+                **config,
+                "is_current": plan_key == current_plan,
+                "is_upgrade": PLANS[plan_key]["price"] > plan_config["price"],
+                "is_downgrade": PLANS[plan_key]["price"] < plan_config["price"]
+            }
+            for plan_key, config in PLANS.items()
+        }
+    }
+
