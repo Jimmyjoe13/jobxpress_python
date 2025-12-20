@@ -287,8 +287,8 @@ async def get_chat_session(
 @router.post("/chat/send")
 @limiter.limit(RATE_LIMIT_CHAT)
 async def send_chat_message(
-    http_request: Request,  # Required for rate limiter
-    request: ChatRequest,
+    request: Request,  # Required for rate limiter - MUST be named 'request'
+    chat_request: ChatRequest,
     token: str = Depends(get_required_token),
     user_id: str = Depends(get_current_user_id)
 ):
@@ -300,7 +300,7 @@ async def send_chat_message(
         raise HTTPException(status_code=500, detail="Erreur connexion base de données")
     
     # Récupérer la session
-    session_result = admin_client.table("chat_sessions").select("*").eq("application_id", request.application_id).eq("user_id", user_id).limit(1).execute()
+    session_result = admin_client.table("chat_sessions").select("*").eq("application_id", chat_request.application_id).eq("user_id", user_id).limit(1).execute()
     
     if not session_result.data or len(session_result.data) == 0:
         raise HTTPException(status_code=404, detail="Session de chat non trouvée. Acceptez d'abord l'offre JobyJoba.")
@@ -325,7 +325,7 @@ async def send_chat_message(
         )
     
     # Récupérer le contexte de l'application
-    app_result = admin_client.table("applications_v2").select("*").eq("id", request.application_id).limit(1).execute()
+    app_result = admin_client.table("applications_v2").select("*").eq("id", chat_request.application_id).limit(1).execute()
     app_data = app_result.data[0] if app_result.data else {}
     
     final_choice = app_data.get("final_choice", {})
@@ -344,7 +344,7 @@ async def send_chat_message(
     
     # Appel à JobyJoba
     assistant_response = await joby_joba_service.chat(
-        user_message=request.message,
+        user_message=chat_request.message,
         conversation_history=messages_history,
         context=context,
         remaining_messages=remaining - 1  # -1 car on compte celui-ci
@@ -354,7 +354,7 @@ async def send_chat_message(
     now = datetime.now(timezone.utc).isoformat()
     
     new_messages = messages_history + [
-        {"role": "user", "content": request.message, "timestamp": now},
+        {"role": "user", "content": chat_request.message, "timestamp": now},
         {"role": "assistant", "content": assistant_response, "timestamp": now}
     ]
     

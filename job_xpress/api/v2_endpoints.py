@@ -406,8 +406,8 @@ async def run_analysis_task(
 @router.post("/search/start", response_model=SearchStartResponse)
 @limiter.limit(RATE_LIMIT_SEARCH)
 async def start_search(
-    http_request: Request,  # Required for rate limiter
-    request: SearchStartRequest,
+    request: Request,  # Required for rate limiter - MUST be named 'request'
+    search_request: SearchStartRequest,
     background_tasks: BackgroundTasks,
     token: str = Depends(get_required_token),
     user_id: str = Depends(get_current_user_id)
@@ -433,7 +433,7 @@ async def start_search(
     # 2. Créer l'application en DB
     app_id = await create_application_v2(
         user_id=user_id,
-        request=request,
+        request=search_request,
         access_token=token
     )
     
@@ -441,7 +441,7 @@ async def start_search(
     background_tasks.add_task(
         run_search_task,
         app_id=app_id,
-        request=request,
+        request=search_request,
         user_id=user_id,
         access_token=token
     )
@@ -533,9 +533,9 @@ async def get_search_results(
 @router.post("/applications/{app_id}/select", response_model=SelectJobsResponse)
 @limiter.limit(RATE_LIMIT_ANALYZE)
 async def select_jobs(
-    http_request: Request,  # Required for rate limiter
+    request: Request,  # Required for rate limiter - MUST be named 'request'
     app_id: str,
-    request: SelectJobsRequest,
+    select_request: SelectJobsRequest,
     background_tasks: BackgroundTasks,
     token: str = Depends(get_required_token),
     user_id: str = Depends(get_current_user_id)
@@ -569,7 +569,7 @@ async def select_jobs(
     raw_jobs = result.data.get("raw_jobs", []) or []
     selected = []
     
-    for idx_str in request.selected_job_ids:
+    for idx_str in select_request.selected_job_ids:
         try:
             idx = int(idx_str)
             if 0 <= idx < len(raw_jobs):
