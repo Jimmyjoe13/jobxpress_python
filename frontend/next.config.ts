@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   
   // Required for Sentry source maps
   productionBrowserSourceMaps: true,
+  
+  // Empty turbopack config to acknowledge Next.js 16 default
+  // Required because Sentry uses webpack config internally
+  turbopack: {},
 };
 
 // Sentry configuration options
