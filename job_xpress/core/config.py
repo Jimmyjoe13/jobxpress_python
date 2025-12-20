@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     
     # Monitoring (Sentry)
     SENTRY_DSN: str = ""
+    
+    # Logging Cloud (Axiom)
+    # Get token from: https://axiom.co > Settings > API Tokens
+    AXIOM_TOKEN: str = ""
+    AXIOM_DATASET: str = "jobxpress-logs"
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
 

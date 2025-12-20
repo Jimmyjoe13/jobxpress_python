@@ -36,7 +36,9 @@ from core.exceptions import DuplicateRequestError
 logger = setup_logging(
     level=settings.LOG_LEVEL,
     json_format=(settings.ENVIRONMENT == "production"),
-    log_file=settings.LOG_FILE if settings.LOG_FILE else None
+    log_file=settings.LOG_FILE if settings.LOG_FILE else None,
+    axiom_token=settings.AXIOM_TOKEN if settings.AXIOM_TOKEN else None,
+    axiom_dataset=settings.AXIOM_DATASET
 )
 
 # --- SENTRY (Production uniquement) ---
