@@ -107,6 +107,78 @@ async def find_user_by_email(email: str) -> Optional[str]:
     return None
 
 
+# ===========================================
+# IDEMPOTENCE HELPERS
+# ===========================================
+
+async def is_event_processed(event_id: str) -> bool:
+    """
+    Vérifie si un événement Stripe a déjà été traité.
+    
+    Cette vérification est CRITIQUE pour éviter le doublement des crédits
+    en cas de retry par Stripe.
+    
+    Args:
+        event_id: ID unique de l'événement Stripe
+        
+    Returns:
+        True si l'événement a déjà été traité
+    """
+    admin_client = db_service.admin_client
+    if not admin_client:
+        logger.warning("⚠️ Admin client non disponible - skip idempotence check")
+        return False
+    
+    try:
+        result = admin_client.table("stripe_events").select("event_id").eq("event_id", event_id).limit(1).execute()
+        return len(result.data) > 0
+    except Exception as e:
+        logger.error(f"❌ Erreur vérification idempotence: {e}")
+        # En cas d'erreur, on continue le traitement (fail-open)
+        # C'est un compromis: risque de doublon vs blocage total
+        return False
+
+
+async def mark_event_processed(
+    event_id: str, 
+    event_type: str, 
+    payload: dict,
+    user_id: Optional[str] = None,
+    status: str = "processed"
+):
+    """
+    Enregistre un événement Stripe comme traité.
+    
+    Cette fonction DOIT être appelée APRÈS le succès du traitement
+    pour garantir l'atomicité.
+    
+    Args:
+        event_id: ID unique de l'événement Stripe
+        event_type: Type d'événement (checkout.session.completed, etc.)
+        payload: Payload complet de l'événement (pour debug)
+        user_id: ID de l'utilisateur concerné (optionnel)
+        status: Statut du traitement (processed, failed, skipped)
+    """
+    admin_client = db_service.admin_client
+    if not admin_client:
+        logger.warning("⚠️ Admin client non disponible - event non enregistré")
+        return
+    
+    try:
+        admin_client.table("stripe_events").insert({
+            "event_id": event_id,
+            "event_type": event_type,
+            "payload": payload,
+            "user_id": user_id,
+            "status": status
+        }).execute()
+        logger.info(f"✅ Event {event_id[:20]}... enregistré ({status})")
+    except Exception as e:
+        # Ne pas bloquer si l'enregistrement échoue
+        # L'événement est déjà traité, on log juste l'erreur
+        logger.error(f"❌ Erreur enregistrement event: {e}")
+
+
 async def upgrade_user_subscription(
     user_id: str, 
     plan: str,
@@ -220,6 +292,12 @@ async def stripe_webhook(
     
     logger.info(f"📦 Webhook Stripe reçu: {event_type} (id: {event_id[:20]}...)")
     
+    # === IDEMPOTENCE CHECK ===
+    # Vérifier si cet événement a déjà été traité
+    if await is_event_processed(event_id):
+        logger.info(f"⏭️ Event {event_id[:20]}... déjà traité - skip")
+        return {"status": "already_processed", "event_id": event_id}
+    
     # Traiter selon le type d'événement
     try:
         if event_type == "checkout.session.completed":
@@ -229,6 +307,7 @@ async def stripe_webhook(
             
             if not customer_email:
                 logger.warning("⚠️ checkout.session.completed sans email")
+                await mark_event_processed(event_id, event_type, data_object, status="skipped")
                 return {"status": "skipped", "reason": "no email"}
             
             # Trouver l'utilisateur par email
@@ -236,7 +315,8 @@ async def stripe_webhook(
             
             if not user_id:
                 logger.warning(f"⚠️ Utilisateur non trouvé pour email: {customer_email}")
-                # On pourrait créer le user ici ou stocker pour traitement manuel
+                # Enregistrer comme "pending" pour traitement manuel ultérieur
+                await mark_event_processed(event_id, event_type, data_object, status="skipped")
                 return {"status": "pending", "reason": "user not found", "email": customer_email}
             
             # Activer le plan Starter (Payment Link actuel)
@@ -244,8 +324,11 @@ async def stripe_webhook(
             
             if success:
                 logger.info(f"🎉 Souscription Starter activée pour {customer_email}")
+                # IMPORTANT: Enregistrer APRÈS le succès pour garantir l'atomicité
+                await mark_event_processed(event_id, event_type, data_object, user_id=user_id)
                 return {"status": "success", "plan": "STARTER"}
             else:
+                await mark_event_processed(event_id, event_type, data_object, user_id=user_id, status="failed")
                 return {"status": "error", "reason": "upgrade failed"}
         
         elif event_type == "customer.subscription.deleted":
@@ -260,9 +343,11 @@ async def stripe_webhook(
                 if result.data and len(result.data) > 0:
                     user_id = result.data[0]["id"]
                     await downgrade_user_subscription(user_id)
+                    await mark_event_processed(event_id, event_type, data_object, user_id=user_id)
                     logger.info(f"⬇️ Abonnement annulé pour customer {customer_id}")
                     return {"status": "success", "action": "downgraded"}
             
+            await mark_event_processed(event_id, event_type, data_object, status="skipped")
             return {"status": "skipped", "reason": "customer not found"}
         
         elif event_type == "invoice.payment_failed":
@@ -281,8 +366,10 @@ async def stripe_webhook(
                     if result.data and len(result.data) > 0:
                         user_id = result.data[0]["id"]
                         await downgrade_user_subscription(user_id)
+                        await mark_event_processed(event_id, event_type, data_object, user_id=user_id)
                         return {"status": "downgraded", "reason": "payment_failed"}
             
+            await mark_event_processed(event_id, event_type, data_object, status="skipped")
             return {"status": "warning", "attempt": attempt_count}
         
         elif event_type == "invoice.payment_succeeded":
@@ -305,17 +392,22 @@ async def stripe_webhook(
                         "updated_at": datetime.now(timezone.utc).isoformat()
                     }).eq("id", user_id).execute()
                     
+                    await mark_event_processed(event_id, event_type, data_object, user_id=user_id)
                     logger.info(f"🔄 Crédits renouvelés pour customer {customer_id}")
                     return {"status": "success", "action": "credits_renewed"}
             
+            await mark_event_processed(event_id, event_type, data_object, status="skipped")
             return {"status": "skipped", "reason": "customer not found"}
         
         else:
-            # Événement non géré
+            # Événement non géré - on l'enregistre quand même
+            await mark_event_processed(event_id, event_type, data_object, status="skipped")
             logger.debug(f"📦 Événement Stripe ignoré: {event_type}")
             return {"status": "ignored", "event_type": event_type}
             
     except Exception as e:
+        # En cas d'erreur, on enregistre comme "failed" pour ne pas réessayer
+        await mark_event_processed(event_id, event_type, data_object, status="failed")
         logger.exception(f"❌ Erreur traitement webhook Stripe: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

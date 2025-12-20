@@ -14,7 +14,9 @@ Workflow:
 from datetime import datetime, timezone
 from typing import Optional, List
 import uuid
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from core.auth import get_required_token, get_current_user_id
 from core.logging_config import get_logger
@@ -37,6 +39,15 @@ router = APIRouter(prefix="/api/v2", tags=["V2 - Human-in-the-Loop"])
 # Instances de services (instanciées une fois)
 billing_service = BillingService(db_service)
 search_engine_v2 = create_search_engine_v2()
+
+# Rate limiter pour les opérations coûteuses
+# Note: Le limiter global est dans main.py, mais on crée une instance locale
+# pour pouvoir l'utiliser comme décorateur sur les routes du router
+limiter = Limiter(key_func=get_remote_address)
+
+# Limites par type d'opération (configurables)
+RATE_LIMIT_SEARCH = "5/minute"     # Recherches (coût RapidAPI modéré)
+RATE_LIMIT_ANALYZE = "3/minute"    # Analyses LLM (coût élevé DeepSeek)
 
 
 # ===========================================
@@ -393,7 +404,9 @@ async def run_analysis_task(
 # ===========================================
 
 @router.post("/search/start", response_model=SearchStartResponse)
+@limiter.limit(RATE_LIMIT_SEARCH)
 async def start_search(
+    http_request: Request,  # Required for rate limiter
     request: SearchStartRequest,
     background_tasks: BackgroundTasks,
     token: str = Depends(get_required_token),
@@ -518,7 +531,9 @@ async def get_search_results(
 
 
 @router.post("/applications/{app_id}/select", response_model=SelectJobsResponse)
+@limiter.limit(RATE_LIMIT_ANALYZE)
 async def select_jobs(
+    http_request: Request,  # Required for rate limiter
     app_id: str,
     request: SelectJobsRequest,
     background_tasks: BackgroundTasks,

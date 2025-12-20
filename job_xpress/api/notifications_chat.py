@@ -4,8 +4,10 @@ API Endpoints pour les notifications et le chat JobyJoba.
 
 from datetime import datetime, timezone
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from core.auth import get_required_token, get_current_user_id
 from core.logging_config import get_logger
@@ -18,6 +20,10 @@ logger = get_logger()
 router = APIRouter(prefix="/api/v2", tags=["Notifications & Chat"])
 
 billing_service = BillingService(db_service)
+
+# Rate limiter pour les appels LLM (JobyJoba)
+limiter = Limiter(key_func=get_remote_address)
+RATE_LIMIT_CHAT = "10/minute"  # Messages chat (appels LLM)
 
 
 # ===========================================
@@ -279,7 +285,9 @@ async def get_chat_session(
 
 
 @router.post("/chat/send")
+@limiter.limit(RATE_LIMIT_CHAT)
 async def send_chat_message(
+    http_request: Request,  # Required for rate limiter
     request: ChatRequest,
     token: str = Depends(get_required_token),
     user_id: str = Depends(get_current_user_id)
