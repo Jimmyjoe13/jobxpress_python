@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # Get token from: https://axiom.co > Settings > API Tokens
     AXIOM_TOKEN: str = ""
     AXIOM_DATASET: str = "jobxpress-logs"
+    
+    # Redis Cache (pour les résultats de recherche)
+    # Format: redis://default:password@host:port ou rediss://... pour TLS
+    REDIS_URL: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
 

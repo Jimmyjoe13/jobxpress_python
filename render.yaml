@@ -1,0 +1,65 @@
+# ==================================================
+# JobXpress - Render Blueprint (Infrastructure as Code)
+# ==================================================
+# Ce fichier définit l'infrastructure de déploiement sur Render.
+#
+# Pour l'utiliser:
+# 1. Connecter le repo GitHub à Render
+# 2. Render détectera automatiquement ce fichier
+# 3. L'infrastructure sera créée/mise à jour automatiquement
+#
+# Documentation: https://docs.render.com/infrastructure-as-code
+# ==================================================
+
+services:
+  # ===========================================
+  # Backend API (FastAPI + Python)
+  # ===========================================
+  - type: web
+    name: jobxpress-api
+    runtime: docker
+    repo: https://github.com/Jimmyjoe13/jobxpress_python
+    branch: main
+    dockerfilePath: ./job_xpress/Dockerfile
+    dockerContext: ./job_xpress
+
+    # Health check
+    healthCheckPath: /health
+
+    # Scaling (Free tier = 1 instance)
+    plan: free
+
+    # Variables d'environnement (à configurer dans Render Dashboard)
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      # Les secrets doivent être configurés manuellement dans Render Dashboard:
+      # - SUPABASE_URL
+      # - SUPABASE_KEY
+      # - SUPABASE_SERVICE_KEY
+      # - SUPABASE_JWT_SECRET
+      # - DEEPSEEK_API_KEY
+      # - RAPIDAPI_KEY
+      # - BREVO_API_KEY
+      # - SENDER_EMAIL
+      # - STRIPE_WEBHOOK_SECRET
+      # - SENTRY_DSN
+      # - AXIOM_TOKEN
+      # - AXIOM_DATASET
+
+    # Build et déploiement
+    buildCommand: |
+      cd job_xpress && \
+      pip install -r requirements.txt && \
+      pip install pytest pytest-asyncio && \
+      python -m pytest tests/ -v --tb=short -x
+
+    # Notifications de déploiement
+    buildFilter:
+      paths:
+        - job_xpress/**
+
+    # Auto-deploy sur push
+    autoDeploy: true

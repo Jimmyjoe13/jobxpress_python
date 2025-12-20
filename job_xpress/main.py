@@ -253,6 +253,28 @@ async def health_check_tasks():
     }
 
 
+@app.get("/health/redis")
+async def health_check_redis():
+    """
+    Endpoint de monitoring du cache Redis.
+    Affiche le statut de connexion et les statistiques de cache.
+    """
+    from services.redis_cache import redis_cache
+    
+    redis_health = redis_cache.health_check()
+    redis_stats = redis_cache.get_stats() if redis_cache.is_available else {}
+    
+    return {
+        "redis": redis_health,
+        "stats": redis_stats,
+        "features": {
+            "search_cache_ttl": "1 heure",
+            "credits_cache_ttl": "1 minute",
+            "rate_limiting": redis_cache.is_available
+        }
+    }
+
+
 async def process_application_task(payload: TallyWebhookPayload, task_id: int = None):
     """
     Tâche de traitement d'une candidature.

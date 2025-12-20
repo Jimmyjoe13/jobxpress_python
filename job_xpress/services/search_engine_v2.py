@@ -24,6 +24,7 @@ from core.logging_config import get_logger
 from core.retry import resilient_get, CircuitBreaker
 from models.candidate import CandidateProfile, WorkType
 from models.job_offer import JobOffer
+from services.redis_cache import redis_cache
 
 logger = get_logger()
 
@@ -72,7 +73,7 @@ class SearchEngineV2:
         limit: int = 25
     ) -> List[JobOffer]:
         """
-        Recherche multi-sources avec déduplication intelligente.
+        Recherche multi-sources avec déduplication intelligente et cache Redis.
         
         Args:
             candidate: Profil du candidat
@@ -85,6 +86,25 @@ class SearchEngineV2:
         filters = filters or {}
         logger.info(f"🔎 SearchV2: {candidate.job_title} à {candidate.location}")
         
+        # === CACHE CHECK ===
+        # Vérifier si les résultats sont en cache (1h de validité)
+        cached_results = redis_cache.get_cached_search(
+            job_title=candidate.job_title,
+            location=candidate.location,
+            filters=filters
+        )
+        
+        if cached_results:
+            logger.info(f"⚡ Cache HIT: {len(cached_results)} offres depuis Redis")
+            # Reconstruire les JobOffer depuis les dicts cachés
+            try:
+                jobs = [JobOffer(**job) for job in cached_results]
+                return jobs[:limit]
+            except Exception as e:
+                logger.warning(f"⚠️ Erreur reconstruction cache: {e}")
+                # Continuer avec une recherche fraîche
+        
+        # === RECHERCHE FRAÎCHE ===
         # 1. Lancement parallèle des sources
         source_tasks = [
             self.base._search_jsearch_strategy(candidate),
@@ -133,6 +153,21 @@ class SearchEngineV2:
         if jobs_to_enrich:
             logger.info(f"⬇️ Deep Fetching: {len(jobs_to_enrich)} offres")
             jobs_to_enrich = await self.base._enrich_jobs_with_full_content(jobs_to_enrich)
+        
+        # === CACHE SAVE ===
+        # Stocker les résultats en cache pour les prochaines requêtes
+        if jobs_to_enrich and redis_cache.is_available:
+            try:
+                jobs_dicts = [job.model_dump() for job in jobs_to_enrich]
+                redis_cache.cache_search_results(
+                    job_title=candidate.job_title,
+                    location=candidate.location,
+                    filters=filters,
+                    results=jobs_dicts
+                )
+                logger.info(f"💾 {len(jobs_to_enrich)} offres mises en cache Redis (TTL: 1h)")
+            except Exception as e:
+                logger.warning(f"⚠️ Erreur cache save: {e}")
         
         return jobs_to_enrich
     

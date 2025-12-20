@@ -25,6 +25,7 @@ python-Levenshtein>=0.25.0
 tenacity>=8.2.0
 slowapi>=0.1.8
 sentry-sdk[fastapi]>=1.35.0
+redis>=5.0.0  # Cache distribué
 
 # --- Testing ---
 pytest>=7.4.0

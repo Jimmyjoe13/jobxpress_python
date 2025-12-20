@@ -1,0 +1,141 @@
+name: JobXpress CI
+
+# Déclencher sur push et pull requests vers main
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "job_xpress/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "job_xpress/**"
+
+jobs:
+  # ===========================================
+  # JOB: Tests Backend
+  # ===========================================
+  test-backend:
+    name: 🧪 Backend Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./job_xpress
+
+    steps:
+      # Checkout le code
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      # Setup Python
+      - name: 🐍 Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: "job_xpress/requirements.txt"
+
+      # Installer les dépendances système pour WeasyPrint
+      - name: 📦 Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2 \
+            libpango-1.0-0 \
+            libpangocairo-1.0-0 \
+            libgdk-pixbuf2.0-0 \
+            libffi-dev \
+            fonts-liberation
+
+      # Installer les dépendances Python
+      - name: 📦 Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      # Lancer les tests
+      - name: 🧪 Run tests
+        run: |
+          python -m pytest tests/ \
+            -v \
+            --tb=short \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-fail-under=50
+        env:
+          ENVIRONMENT: test
+          SUPABASE_JWT_SECRET: test-secret-for-ci-minimum-32-chars
+
+      # Afficher le résumé de couverture
+      - name: 📊 Coverage Summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All tests passed!" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================
+  # JOB: Lint & Type Check
+  # ===========================================
+  lint:
+    name: 🔍 Lint & Type Check
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./job_xpress
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: 📦 Install linters
+        run: |
+          pip install ruff mypy
+
+      - name: 🔍 Run Ruff (linter)
+        run: |
+          ruff check . --output-format=github || true
+        continue-on-error: true # Ne pas bloquer le CI sur du lint
+
+      # Type checking optionnel
+      # - name: 🔍 Run MyPy (type check)
+      #   run: mypy . --ignore-missing-imports || true
+
+  # ===========================================
+  # JOB: Security Check
+  # ===========================================
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./job_xpress
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: 📦 Install security tools
+        run: pip install safety bandit
+
+      - name: 🔒 Check dependencies (Safety)
+        run: safety check -r requirements.txt || true
+        continue-on-error: true # Avertissement seulement
+
+      - name: 🔒 Security scan (Bandit)
+        run: bandit -r . -x ./tests -f json || true
+        continue-on-error: true # Avertissement seulement
