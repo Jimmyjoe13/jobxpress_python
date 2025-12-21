@@ -6,6 +6,7 @@ import { motion } from "framer-motion"
 import { Sparkles, ArrowLeft, CheckCircle, Mail, Lock, User, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { Confetti } from "@/components/ui/confetti"
+import { SocialAuth, AuthDivider } from "@/components/auth/social-auth"
 
 export default function RegisterPage() {
   const { showToast } = useToast()
@@ -226,7 +227,7 @@ export default function RegisterPage() {
               Rejoignez JobXpress et automatisez vos candidatures
             </p>
 
-            <form onSubmit={handleRegister} className="space-y-5">
+            <div className="space-y-5">
               {error && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
@@ -236,6 +237,13 @@ export default function RegisterPage() {
                   {error}
                 </motion.div>
               )}
+
+              {/* Authentification sociale */}
+              <SocialAuth mode="register" />
+              
+              <AuthDivider />
+
+            <form onSubmit={handleRegister} className="space-y-5">
 
               {/* Names */}
               <div className="grid grid-cols-2 gap-4">
@@ -376,6 +384,7 @@ export default function RegisterPage() {
                 </Link>
               </p>
             </form>
+            </div>
           </motion.div>
         </motion.div>
       </div>

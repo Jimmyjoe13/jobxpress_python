@@ -1,14 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { Sparkles, ArrowLeft, Mail, Lock, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
+import { SocialAuth, AuthDivider } from "@/components/auth/social-auth"
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { showToast } = useToast()
 
   const [email, setEmail] = useState("")
@@ -16,6 +18,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+
+  // Gestion des erreurs OAuth depuis l'URL
+  useEffect(() => {
+    const oauthError = searchParams.get('error')
+    if (oauthError === 'oauth_failed') {
+      setError("La connexion via le fournisseur a échoué. Veuillez réessayer.")
+      showToast("Échec de la connexion OAuth", "error")
+    }
+  }, [searchParams, showToast])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,7 +100,7 @@ export default function LoginPage() {
               <p className="text-slate-400">Connectez-vous pour accéder à votre espace</p>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-5">
+            <div className="space-y-5">
               {error && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
@@ -99,6 +110,13 @@ export default function LoginPage() {
                   {error}
                 </motion.div>
               )}
+
+              {/* Authentification sociale */}
+              <SocialAuth mode="login" />
+
+              <AuthDivider />
+
+            <form onSubmit={handleLogin} className="space-y-5">
 
               {/* Email */}
               <div>
@@ -183,16 +201,6 @@ export default function LoginPage() {
                 )}
               </motion.button>
 
-              {/* Divider */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-700" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="px-4 bg-slate-800/50 text-slate-500 text-sm">ou</span>
-                </div>
-              </div>
-
               {/* Register Link */}
               <p className="text-center text-slate-400">
                 Pas encore de compte ?{" "}
@@ -204,6 +212,7 @@ export default function LoginPage() {
                 </Link>
               </p>
             </form>
+            </div>
           </motion.div>
         </motion.div>
       </div>
