@@ -111,7 +111,7 @@ export default function LoginPage() {
                 <Sparkles className="w-8 h-8 text-white" />
               </motion.div>
               <h1 className="text-2xl font-bold text-white mb-2">Bon retour !</h1>
-              <p className="text-slate-400">Connectez-vous pour accéder à votre espace</p>
+              <p className="text-slate-400">Connectez-vous pour accéder à votre espace<br>Pour le moment la connexion avec un compte Google Fonctionne, nous mettons la connexion Microsoft en place prochainement. Sinon, connectez-vous avec votre email directement.</br></p>
             </div>
 
             <div className="space-y-5">
