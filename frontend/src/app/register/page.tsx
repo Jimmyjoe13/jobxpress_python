@@ -1,14 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Sparkles, ArrowLeft, CheckCircle, Mail, Lock, User, Eye, EyeOff } from "lucide-react"
+import { Sparkles, ArrowLeft, CheckCircle, Mail, Lock, User, Eye, EyeOff, CreditCard } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { Confetti } from "@/components/ui/confetti"
 import { SocialAuth, AuthDivider } from "@/components/auth/social-auth"
 
-export default function RegisterPage() {
+// Liens Stripe pour les plans payants
+const STRIPE_LINKS: Record<string, string> = {
+  starter: "https://buy.stripe.com/7sYaEY5UdavdaDU0gZ3F601"
+}
+
+/**
+ * Composant interne qui lit les search params.
+ * Doit être enveloppé dans Suspense pour la génération statique Next.js.
+ */
+function RegisterFormContent() {
   const { showToast } = useToast()
 
   const [formData, setFormData] = useState({
@@ -22,6 +32,11 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+
+  const searchParams = useSearchParams()
+  const planFromUrl = searchParams.get('plan')
+  const redirectToPayment = searchParams.get('redirect') === 'payment'
+  const hasPendingPayment = redirectToPayment && planFromUrl && STRIPE_LINKS[planFromUrl]
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -80,7 +95,7 @@ export default function RegisterPage() {
       }
 
       setSuccess(true)
-      showToast("Inscription réussie !", "success")
+      showToast(hasPendingPayment ? "Inscription réussie ! Confirmez votre email pour continuer." : "Inscription réussie !", "success")
     } catch {
       setError("Une erreur est survenue")
       showToast("Une erreur est survenue", "error")
@@ -88,6 +103,11 @@ export default function RegisterPage() {
       setIsLoading(false)
     }
   }
+
+  // Construire l'URL de login avec les paramètres de paiement
+  const loginUrl = hasPendingPayment 
+    ? `/login?plan=${planFromUrl}&redirect=payment`
+    : "/login"
 
   if (success) {
     return (
@@ -115,12 +135,31 @@ export default function RegisterPage() {
               <br />
               Vérifiez votre boîte de réception pour activer votre compte.
             </p>
+            
+            {/* Message contextuel pour le paiement en attente */}
+            {hasPendingPayment && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 mb-6"
+              >
+                <div className="flex items-center gap-2 text-indigo-400 mb-2">
+                  <CreditCard className="w-4 h-4" />
+                  <span className="font-medium">Souscription en attente</span>
+                </div>
+                <p className="text-sm text-slate-400">
+                  Une fois connecté, vous serez redirigé vers le paiement pour activer votre plan <span className="text-white font-medium capitalize">{planFromUrl}</span>.
+                </p>
+              </motion.div>
+            )}
+
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Link
-                href="/login"
+                href={loginUrl}
                 className="inline-flex items-center justify-center w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all"
               >
-                Retour à la connexion
+                {hasPendingPayment ? "Se connecter pour continuer" : "Retour à la connexion"}
               </Link>
             </motion.div>
           </div>
@@ -389,5 +428,20 @@ export default function RegisterPage() {
         </motion.div>
       </div>
     </div>
+  )
+}
+
+/**
+ * Export default avec Suspense pour la génération statique Next.js.
+ */
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen mesh-gradient flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
+      </div>
+    }>
+      <RegisterFormContent />
+    </Suspense>
   )
 }

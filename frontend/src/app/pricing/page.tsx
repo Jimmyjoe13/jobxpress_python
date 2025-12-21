@@ -1,11 +1,13 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Check, Zap, Star, ArrowRight, Clock, Sparkles, MessageCircle, CreditCard } from "lucide-react"
 import { motion } from "framer-motion"
 import type { Variants } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Navbar, Footer } from "@/components/layout"
+import { createClient } from "@/lib/supabase/client"
 
 interface PlanFeature {
   text: string
@@ -125,6 +127,17 @@ const comparisonData = [
 ]
 
 export default function PricingPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      setIsAuthenticated(!!session)
+    }
+    checkAuth()
+  }, [])
+
   return (
     <div className="min-h-screen mesh-gradient">
       <Navbar />
@@ -265,21 +278,35 @@ export default function PricingPage() {
 
                 {/* CTA Button */}
                 {plan.external ? (
-                  <a 
-                    href={plan.href} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="block"
-                  >
-                    <Button 
-                      variant="gradient" 
-                      className="w-full" 
-                      size="lg"
+                  // Si utilisateur connecté → Stripe direct, sinon → inscription d'abord
+                  isAuthenticated ? (
+                    <a 
+                      href={plan.href} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="block"
                     >
-                      {plan.cta}
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </a>
+                      <Button 
+                        variant="gradient" 
+                        className="w-full" 
+                        size="lg"
+                      >
+                        {plan.cta}
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    </a>
+                  ) : (
+                    <Link href={`/register?plan=${plan.name.toLowerCase()}&redirect=payment`}>
+                      <Button 
+                        variant="gradient" 
+                        className="w-full" 
+                        size="lg"
+                      >
+                        {plan.cta}
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    </Link>
+                  )
                 ) : (
                   <Link href={plan.disabled ? "#" : plan.href}>
                     <Button 

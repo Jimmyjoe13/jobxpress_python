@@ -27,6 +27,29 @@ function OAuthErrorHandler({ onError }: { onError: (message: string) => void }) 
   return null
 }
 
+// Liens Stripe pour les plans payants
+const STRIPE_LINKS: Record<string, string> = {
+  starter: "https://buy.stripe.com/7sYaEY5UdavdaDU0gZ3F601"
+}
+
+/**
+ * Composant interne qui gère la redirection post-connexion vers Stripe.
+ * Doit être enveloppé dans Suspense pour la génération statique Next.js.
+ */
+function PaymentRedirectHandler({ onPaymentParams }: { 
+  onPaymentParams: (plan: string | null, redirect: boolean) => void 
+}) {
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const plan = searchParams.get('plan')
+    const redirect = searchParams.get('redirect') === 'payment'
+    onPaymentParams(plan, redirect)
+  }, [searchParams, onPaymentParams])
+
+  return null
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -36,6 +59,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Paramètres de redirection vers Stripe après connexion
+  const [planFromUrl, setPlanFromUrl] = useState<string | null>(null)
+  const [redirectToPayment, setRedirectToPayment] = useState(false)
+
+  const handlePaymentParams = (plan: string | null, redirect: boolean) => {
+    setPlanFromUrl(plan)
+    setRedirectToPayment(redirect)
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,6 +94,14 @@ export default function LoginPage() {
       }
 
       showToast("Connexion réussie !", "success")
+      
+      // Redirection vers Stripe si paiement en attente
+      if (redirectToPayment && planFromUrl && STRIPE_LINKS[planFromUrl]) {
+        showToast("Redirection vers le paiement...", "info")
+        window.location.href = STRIPE_LINKS[planFromUrl]
+        return
+      }
+      
       router.push("/dashboard")
     } catch {
       setError("Une erreur est survenue")
@@ -76,6 +116,11 @@ export default function LoginPage() {
       {/* Gestionnaire d'erreurs OAuth avec Suspense pour SSG */}
       <Suspense fallback={null}>
         <OAuthErrorHandler onError={setError} />
+      </Suspense>
+      
+      {/* Gestionnaire des paramètres de paiement */}
+      <Suspense fallback={null}>
+        <PaymentRedirectHandler onPaymentParams={handlePaymentParams} />
       </Suspense>
 
       {/* Left Side - Form */}
