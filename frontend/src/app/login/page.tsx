@@ -159,9 +159,6 @@ export default function LoginPage() {
               <p className="text-slate-400">
                 Connectez-vous pour accéder à votre espace
               </p>
-              <p className="text-slate-500 text-sm mt-2">
-                Pour le moment la connexion avec un compte Google fonctionne, nous mettons la connexion Microsoft en place prochainement. Sinon, connectez-vous avec votre email directement.
-              </p>
             </div>
 
             <div className="space-y-5">
