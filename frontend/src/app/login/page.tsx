@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
@@ -8,9 +8,27 @@ import { Sparkles, ArrowLeft, Mail, Lock, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { SocialAuth, AuthDivider } from "@/components/auth/social-auth"
 
+/**
+ * Composant qui gère les erreurs OAuth depuis les paramètres URL.
+ * Doit être enveloppé dans Suspense pour la génération statique Next.js.
+ */
+function OAuthErrorHandler({ onError }: { onError: (message: string) => void }) {
+  const searchParams = useSearchParams()
+  const { showToast } = useToast()
+
+  useEffect(() => {
+    const oauthError = searchParams.get('error')
+    if (oauthError === 'oauth_failed') {
+      onError("La connexion via le fournisseur a échoué. Veuillez réessayer.")
+      showToast("Échec de la connexion OAuth", "error")
+    }
+  }, [searchParams, showToast, onError])
+
+  return null
+}
+
 export default function LoginPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { showToast } = useToast()
 
   const [email, setEmail] = useState("")
@@ -18,15 +36,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-
-  // Gestion des erreurs OAuth depuis l'URL
-  useEffect(() => {
-    const oauthError = searchParams.get('error')
-    if (oauthError === 'oauth_failed') {
-      setError("La connexion via le fournisseur a échoué. Veuillez réessayer.")
-      showToast("Échec de la connexion OAuth", "error")
-    }
-  }, [searchParams, showToast])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -64,6 +73,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen mesh-gradient flex">
+      {/* Gestionnaire d'erreurs OAuth avec Suspense pour SSG */}
+      <Suspense fallback={null}>
+        <OAuthErrorHandler onError={setError} />
+      </Suspense>
+
       {/* Left Side - Form */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-8 relative z-10">
         <motion.div
