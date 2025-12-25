@@ -16,6 +16,7 @@ export const metadata: Metadata = {
     "automatisation candidature",
     "lettre de motivation",
     "trouver un travail rapidement",
+    "deepseek",
   ],
   openGraph: {
     title: "jobXpress - L'IA au service de votre carrière",
