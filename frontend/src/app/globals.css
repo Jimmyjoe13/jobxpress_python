@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap');
+/* Polices chargées via next/font dans layout.tsx - élimine le Layout Shift */
 
 @import "tailwindcss";
 
@@ -28,7 +28,7 @@
    ======================================== */
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
   background: #0f172a;
   color: #f8fafc;
   min-height: 100vh;
@@ -37,7 +37,7 @@ body {
 
 /* Headings with Sora font */
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Sora', sans-serif;
+  font-family: var(--font-sora), sans-serif;
   font-weight: 600;
   letter-spacing: -0.02em;
 }

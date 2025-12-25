@@ -1,10 +1,31 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+/**
+ * Vérifie si la route est privée (ne doit pas être indexée par Google)
+ */
+function isPrivateRoute(pathname: string): boolean {
+  const privatePatterns = ['/dashboard', '/api', '/auth']
+  return privatePatterns.some(pattern => pathname.startsWith(pattern))
+}
+
+/**
+ * Ajoute le header X-Robots-Tag pour empêcher l'indexation des routes privées
+ */
+function addNoIndexHeader(response: NextResponse, pathname: string): NextResponse {
+  if (isPrivateRoute(pathname)) {
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow')
+  }
+  return response
+}
+
 export async function updateSession(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
   // Skip if Supabase is not configured
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    return NextResponse.next({ request })
+    const response = NextResponse.next({ request })
+    return addNoIndexHeader(response, pathname)
   }
 
   let supabaseResponse = NextResponse.next({
@@ -49,12 +70,15 @@ export async function updateSession(request: NextRequest) {
     ) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
-      return NextResponse.redirect(url)
+      const redirectResponse = NextResponse.redirect(url)
+      return addNoIndexHeader(redirectResponse, pathname)
     }
 
-    return supabaseResponse
+    return addNoIndexHeader(supabaseResponse, pathname)
   } catch (error) {
     console.error('Middleware error:', error)
-    return NextResponse.next({ request })
+    const response = NextResponse.next({ request })
+    return addNoIndexHeader(response, pathname)
   }
 }
+
