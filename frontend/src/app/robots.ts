@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next'
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://rocket-jobxpress.netlify.app'
+  const baseUrl = 'https://jobxpress.fr'
   
   return {
     rules: [

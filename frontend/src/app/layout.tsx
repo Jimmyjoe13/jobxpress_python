@@ -17,7 +17,7 @@ const sora = Sora({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://rocket-jobxpress.netlify.app"),
+  metadataBase: new URL("https://jobxpress.fr"),
   title: {
     default: "jobXpress - Automatisez votre recherche d'emploi avec l'IA",
     template: "%s | jobXpress",

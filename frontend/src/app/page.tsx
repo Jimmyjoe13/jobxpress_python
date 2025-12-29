@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     title: "jobXpress - L'IA au service de votre carrière",
     description:
       "Postulez intelligemment. Laissez notre IA gérer la partie fastidieuse de votre recherche d'emploi.",
-    url: "https://rocket-jobxpress.netlify.app",
+    url: "https://jobxpress.fr",
     siteName: "jobXpress",
     images: [
       {
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     images: ["/og-image.png"],
   },
   alternates: {
-    canonical: "https://rocket-jobxpress.netlify.app",
+    canonical: "https://jobxpress.fr",
   },
 }
 

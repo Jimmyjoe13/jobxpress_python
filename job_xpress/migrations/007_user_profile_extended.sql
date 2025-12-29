@@ -35,6 +35,9 @@ ADD COLUMN IF NOT EXISTS cv_uploaded_at TIMESTAMPTZ;
 
 -- 5. Mettre à jour le trigger pour copier les données de auth.users
 -- ----------------------------------------------
+-- SECURITY DEFINER : s'exécute avec les privilèges du créateur (postgres)
+-- SET search_path : évite les attaques par détournement de path
+-- COALESCE : évite les erreurs NOT NULL si les métadonnées sont absentes
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -49,12 +52,12 @@ BEGIN
         NEW.id, 
         5, 
         'FREE',
-        NEW.raw_user_meta_data->>'first_name',
-        NEW.raw_user_meta_data->>'last_name'
+        COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
+        COALESCE(NEW.raw_user_meta_data->>'last_name', '')
     );
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 6. Recréer le trigger
 -- ----------------------------------------------

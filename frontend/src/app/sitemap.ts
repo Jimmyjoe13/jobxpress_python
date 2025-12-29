@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://rocket-jobxpress.netlify.app'
+  const baseUrl = 'https://jobxpress.fr'
   
   return [
     {
