@@ -54,43 +54,6 @@ export function ChatWidget() {
     }
   }, [pathname])
 
-  // Redirection automatique si une recherche est effectuée via le chat
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1]
-    
-    // Vérifier si le message de l'assistant contient le signal de navigation
-    const hasSearchAction = 
-      lastMessage?.role === 'assistant' && 
-      (lastMessage.content?.includes('[ACTION:NAVIGATE_SEARCH]') || 
-       lastMessage.tool_calls_executed?.some(t => t.result.includes('[ACTION:NAVIGATE_SEARCH]')))
-
-    if (hasSearchAction) {
-      // Tenter d'extraire les paramètres de recherche
-      const searchTool = lastMessage.tool_calls_executed?.find(
-        (t: any) => t.tool_call?.function?.name === "search_jobs"
-      )
-      
-      let query = ""
-      if (searchTool?.tool_call?.function?.arguments) {
-        try {
-          const args = typeof searchTool.tool_call.function.arguments === 'string' 
-            ? JSON.parse(searchTool.tool_call.function.arguments)
-            : searchTool.tool_call.function.arguments
-          const q = encodeURIComponent(args.job_title || "")
-          const l = encodeURIComponent(args.location || "France")
-          query = `?q=${q}&l=${l}`
-        } catch (e) {
-          console.error("Erreur parse arguments recherche:", e)
-        }
-      }
-
-      const timer = setTimeout(() => {
-        router.push(`/dashboard/search${query}`)
-      }, 2500)
-      return () => clearTimeout(timer)
-    }
-  }, [messages, router])
-
   // Initialisation à l'ouverture
   useEffect(() => {
     if (isOpen && !hasInit) {
@@ -158,6 +121,7 @@ export function ChatWidget() {
       setMessages(prev => [...prev, assistantMessage])
 
       let fullContent = ""
+      let finalMetadata: any = null
       const stream = sendGlobalChatMessageStream(text)
       
       for await (const chunk of stream) {
@@ -174,6 +138,7 @@ export function ChatWidget() {
         }
         
         if (chunk.m) {
+          finalMetadata = chunk.m
           setMessages(prev => {
             const updated = [...prev]
             const lastMsg = updated[updated.length - 1]
@@ -184,6 +149,31 @@ export function ChatWidget() {
             return updated
           })
         }
+      }
+
+      // Action post-stream déclenchée LOCALEMENT par ce message uniquement
+      const hasSearchAction = 
+        fullContent.includes('[ACTION:NAVIGATE_SEARCH]') || 
+        finalMetadata?.tool_calls_executed?.some((t: any) => t.result.includes('[ACTION:NAVIGATE_SEARCH]'))
+
+      if (hasSearchAction) {
+        const searchTool = finalMetadata?.tool_calls_executed?.find(
+          (t: any) => t.tool_call?.function?.name === "search_jobs"
+        )
+        let query = ""
+        if (searchTool?.tool_call?.function?.arguments) {
+          try {
+            const args = typeof searchTool.tool_call.function.arguments === 'string' 
+              ? JSON.parse(searchTool.tool_call.function.arguments)
+              : searchTool.tool_call.function.arguments
+            const q = encodeURIComponent(args.job_title || "")
+            const l = encodeURIComponent(args.location || "France")
+            query = `?q=${q}&l=${l}`
+          } catch (e) {}
+        }
+        setTimeout(() => {
+          router.push(`/dashboard/search${query}`)
+        }, 2500)
       }
 
     } catch (error) {
