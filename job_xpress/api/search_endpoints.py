@@ -29,7 +29,13 @@ logger = get_logger()
 router = APIRouter(prefix="/api/v2", tags=["Recherche & Favoris"])
 
 # Services
-search_engine_v2 = create_search_engine_v2()
+_search_engine_instance = None
+
+def get_search_engine():
+    global _search_engine_instance
+    if _search_engine_instance is None:
+        _search_engine_instance = create_search_engine_v2()
+    return _search_engine_instance
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -160,10 +166,18 @@ async def quick_search(
         )
 
         filters = search_request.filters.model_dump() if search_request.filters else {}
-        jobs = await search_engine_v2.find_jobs_v2(candidate, filters, limit=25)
+        
+        try:
+            engine = get_search_engine()
+            jobs = await engine.find_jobs_v2(candidate, filters, limit=25)
+        except Exception as e:
+            logger.error(f"❌ SearchEngineV2 indisponible: {e}")
+            raise HTTPException(status_code=503, detail="Le moteur de recherche est temporairement indisponible.")
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception(f"❌ Erreur recherche rapide: {e}")
+        logger.exception(f"❌ Erreur inattendue recherche rapide: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de la recherche d'offres")
 
     # 3. Convertir en JobResultItem

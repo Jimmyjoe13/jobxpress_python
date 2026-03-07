@@ -38,7 +38,13 @@ router = APIRouter(prefix="/api/v2", tags=["V2 - Human-in-the-Loop"])
 
 # Instances de services (instanciées une fois)
 billing_service = BillingService(db_service)
-search_engine_v2 = create_search_engine_v2()
+_search_engine_instance = None
+
+def get_search_engine():
+    global _search_engine_instance
+    if _search_engine_instance is None:
+        _search_engine_instance = create_search_engine_v2()
+    return _search_engine_instance
 
 # Rate limiter pour les opérations coûteuses
 # Note: Le limiter global est dans main.py, mais on crée une instance locale
@@ -138,8 +144,20 @@ async def run_search_task(
             filters = request.filters.model_dump()
         
         # Exécuter la recherche
-        jobs = await search_engine_v2.find_jobs_v2(candidate, filters)
-        
+        try:
+            engine = get_search_engine()
+            jobs = await engine.find_jobs_v2(candidate, filters)
+        except Exception as e:
+            logger.error(f"❌ SearchEngineV2 indisponible en tâche de fond: {e}")
+            # Mettre à jour l'application en erreur
+            client = db_service.admin_client
+            if client:
+                client.table("applications_v2").update({
+                    "status": "FAILED",
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }).eq("id", app_id).execute()
+            return
+
         # Convertir en dicts pour stockage JSON
         raw_jobs = [job.model_dump() for job in jobs]
         

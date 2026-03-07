@@ -10,8 +10,14 @@ from services.database import db_service
 from models.candidate import CandidateProfile, WorkType
 from fastapi import HTTPException
 
-search_engine_v2 = create_search_engine_v2()
+_search_engine_instance = None
 logger = logging.getLogger(__name__)
+
+def get_search_engine():
+    global _search_engine_instance
+    if _search_engine_instance is None:
+        _search_engine_instance = create_search_engine_v2()
+    return _search_engine_instance
 
 AGENT_SYSTEM_PROMPT = """Tu es l'assistant IA de JobXpress, conçu pour accompagner les chercheurs d'emploi de manière proactive.
 
@@ -108,11 +114,16 @@ class ChatAgent:
                     contract_type="Indifférent"
                 )
                 
-                results = await search_engine_v2.find_jobs_v2(
-                    candidate=candidate,
-                    filters={},
-                    limit=5
-                )
+                try:
+                    engine = get_search_engine()
+                    results = await engine.find_jobs_v2(
+                        candidate=candidate,
+                        filters={},
+                        limit=5
+                    )
+                except Exception as e:
+                    logger.error(f"❌ SearchEngineV2 indisponible dans ChatAgent: {e}")
+                    return "Désolé, le moteur de recherche est temporairement indisponible. Réessaie dans quelques instants."
                 
                 # 3. Formater les résultats pour le LLM
                 if not results:
