@@ -1,7 +1,20 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { 
+  DndContext, 
+  DragOverlay, 
+  closestCenter,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  useDraggable,
+  useDroppable
+} from '@dnd-kit/core'
 import { 
   MoreVertical, 
   MapPin, 
@@ -31,10 +44,232 @@ const COLUMNS: { id: TrackingStatus, label: string, color: string, icon: any }[]
   { id: 'REJECTED', label: 'Refusée', color: 'red', icon: XCircle },
 ]
 
+const getStatusColor = (status: TrackingStatus | undefined) => {
+  switch (status) {
+    case 'SAVED': return 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+    case 'APPLIED': return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+    case 'INTERVIEW_SCHEDULED': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+    case 'INTERVIEWED': return 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+    case 'OFFER_RECEIVED': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+    case 'ACCEPTED': return 'bg-green-500/10 text-green-400 border-green-500/20'
+    case 'REJECTED': return 'bg-red-500/10 text-red-400 border-red-500/20'
+    case 'WITHDRAWN': return 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+    default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+  }
+}
+
+// -------------------------------------------------------------
+// Composant Droppable (Colonne)
+// -------------------------------------------------------------
+function DroppableColumn({ 
+  column, 
+  children, 
+  count 
+}: { 
+  column: typeof COLUMNS[0], 
+  children: React.ReactNode,
+  count: number 
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: column.id })
+
+  return (
+    <div className="flex flex-col min-w-[300px]">
+      {/* Column Header */}
+      <div className={`group flex items-center justify-between p-3 mb-4 rounded-xl border bg-slate-900/50 border-slate-800 transition-colors hover:border-${column.color}-500/30`}>
+        <div className="flex items-center gap-2">
+          <column.icon className={`w-4 h-4 text-slate-400 group-hover:text-${column.color}-400 transition-colors`} />
+          <h3 className={`font-semibold text-slate-300 group-hover:text-white transition-colors`}>{column.label}</h3>
+        </div>
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-500`}>
+          {count}
+        </span>
+      </div>
+
+      {/* Cards Container (Droppable Zone) */}
+      <div 
+        ref={setNodeRef}
+        className={`flex flex-col gap-3 min-h-[300px] p-2 rounded-2xl border transition-all duration-150 ${
+          isOver 
+            ? 'ring-2 ring-indigo-500/50 bg-indigo-500/5 border-indigo-500/50' 
+            : 'bg-slate-950/20 border-white/5'
+        }`}
+      >
+        <AnimatePresence>
+          {children}
+        </AnimatePresence>
+        
+        {count === 0 && (
+          <div className="flex flex-col items-center justify-center p-8 text-center h-[200px] text-slate-600 border border-dashed border-white/5 rounded-2xl pointer-events-none">
+            <GripHorizontal className="w-10 h-10 mb-2 opacity-5" />
+            <span className="text-xs font-medium italic opacity-40">Vide</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// -------------------------------------------------------------
+// Composant Draggable (Carte) avec wrapper Drag
+// -------------------------------------------------------------
+function DraggableCard({ 
+  app, 
+  column,
+  updatingId, 
+  handleStatusChange 
+}: { 
+  app: ApplicationV2, 
+  column: typeof COLUMNS[0],
+  updatingId: string | null,
+  handleStatusChange: (id: string, st: TrackingStatus) => void 
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: app.id,
+    data: app
+  })
+
+  // Le wrapper extérieur gère la ref Dnd-kit + la transparence quand dragué.
+  // Les écouteurs (listeners + attributes) sont appliqués au wrapper entier 
+  // car l'utilisations de distance/delay évite les clics intempestifs.
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={{ opacity: isDragging ? 0.4 : 1 }}
+      className="relative touch-none"
+      {...attributes} 
+      {...listeners}
+    >
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        whileHover={{ scale: 1.02 }}
+        className={`relative p-5 rounded-2xl bg-slate-900/80 border ${updatingId === app.id ? 'border-indigo-500/50' : 'border-white/5'} hover:border-indigo-500/30 transition-all group overflow-hidden`}
+      >
+        {/* Poignée visible sur mobile/touch en haut à gauche */}
+        <div className="absolute top-2.5 left-2.5 opacity-30 md:opacity-0 group-hover:md:opacity-30 transition-opacity">
+          <GripHorizontal className="w-5 h-5 text-slate-500" />
+        </div>
+
+        {updatingId === app.id && (
+            <div className="absolute inset-0 z-10 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
+            </div>
+        )}
+
+        <div className="flex justify-between items-start mb-3 pl-4 md:pl-0">
+          <h4 className="font-bold text-white text-sm line-clamp-2 pr-6 leading-snug">
+            {app.final_choice?.title || app.job_title}
+          </h4>
+          
+          <div 
+            className="absolute top-4 right-4" 
+            onPointerDown={(e) => e.stopPropagation()} // Évite de déclencher le drag en voulant ouvrir le menu
+          >
+            <DropdownMenu>
+              <DropdownMenuTrigger className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700/50 transition-colors">
+                <MoreVertical className="w-4 h-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-slate-900 border-white/10 p-2 rounded-xl">
+                <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Changer le statut</div>
+                {COLUMNS.map(c => (
+                  <DropdownMenuItem 
+                    key={c.id}
+                    onClick={() => handleStatusChange(app.id, c.id)}
+                    className="text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer flex items-center gap-3 rounded-lg mb-1 last:mb-0"
+                  >
+                    <c.icon className={`w-3.5 h-3.5 text-${c.color}-400`} />
+                    {c.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <div className="space-y-2 mb-4 pl-4 md:pl-0">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Building2 className="w-3.5 h-3.5 text-slate-500" />
+            <span className="truncate max-w-[180px]">{app.final_choice?.company || "Calculé via IA..."}</span>
+          </div>
+          {app.location && (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <MapPin className="w-3.5 h-3.5 text-slate-500" />
+              <span className="truncate">{app.location}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+          <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold tracking-wider">
+              <Clock className="w-3 h-3" />
+              {new Date(app.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+          </div>
+          <span className={`px-2.5 py-1 rounded-lg text-[9px] font-bold border uppercase tracking-widest ${getStatusColor(app.tracking_status || (app.status === 'completed' ? 'APPLIED' : 'SAVED'))}`}>
+            {app.tracking_status ? column.label : 'IA Généré'}
+          </span>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// -------------------------------------------------------------
+// Composant DragOverlay pour la carte fantôme
+// -------------------------------------------------------------
+function CardPreview({ app, column }: { app: ApplicationV2, column: typeof COLUMNS[0] }) {
+  // Une simple div stylisée comme la carte originale, sans interactions (ni framer-motion, ni dropdown actif)
+  return (
+    <div className="relative p-5 rounded-2xl bg-slate-900 border border-indigo-500 shadow-2xl shadow-black/50 overflow-hidden w-full cursor-grabbing transform scale-105 opacity-90 rotate-2">
+      <div className="flex justify-between items-start mb-3 pl-4 md:pl-0">
+        <h4 className="font-bold text-white text-sm line-clamp-2 pr-6 leading-snug">
+          {app.final_choice?.title || app.job_title}
+        </h4>
+        <MoreVertical className="w-4 h-4 text-slate-600 mt-2" />
+      </div>
+
+      <div className="space-y-2 mb-4 pl-4 md:pl-0">
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <Building2 className="w-3.5 h-3.5 text-slate-500" />
+          <span className="truncate max-w-[180px]">{app.final_choice?.company || "Calculé via IA..."}</span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+        <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold tracking-wider">
+            <Clock className="w-3 h-3" />
+            {new Date(app.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+        </div>
+        <span className={`px-2.5 py-1 rounded-lg text-[9px] font-bold border uppercase tracking-widest ${getStatusColor(app.tracking_status || (app.status === 'completed' ? 'APPLIED' : 'SAVED'))}`}>
+          {column.label}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+
+// -------------------------------------------------------------
+// MAIN COMPONENT
+// -------------------------------------------------------------
 export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
   const { showToast } = useToast()
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [showCelebrate, setShowCelebrate] = useState(false)
+  const [localApps, setLocalApps] = useState<ApplicationV2[]>(applications)
+  const [activeApp, setActiveApp] = useState<ApplicationV2 | null>(null)
+
+  // Sensors configuration (Desktop: distance 8px / Mobile: long press 250ms)
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+  )
+
+  // Sync state when props change
+  useEffect(() => {
+    setLocalApps(applications)
+  }, [applications])
 
   const handleStatusChange = async (appId: string, newStatus: TrackingStatus) => {
     try {
@@ -57,147 +292,137 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
     }
   }
 
-  const getStatusColor = (status: TrackingStatus | undefined) => {
-    switch (status) {
-      case 'SAVED': return 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-      case 'APPLIED': return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-      case 'INTERVIEW_SCHEDULED': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-      case 'INTERVIEWED': return 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-      case 'OFFER_RECEIVED': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-      case 'ACCEPTED': return 'bg-green-500/10 text-green-400 border-green-500/20'
-      case 'REJECTED': return 'bg-red-500/10 text-red-400 border-red-500/20'
-      case 'WITHDRAWN': return 'bg-gray-500/10 text-gray-400 border-gray-500/20'
-      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+  // --- DND HANDLERS ---
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event
+    const found = localApps.find(app => app.id === active.id)
+    if (found) setActiveApp(found)
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveApp(null)
+    const { active, over } = event
+    
+    // Annuler si pas déposé ou si déposé dans la même colonne (car tri pas nécessaire)
+    if (!over) return
+
+    const newStatus = over.id as TrackingStatus
+    const appId = active.id as string
+
+    // Ignorer si pas de changement de colonne 
+    // (Pour connaître son statut actuel, on le recherche dans nos localApps)
+    const appData = localApps.find(a => a.id === appId)
+    if (!appData) return
+    const currentStatus = appData.tracking_status || (appData.status === 'completed' ? 'APPLIED' : 'SAVED')
+    
+    // Attention: certains statuts sont groupés dans INTERVIEW_SCHEDULED ou REJECTED
+    // Si la colonne cible est là où l'app se trouve déjà logiquement, on ne fait rien.
+    const getVirtualColumn = (st: string) => {
+      if (['REJECTED', 'WITHDRAWN'].includes(st)) return 'REJECTED'
+      if (['INTERVIEW_SCHEDULED', 'INTERVIEWED', 'OFFER_RECEIVED', 'ACCEPTED'].includes(st)) return 'INTERVIEW_SCHEDULED'
+      if (st === 'APPLIED') return 'APPLIED'
+      return 'SAVED'
+    }
+
+    if (getVirtualColumn(currentStatus) === newStatus) return
+
+    // 1. Optimistic Update : Met à jour PENDANT que l'API est appelée
+    setLocalApps(prev => prev.map(app => 
+      app.id === appId 
+        ? { ...app, tracking_status: newStatus } 
+        : app
+    ))
+
+    // 2. Appel API réel
+    try {
+      setUpdatingId(appId)
+      await updateTrackingStatus(appId, newStatus)
+
+      // Célébrer si positif
+      if (['INTERVIEW_SCHEDULED', 'INTERVIEWED', 'OFFER_RECEIVED', 'ACCEPTED'].includes(newStatus)) {
+        setShowCelebrate(true)
+        setTimeout(() => setShowCelebrate(false), 2000)
+      }
+      onUpdate() // Synchro propre base de données
+    } catch (err) {
+      // Rollback
+      setLocalApps(applications)
+      showToast("Erreur lors du déplacement", "error")
+    } finally {
+      setUpdatingId(null)
     }
   }
 
-  // Group by status
+  // Group by status locally
   const groupedApps = COLUMNS.reduce((acc, col) => {
-    acc[col.id] = applications.filter(app => {
+    acc[col.id] = localApps.filter(app => {
       const st = app.tracking_status || (app.status === 'completed' ? 'APPLIED' : 'SAVED')
       return st === col.id || (col.id === 'REJECTED' && ['REJECTED', 'WITHDRAWN'].includes(st)) || (col.id === 'INTERVIEW_SCHEDULED' && ['INTERVIEW_SCHEDULED', 'INTERVIEWED', 'OFFER_RECEIVED', 'ACCEPTED'].includes(st))
     })
     return acc
   }, {} as Record<string, ApplicationV2[]>)
 
+  // Trouver la colonne source pour le DragOverlay
+  const activeColumn = activeApp ? COLUMNS.find(c => {
+      const st = activeApp.tracking_status || (activeApp.status === 'completed' ? 'APPLIED' : 'SAVED')
+      return st === c.id || (c.id === 'REJECTED' && ['REJECTED', 'WITHDRAWN'].includes(st)) || (c.id === 'INTERVIEW_SCHEDULED' && ['INTERVIEW_SCHEDULED', 'INTERVIEWED', 'OFFER_RECEIVED', 'ACCEPTED'].includes(st))
+  }) : null
+
+
   return (
-    <div className="relative">
-      {/* Celebration Overlay */}
-      <AnimatePresence>
-        {showCelebrate && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1.2 }}
-            exit={{ opacity: 0, scale: 1.5 }}
-            className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
-          >
-            <div className="flex flex-col items-center">
-               <Sparkles className="w-24 h-24 text-yellow-400 animate-pulse" />
-               <motion.span 
-                 animate={{ y: [0, -20, 0] }}
-                 className="text-white font-bold text-3xl mt-4 drop-shadow-lg"
-               >
-                 BRAVO ! 🎉
-               </motion.span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 overflow-x-auto pb-4">
-        {COLUMNS.map((column) => (
-          <div key={column.id} className="flex flex-col min-w-[300px]">
-            {/* Column Header */}
-            <div className={`group flex items-center justify-between p-3 mb-4 rounded-xl border bg-slate-900/50 border-slate-800 transition-colors hover:border-${column.color}-500/30`}>
-              <div className="flex items-center gap-2">
-                <column.icon className={`w-4 h-4 text-slate-400 group-hover:text-${column.color}-400 transition-colors`} />
-                <h3 className={`font-semibold text-slate-300 group-hover:text-white transition-colors`}>{column.label}</h3>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      collisionDetection={closestCenter}
+    >
+      <div className="relative">
+        {/* Celebration Overlay */}
+        <AnimatePresence>
+          {showCelebrate && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1.2 }}
+              exit={{ opacity: 0, scale: 1.5 }}
+              className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+            >
+              <div className="flex flex-col items-center">
+                 <Sparkles className="w-24 h-24 text-yellow-400 animate-pulse" />
+                 <motion.span 
+                   animate={{ y: [0, -20, 0] }}
+                   className="text-white font-bold text-3xl mt-4 drop-shadow-lg"
+                 >
+                   BRAVO ! 🎉
+                 </motion.span>
               </div>
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-500`}>
-                {groupedApps[column.id]?.length || 0}
-              </span>
-            </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-            {/* Cards Container */}
-            <div className="flex flex-col gap-3 min-h-[300px] p-2 rounded-2xl bg-slate-950/20 border border-white/5">
-              <AnimatePresence>
-                {groupedApps[column.id]?.map((app) => (
-                  <motion.div
-                    key={app.id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    whileHover={{ scale: 1.02 }}
-                    className={`relative p-5 rounded-2xl bg-slate-900/80 border ${updatingId === app.id ? 'border-indigo-500/50' : 'border-white/5'} hover:border-indigo-500/30 transition-all group overflow-hidden`}
-                  >
-                    {updatingId === app.id && (
-                       <div className="absolute inset-0 z-10 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center">
-                         <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
-                       </div>
-                    )}
-
-                    <div className="flex justify-between items-start mb-3">
-                      <h4 className="font-bold text-white text-sm line-clamp-2 pr-6 leading-snug">
-                        {app.final_choice?.title || app.job_title}
-                      </h4>
-                      
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700/50 transition-colors">
-                          <MoreVertical className="w-4 h-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 bg-slate-900 border-white/10 p-2 rounded-xl">
-                          <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Changer le statut</div>
-                          {COLUMNS.map(c => (
-                            <DropdownMenuItem 
-                              key={c.id}
-                              onClick={() => handleStatusChange(app.id, c.id)}
-                              className="text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer flex items-center gap-3 rounded-lg mb-1 last:mb-0"
-                            >
-                              <c.icon className={`w-3.5 h-3.5 text-${c.color}-400`} />
-                              {c.label}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-
-                    <div className="space-y-2 mb-4">
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <Building2 className="w-3.5 h-3.5 text-slate-500" />
-                        <span className="truncate max-w-[180px]">{app.final_choice?.company || "Calculé via IA..."}</span>
-                      </div>
-                      {app.location && (
-                        <div className="flex items-center gap-2 text-xs text-slate-400">
-                          <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                          <span className="truncate">{app.location}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
-                      <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold tracking-wider">
-                         <Clock className="w-3 h-3" />
-                         {new Date(app.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
-                      </div>
-                      <span className={`px-2.5 py-1 rounded-lg text-[9px] font-bold border uppercase tracking-widest ${getStatusColor(app.tracking_status || (app.status === 'completed' ? 'APPLIED' : 'SAVED'))}`}>
-                        {app.tracking_status ? column.label : 'IA Généré'}
-                      </span>
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-              
-              {groupedApps[column.id]?.length === 0 && (
-                <div className="flex flex-col items-center justify-center p-8 text-center h-[200px] text-slate-600 border border-dashed border-white/5 rounded-2xl">
-                  <GripHorizontal className="w-10 h-10 mb-2 opacity-5" />
-                  <span className="text-xs font-medium italic opacity-40">Vide</span>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 overflow-x-auto pb-4">
+          {COLUMNS.map((column) => (
+            <DroppableColumn 
+              key={column.id} 
+              column={column} 
+              count={groupedApps[column.id]?.length || 0}
+            >
+              {groupedApps[column.id]?.map((app) => (
+                <DraggableCard 
+                  key={app.id} 
+                  app={app} 
+                  column={column} 
+                  updatingId={updatingId}
+                  handleStatusChange={handleStatusChange} 
+                />
+              ))}
+            </DroppableColumn>
+          ))}
+        </div>
       </div>
-    </div>
+
+      <DragOverlay>
+        {activeApp && activeColumn ? <CardPreview app={activeApp} column={activeColumn} /> : null}
+      </DragOverlay>
+    </DndContext>
   )
 }
