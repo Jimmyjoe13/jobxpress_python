@@ -266,10 +266,12 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   )
 
-  // Sync state when props change
+  // Sync state when props change, ONLY if we are not currently updating
   useEffect(() => {
-    setLocalApps(applications)
-  }, [applications])
+    if (!updatingId) {
+      setLocalApps(applications)
+    }
+  }, [applications, updatingId])
 
   const handleStatusChange = async (appId: string, newStatus: TrackingStatus) => {
     try {

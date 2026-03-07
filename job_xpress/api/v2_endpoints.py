@@ -709,7 +709,7 @@ async def list_applications(
 
     query = (
         client.table("applications_v2")
-        .select("id, status, job_title, location, created_at, updated_at")
+        .select("id, status, job_title, location, created_at, updated_at, tracking_status, final_choice")
         .order("created_at", desc=True)
         .limit(limit)
     )
