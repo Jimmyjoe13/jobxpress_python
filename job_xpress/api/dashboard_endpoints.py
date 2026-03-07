@@ -61,14 +61,14 @@ async def get_dashboard_stats(
         total_saved = saved_res.count if saved_res.count is not None else 0
 
         # Profile completeness
-        profile_res = client.table("user_profiles").select("job_title, location, current_cv_id, free_searches_used").eq("id", user_id).single().execute()
+        profile_res = client.table("user_profiles").select("job_title, location, current_cv_id, free_searches_used").eq("id", user_id).execute()
         
         has_profile = False
         has_cv = False
         has_searched = False
         
-        if profile_res.data:
-            p = profile_res.data
+        if profile_res.data and len(profile_res.data) > 0:
+            p = profile_res.data[0]
             has_profile = bool(p.get("job_title"))
             has_cv = bool(p.get("current_cv_id"))
             has_searched = p.get("free_searches_used", 0) > 0

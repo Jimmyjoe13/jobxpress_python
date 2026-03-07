@@ -7,6 +7,7 @@ import logging
 from core.config import settings
 from services.search_engine_v2 import create_search_engine_v2
 from services.database import db_service
+from models.candidate import CandidateProfile, WorkType
 
 search_engine_v2 = create_search_engine_v2()
 logger = logging.getLogger(__name__)
@@ -82,9 +83,18 @@ class ChatAgent:
                     )
                 else:
                     # Fallback au cas où quick_search n'est pas encore implémenté
+                    # On crée un profil minimal pour satisfaire find_jobs_v2
+                    candidate = CandidateProfile(
+                        first_name="User",
+                        last_name=user_id[:8],
+                        email="chat@jobxpress.fr",
+                        job_title=job_title,
+                        location=location or "France",
+                        contract_type="Indifférent"
+                    )
                     results = await search_engine_v2.find_jobs_v2(
-                        candidate_profile={"job_title": job_title, "location": location, "contract_type": "Indifférent"},
-                        cv_text="",
+                        candidate=candidate,
+                        filters={},
                         limit=5
                     )
                 
