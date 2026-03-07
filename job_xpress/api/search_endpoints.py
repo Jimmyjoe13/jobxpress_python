@@ -10,7 +10,6 @@ Quota (plan FREE) : 5 recherches gratuites/mois, puis 1 crédit par recherche.
 Plans STARTER/PRO : recherches illimitées.
 """
 
-from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
@@ -31,11 +30,13 @@ router = APIRouter(prefix="/api/v2", tags=["Recherche & Favoris"])
 # Services
 _search_engine_instance = None
 
+
 def get_search_engine():
     global _search_engine_instance
     if _search_engine_instance is None:
         _search_engine_instance = create_search_engine_v2()
     return _search_engine_instance
+
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -46,34 +47,51 @@ RATE_LIMIT_QUICK_SEARCH = "5/minute"
 # MODELS
 # ===========================================
 
+
 class QuickSearchRequest(BaseModel):
     """Requête de recherche rapide (sans créer de candidature)."""
-    job_title: str = Field(..., min_length=2, max_length=200, description="Intitulé du poste")
+
+    job_title: str = Field(
+        ..., min_length=2, max_length=200, description="Intitulé du poste"
+    )
     location: str = Field("France", max_length=100, description="Localisation")
-    contract_type: str = Field("CDI", description="Type de contrat (CDI, CDD, Alternance, Stage)")
-    experience_level: str = Field("Non spécifié", description="Junior, Confirmé, Sénior")
+    contract_type: str = Field(
+        "CDI", description="Type de contrat (CDI, CDD, Alternance, Stage)"
+    )
+    experience_level: str = Field(
+        "Non spécifié", description="Junior, Confirmé, Sénior"
+    )
     work_type: str = Field("Tous", description="Présentiel, Hybride, Full Remote, Tous")
     filters: Optional[JobFilters] = Field(None, description="Filtres avancés")
 
 
 class QuickSearchResponse(BaseModel):
     """Réponse de la recherche rapide."""
+
     jobs: List[JobResultItem]
     total_found: int
-    free_searches_remaining: int = Field(description="Recherches gratuites restantes ce mois")
+    free_searches_remaining: int = Field(
+        description="Recherches gratuites restantes ce mois"
+    )
     used_credit: bool = Field(False, description="True si un crédit a été consommé")
     message: str
 
 
 class SaveJobRequest(BaseModel):
     """Requête pour sauvegarder une offre en favori."""
-    job_data: dict = Field(..., description="Données de l'offre (title, company, url, etc.)")
-    notes: Optional[str] = Field(None, max_length=1000, description="Notes personnelles")
+
+    job_data: dict = Field(
+        ..., description="Données de l'offre (title, company, url, etc.)"
+    )
+    notes: Optional[str] = Field(
+        None, max_length=1000, description="Notes personnelles"
+    )
     source: str = Field("search", description="Origine: search, chatbot, manual")
 
 
 class SavedJobResponse(BaseModel):
     """Représentation d'une offre sauvegardée."""
+
     id: str
     job_data: dict
     notes: Optional[str] = None
@@ -83,6 +101,7 @@ class SavedJobResponse(BaseModel):
 
 class SearchHistoryItem(BaseModel):
     """Représentation d'une recherche dans l'historique."""
+
     id: str
     query_params: dict
     results_count: int
@@ -93,13 +112,14 @@ class SearchHistoryItem(BaseModel):
 # ENDPOINTS — RECHERCHE RAPIDE
 # ===========================================
 
+
 @router.post("/search/quick", response_model=QuickSearchResponse)
 @limiter.limit(RATE_LIMIT_QUICK_SEARCH)
 async def quick_search(
     request: Request,  # Requis pour rate limiter
     search_request: QuickSearchRequest,
     token: str = Depends(get_required_token),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Recherche rapide d'offres d'emploi depuis le dashboard.
@@ -113,11 +133,12 @@ async def quick_search(
     try:
         client = db_service.admin_client
         if not client:
-            raise HTTPException(status_code=500, detail="Erreur connexion base de données")
+            raise HTTPException(
+                status_code=500, detail="Erreur connexion base de données"
+            )
 
         quota_result = client.rpc(
-            "check_and_use_search_quota",
-            {"p_user_id": user_id}
+            "check_and_use_search_quota", {"p_user_id": user_id}
         ).execute()
 
         if not quota_result.data or len(quota_result.data) == 0:
@@ -131,17 +152,21 @@ async def quick_search(
         if not allowed:
             raise HTTPException(
                 status_code=402,
-                detail="Quota de recherches épuisé ce mois. Passez à un plan payant ou attendez le renouvellement."
+                detail="Quota de recherches épuisé ce mois. Passez à un plan payant ou attendez le renouvellement.",
             )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ Erreur quota recherche: {e}")
-        raise HTTPException(status_code=500, detail="Erreur vérification quota de recherche")
+        raise HTTPException(
+            status_code=500, detail="Erreur vérification quota de recherche"
+        )
 
     # 2. Exécuter la recherche via SearchEngineV2
-    logger.info(f"🔍 Recherche rapide: '{search_request.job_title}' à '{search_request.location}' (user: {user_id[:8]})")
+    logger.info(
+        f"🔍 Recherche rapide: '{search_request.job_title}' à '{search_request.location}' (user: {user_id[:8]})"
+    )
 
     try:
         from models.candidate import CandidateProfile, WorkType
@@ -166,37 +191,44 @@ async def quick_search(
         )
 
         filters = search_request.filters.model_dump() if search_request.filters else {}
-        
+
         try:
             engine = get_search_engine()
             jobs = await engine.find_jobs_v2(candidate, filters, limit=25)
         except Exception as e:
             logger.error(f"❌ SearchEngineV2 indisponible: {e}")
-            raise HTTPException(status_code=503, detail="Le moteur de recherche est temporairement indisponible.")
+            raise HTTPException(
+                status_code=503,
+                detail="Le moteur de recherche est temporairement indisponible.",
+            )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(f"❌ Erreur inattendue recherche rapide: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors de la recherche d'offres")
+        raise HTTPException(
+            status_code=500, detail="Erreur lors de la recherche d'offres"
+        )
 
     # 3. Convertir en JobResultItem
     job_items = []
     for i, job in enumerate(jobs):
         try:
-            job_items.append(JobResultItem(
-                id=str(i),
-                title=job.title,
-                company=job.company,
-                location=job.location or "Non spécifié",
-                url=job.url,
-                date_posted=job.date_posted,
-                is_remote=job.is_remote,
-                work_type=job.work_type,
-                salary_warning=job.salary_warning,
-                is_agency=job.is_agency,
-                source=job.source,
-            ))
+            job_items.append(
+                JobResultItem(
+                    id=str(i),
+                    title=job.title,
+                    company=job.company,
+                    location=job.location or "Non spécifié",
+                    url=job.url,
+                    date_posted=job.date_posted,
+                    is_remote=job.is_remote,
+                    work_type=job.work_type,
+                    salary_warning=job.salary_warning,
+                    is_agency=job.is_agency,
+                    source=job.source,
+                )
+            )
         except Exception as e:
             logger.warning(f"Erreur conversion job {i}: {e}")
             continue
@@ -205,18 +237,22 @@ async def quick_search(
     try:
         user_client = db_service.get_user_client(token)
         if user_client:
-            user_client.table("search_history").insert({
-                "user_id": user_id,
-                "query_params": {
-                    "job_title": search_request.job_title,
-                    "location": search_request.location,
-                    "contract_type": search_request.contract_type,
-                    "experience_level": search_request.experience_level,
-                    "work_type": search_request.work_type,
-                    "filters": search_request.filters.model_dump() if search_request.filters else None,
-                },
-                "results_count": len(job_items),
-            }).execute()
+            user_client.table("search_history").insert(
+                {
+                    "user_id": user_id,
+                    "query_params": {
+                        "job_title": search_request.job_title,
+                        "location": search_request.location,
+                        "contract_type": search_request.contract_type,
+                        "experience_level": search_request.experience_level,
+                        "work_type": search_request.work_type,
+                        "filters": search_request.filters.model_dump()
+                        if search_request.filters
+                        else None,
+                    },
+                    "results_count": len(job_items),
+                }
+            ).execute()
     except Exception as e:
         logger.warning(f"⚠️ Erreur sauvegarde historique: {e}")
 
@@ -227,7 +263,9 @@ async def quick_search(
     elif free_remaining >= 0:
         credit_msg = f" ({free_remaining} recherche(s) gratuite(s) restante(s))"
 
-    logger.info(f"✅ Recherche rapide terminée: {len(job_items)} offres trouvées{credit_msg}")
+    logger.info(
+        f"✅ Recherche rapide terminée: {len(job_items)} offres trouvées{credit_msg}"
+    )
 
     return QuickSearchResponse(
         jobs=job_items,
@@ -242,11 +280,12 @@ async def quick_search(
 # ENDPOINTS — HISTORIQUE DE RECHERCHE
 # ===========================================
 
+
 @router.get("/search/history")
 async def get_search_history(
     token: str = Depends(get_required_token),
     user_id: str = Depends(get_current_user_id),
-    limit: int = 20
+    limit: int = 20,
 ):
     """
     Récupère l'historique des recherches de l'utilisateur.
@@ -258,11 +297,13 @@ async def get_search_history(
         raise HTTPException(status_code=500, detail="Erreur connexion base de données")
 
     try:
-        result = client.table("search_history") \
-            .select("id, query_params, results_count, created_at") \
-            .order("created_at", desc=True) \
-            .limit(limit) \
+        result = (
+            client.table("search_history")
+            .select("id, query_params, results_count, created_at")
+            .order("created_at", desc=True)
+            .limit(limit)
             .execute()
+        )
 
         return {
             "count": len(result.data) if result.data else 0,
@@ -278,7 +319,7 @@ async def get_search_history(
 async def delete_search_history_item(
     history_id: str,
     token: str = Depends(get_required_token),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
 ):
     """Supprime un élément de l'historique de recherche."""
     client = db_service.get_user_client(token)
@@ -297,11 +338,12 @@ async def delete_search_history_item(
 # ENDPOINTS — OFFRES FAVORITES
 # ===========================================
 
+
 @router.post("/jobs/save", response_model=SavedJobResponse)
 async def save_job(
     save_request: SaveJobRequest,
     token: str = Depends(get_required_token),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Sauvegarde une offre d'emploi en favori.
@@ -318,16 +360,22 @@ async def save_job(
     if not job_data.get("title") or not job_data.get("company"):
         raise HTTPException(
             status_code=400,
-            detail="job_data doit contenir au minimum 'title' et 'company'"
+            detail="job_data doit contenir au minimum 'title' et 'company'",
         )
 
     try:
-        result = client.table("saved_jobs").insert({
-            "user_id": user_id,
-            "job_data": job_data,
-            "notes": save_request.notes,
-            "source": save_request.source,
-        }).execute()
+        result = (
+            client.table("saved_jobs")
+            .insert(
+                {
+                    "user_id": user_id,
+                    "job_data": job_data,
+                    "notes": save_request.notes,
+                    "source": save_request.source,
+                }
+            )
+            .execute()
+        )
 
         if result.data and len(result.data) > 0:
             saved = result.data[0]
@@ -352,7 +400,7 @@ async def save_job(
 async def get_saved_jobs(
     token: str = Depends(get_required_token),
     user_id: str = Depends(get_current_user_id),
-    limit: int = 50
+    limit: int = 50,
 ):
     """
     Récupère les offres sauvegardées en favoris.
@@ -364,11 +412,13 @@ async def get_saved_jobs(
         raise HTTPException(status_code=500, detail="Erreur connexion base de données")
 
     try:
-        result = client.table("saved_jobs") \
-            .select("id, job_data, notes, source, created_at") \
-            .order("created_at", desc=True) \
-            .limit(limit) \
+        result = (
+            client.table("saved_jobs")
+            .select("id, job_data, notes, source, created_at")
+            .order("created_at", desc=True)
+            .limit(limit)
             .execute()
+        )
 
         return {
             "count": len(result.data) if result.data else 0,
@@ -385,7 +435,7 @@ async def update_saved_job(
     job_id: str,
     notes: Optional[str] = None,
     token: str = Depends(get_required_token),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
 ):
     """Met à jour les notes d'une offre sauvegardée."""
     client = db_service.get_user_client(token)
@@ -393,10 +443,12 @@ async def update_saved_job(
         raise HTTPException(status_code=500, detail="Erreur connexion base de données")
 
     try:
-        result = client.table("saved_jobs") \
-            .update({"notes": notes}) \
-            .eq("id", job_id) \
+        result = (
+            client.table("saved_jobs")
+            .update({"notes": notes})
+            .eq("id", job_id)
             .execute()
+        )
 
         if not result.data:
             raise HTTPException(status_code=404, detail="Favori non trouvé")
@@ -414,7 +466,7 @@ async def update_saved_job(
 async def delete_saved_job(
     job_id: str,
     token: str = Depends(get_required_token),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
 ):
     """Supprime une offre des favoris."""
     client = db_service.get_user_client(token)
@@ -434,10 +486,11 @@ async def delete_saved_job(
 # ENDPOINT — QUOTA DE RECHERCHE
 # ===========================================
 
+
 @router.get("/search/quota")
 async def get_search_quota(
     token: str = Depends(get_required_token),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Récupère l'état du quota de recherche de l'utilisateur.
@@ -452,11 +505,13 @@ async def get_search_quota(
         raise HTTPException(status_code=500, detail="Erreur connexion base de données")
 
     try:
-        result = client.table("user_profiles") \
-            .select("plan, credits, free_searches_used, free_searches_reset_at") \
-            .eq("id", user_id) \
-            .single() \
+        result = (
+            client.table("user_profiles")
+            .select("plan, credits, free_searches_used, free_searches_reset_at")
+            .eq("id", user_id)
+            .single()
             .execute()
+        )
 
         if not result.data:
             raise HTTPException(status_code=404, detail="Profil non trouvé")

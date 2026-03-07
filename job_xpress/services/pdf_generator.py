@@ -11,12 +11,10 @@ Dépendances système Linux requises:
 - libgdk-pixbuf2.0-0
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 
 from core.logging_config import get_logger
-from core.exceptions import PDFError, PDFGenerationError
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 
@@ -25,6 +23,7 @@ logger = get_logger()
 # Import conditionnel de WeasyPrint (peut échouer sur Windows sans deps)
 try:
     from weasyprint import HTML, CSS
+
     WEASYPRINT_AVAILABLE = True
 except ImportError:
     WEASYPRINT_AVAILABLE = False
@@ -33,6 +32,7 @@ except ImportError:
 # Fallback xhtml2pdf si WeasyPrint non disponible
 try:
     from xhtml2pdf import pisa
+
     XHTML2PDF_AVAILABLE = True
 except ImportError:
     XHTML2PDF_AVAILABLE = False
@@ -41,35 +41,32 @@ except ImportError:
 class PDFGenerator:
     """
     Générateur de PDF pour les lettres de motivation.
-    
+
     Utilise WeasyPrint en priorité, avec fallback vers xhtml2pdf si non disponible.
     """
-    
+
     def __init__(self):
         self.output_dir = Path("output")
         self.output_dir.mkdir(exist_ok=True)
-        
+
         if WEASYPRINT_AVAILABLE:
             logger.info("✅ PDFGenerator initialisé avec WeasyPrint")
         elif XHTML2PDF_AVAILABLE:
             logger.info("⚠️ PDFGenerator initialisé avec xhtml2pdf (fallback)")
         else:
             logger.warning("❌ Aucun générateur PDF disponible")
-    
+
     def create_application_pdf(
-        self, 
-        candidate: CandidateProfile, 
-        offer: JobOffer, 
-        letter_html: str
+        self, candidate: CandidateProfile, offer: JobOffer, letter_html: str
     ) -> Optional[str]:
         """
         Crée un PDF avec la lettre de motivation.
-        
+
         Args:
             candidate: Profil du candidat
             offer: Offre d'emploi ciblée
             letter_html: Contenu HTML de la lettre
-            
+
         Returns:
             Chemin du fichier PDF créé, ou None si erreur
         """
@@ -78,29 +75,30 @@ class PDFGenerator:
         safe_name = "".join([c if c.isalnum() else "_" for c in candidate.last_name])
         filename = f"Lettre_{safe_name}_{safe_company}.pdf"
         filepath = self.output_dir / filename
-        
+
         # Générer le HTML complet
         full_html = self._build_html_template(candidate, offer, letter_html)
-        
+
         logger.info(f"🖨️ Génération PDF: {filepath}")
-        
+
         # Essayer WeasyPrint d'abord
         if WEASYPRINT_AVAILABLE:
             return self._generate_with_weasyprint(full_html, str(filepath))
-        
+
         # Fallback vers xhtml2pdf
         if XHTML2PDF_AVAILABLE:
             return self._generate_with_xhtml2pdf(full_html, str(filepath))
-        
+
         # Aucun générateur disponible
         logger.error("❌ Aucun générateur PDF disponible")
         return None
-    
+
     def _generate_with_weasyprint(self, html: str, filepath: str) -> Optional[str]:
         """Génère le PDF avec WeasyPrint."""
         try:
             # CSS supplémentaire pour WeasyPrint
-            css = CSS(string="""
+            css = CSS(
+                string="""
                 @page {
                     size: A4;
                     margin: 2cm;
@@ -108,48 +106,46 @@ class PDFGenerator:
                 body {
                     font-family: 'Helvetica', 'Arial', sans-serif;
                 }
-            """)
-            
+            """
+            )
+
             HTML(string=html).write_pdf(filepath, stylesheets=[css])
             logger.info(f"✅ PDF créé (WeasyPrint): {filepath}")
             return filepath
-            
+
         except Exception as e:
             logger.exception(f"❌ Erreur WeasyPrint: {e}")
-            
+
             # Fallback vers xhtml2pdf si disponible
             if XHTML2PDF_AVAILABLE:
                 logger.info("🔄 Tentative fallback xhtml2pdf...")
                 return self._generate_with_xhtml2pdf(html, filepath)
-            
+
             return None
-    
+
     def _generate_with_xhtml2pdf(self, html: str, filepath: str) -> Optional[str]:
         """Génère le PDF avec xhtml2pdf (fallback)."""
         try:
             with open(filepath, "wb") as pdf_file:
                 pisa_status = pisa.CreatePDF(src=html, dest=pdf_file)
-            
+
             if pisa_status.err:
                 logger.error(f"❌ Erreur xhtml2pdf: {pisa_status.err}")
                 return None
-            
+
             logger.info(f"✅ PDF créé (xhtml2pdf): {filepath}")
             return filepath
-            
+
         except Exception as e:
             logger.exception(f"❌ Exception xhtml2pdf: {e}")
             return None
-    
+
     def _build_html_template(
-        self, 
-        candidate: CandidateProfile, 
-        offer: JobOffer, 
-        letter_html: str
+        self, candidate: CandidateProfile, offer: JobOffer, letter_html: str
     ) -> str:
         """
         Construit le template HTML complet pour le PDF.
-        
+
         Design moderne avec header, contenu et footer.
         """
         # Formater le score si disponible
@@ -168,7 +164,7 @@ class PDFGenerator:
                     Match: {offer.match_score}%
                 </span>
             """
-        
+
         return f"""
         <!DOCTYPE html>
         <html lang="fr">

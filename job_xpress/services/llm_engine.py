@@ -5,8 +5,7 @@ from typing import List, Dict, Any
 from pydantic import ValidationError
 from core.config import settings
 from core.logging_config import get_logger
-from core.retry import resilient_post, CircuitBreaker
-from core.exceptions import LLMError, LLMTimeoutError, LLMResponseError, LLMQuotaError
+from core.retry import CircuitBreaker
 from models.candidate import CandidateProfile, WorkType
 from models.job_offer import JobOffer
 from models.llm_schemas import LLMScoreResponse
@@ -18,27 +17,32 @@ logger = get_logger()
 # Circuit breaker pour DeepSeek
 deepseek_circuit = CircuitBreaker(failure_threshold=3, recovery_timeout=180)
 
+
 class LLMEngine:
     API_URL = "https://api.deepseek.com/v1/chat/completions"
-    
+
     def __init__(self):
         self.api_key = settings.DEEPSEEK_API_KEY
 
-    async def analyze_offers_parallel(self, candidate: CandidateProfile, offers: List[JobOffer]) -> List[JobOffer]:
+    async def analyze_offers_parallel(
+        self, candidate: CandidateProfile, offers: List[JobOffer]
+    ) -> List[JobOffer]:
         """
         Analyse toutes les offres en parallèle avec le nouveau scoring expert.
         """
         logger.info(f"🧠 Analyse IA Expert pour {len(offers)} offres")
-        
+
         tasks = [self._analyze_single_offer(candidate, offer) for offer in offers]
         analyzed_offers = await asyncio.gather(*tasks)
-        
+
         # Tri par le nouveau score calculé (Pondéré)
         analyzed_offers.sort(key=lambda x: x.match_score, reverse=True)
-        
+
         return analyzed_offers
 
-    async def _analyze_single_offer(self, candidate: CandidateProfile, offer: JobOffer) -> JobOffer:
+    async def _analyze_single_offer(
+        self, candidate: CandidateProfile, offer: JobOffer
+    ) -> JobOffer:
         """
         Analyse une offre sur 3 axes (Tech, Structure, Exp) et calcule un score pondéré.
         """
@@ -94,82 +98,93 @@ class LLMEngine:
             "model": "deepseek-chat",
             "messages": [
                 {"role": "system", "content": "Tu es un analyste JSON strict."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
-            "temperature": 0.1, 
-            "response_format": { "type": "json_object" }
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
         }
 
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    self.API_URL, 
-                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                    self.API_URL,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
                     json=payload,
-                    timeout=60.0 
+                    timeout=60.0,
                 )
                 response.raise_for_status()
-                raw_content = response.json()['choices'][0]['message']['content']
-                
+                raw_content = response.json()["choices"][0]["message"]["content"]
+
                 # --- VALIDATION PYDANTIC ---
                 # Garantit que la réponse LLM est conforme au schéma attendu
                 try:
                     score_data = LLMScoreResponse.model_validate_json(raw_content)
                 except ValidationError as ve:
-                    logger.warning(f"⚠️ Validation Pydantic échouée pour '{offer.title}': {ve.error_count()} erreurs")
+                    logger.warning(
+                        f"⚠️ Validation Pydantic échouée pour '{offer.title}': {ve.error_count()} erreurs"
+                    )
                     logger.debug(f"Détails validation: {ve.errors()}")
                     return self._fallback_scoring(candidate, offer)
-                
+
                 # --- CALCUL DU SCORE PONDÉRÉ via le modèle ---
                 final_score = score_data.calculate_weighted_score(
-                    w_tech=0.4,   # 40% Compétences
-                    w_struct=0.3, # 30% Contrat/Lieu
-                    w_exp=0.3     # 30% Expérience
+                    w_tech=0.4,  # 40% Compétences
+                    w_struct=0.3,  # 30% Contrat/Lieu
+                    w_exp=0.3,  # 30% Expérience
                 )
 
                 offer.match_score = final_score
                 # On stocke les détails pour l'affichage dans l'email
-                offer.ai_analysis = score_data.model_dump() 
-                
-            except httpx.TimeoutException as e:
+                offer.ai_analysis = score_data.model_dump()
+
+            except httpx.TimeoutException:
                 logger.warning(f"⚠️ Timeout IA sur '{offer.title}'")
                 return self._fallback_scoring(candidate, offer)
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429:
-                    logger.warning(f"⚠️ Quota DeepSeek dépassé")
+                    logger.warning("⚠️ Quota DeepSeek dépassé")
                 else:
                     logger.warning(f"⚠️ Erreur HTTP DeepSeek: {e.response.status_code}")
                 return self._fallback_scoring(candidate, offer)
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 logger.warning(f"⚠️ Réponse LLM invalide pour '{offer.title}'")
                 return self._fallback_scoring(candidate, offer)
             except Exception as e:
                 logger.warning(f"⚠️ Erreur IA sur '{offer.title}': {e}")
                 return self._fallback_scoring(candidate, offer)
-        
+
         return offer
-    
-    def _fallback_scoring(self, candidate: CandidateProfile, offer: JobOffer) -> JobOffer:
+
+    def _fallback_scoring(
+        self, candidate: CandidateProfile, offer: JobOffer
+    ) -> JobOffer:
         """
         Scoring heuristique sans IA en cas d'échec DeepSeek.
         Permet de continuer le traitement même si l'IA est down.
         """
         logger.info(f"🔄 Fallback scoring pour: {offer.title}")
-        
+
         score = 40  # Base
-        
+
         # +20 si le titre correspond
         if candidate.job_title.lower() in offer.title.lower():
             score += 20
-        elif any(word in offer.title.lower() for word in candidate.job_title.lower().split()):
+        elif any(
+            word in offer.title.lower() for word in candidate.job_title.lower().split()
+        ):
             score += 10
-        
+
         # +15 si même localisation
         if candidate.location.lower() in (offer.location or "").lower():
             score += 15
-        
+
         # Scoring work_type amélioré avec toutes les combinaisons
-        offer_work_type = offer.work_type or ("Full Remote" if offer.is_remote else None)
+        offer_work_type = offer.work_type or (
+            "Full Remote" if offer.is_remote else None
+        )
         match (candidate.work_type, offer_work_type):
             case (WorkType.FULL_REMOTE, "Full Remote"):
                 score += 15  # Match parfait
@@ -185,30 +200,32 @@ class LLMEngine:
                 score -= 10  # Pénalité: incompatible
             case _:
                 pass  # Autres combinaisons: neutre
-        
+
         # Détection école basique (mots-clés)
         school_keywords = ["formation", "école", "cfa", "campus", "academy", "bootcamp"]
         desc_lower = (offer.description or "").lower()
         if any(kw in desc_lower for kw in school_keywords):
             score = max(score - 30, 0)
-        
+
         offer.match_score = min(score, 75)  # Cap à 75 sans IA
         offer.ai_analysis = {
             "mode": "fallback_heuristic",
             "reasoning": "Score basé sur heuristiques (IA indisponible)",
             "score_technical": score,
             "score_structural": score,
-            "score_experience": score
+            "score_experience": score,
         }
-        
+
         return offer
 
-    async def generate_cover_letter(self, candidate: CandidateProfile, offer: JobOffer) -> Dict[str, Any]:
+    async def generate_cover_letter(
+        self, candidate: CandidateProfile, offer: JobOffer
+    ) -> Dict[str, Any]:
         """
         Génère la lettre de motivation en utilisant les détails du CV (OCR).
         """
         logger.info(f"✍️ Rédaction lettre pour: {offer.title} chez {offer.company}")
-        
+
         prompt = f"""
         Tu es un expert en recrutement. Rédige une lettre de motivation personnalisée et percutante.
         
@@ -238,51 +255,59 @@ class LLMEngine:
             "strategic_advice": "Mettez en avant votre expérience sur..."
         }}
         """
-        
+
         if not self.api_key:
             return {
                 "html_content": f"<p>Lettre générée (Simulation) pour {offer.company}.</p>",
-                "strategic_advice": "Ceci est un conseil factice."
+                "strategic_advice": "Ceci est un conseil factice.",
             }
 
         payload = {
             "model": "deepseek-chat",
             "messages": [
                 {"role": "system", "content": "Tu es un assistant JSON strict."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             "temperature": 0.7,
-            "response_format": { "type": "json_object" }
+            "response_format": {"type": "json_object"},
         }
 
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    self.API_URL, 
-                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                    self.API_URL,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
                     json=payload,
-                    timeout=120.0 
+                    timeout=120.0,
                 )
                 response.raise_for_status()
-                return json.loads(response.json()['choices'][0]['message']['content'])
+                return json.loads(response.json()["choices"][0]["message"]["content"])
             except httpx.TimeoutException:
-                logger.error(f"❌ Timeout génération lettre")
+                logger.error("❌ Timeout génération lettre")
                 return self._generate_fallback_letter(candidate, offer)
             except httpx.HTTPStatusError as e:
-                logger.error(f"❌ Erreur HTTP génération lettre: {e.response.status_code}")
+                logger.error(
+                    f"❌ Erreur HTTP génération lettre: {e.response.status_code}"
+                )
                 return self._generate_fallback_letter(candidate, offer)
             except json.JSONDecodeError:
-                logger.error(f"❌ Réponse JSON invalide pour lettre")
+                logger.error("❌ Réponse JSON invalide pour lettre")
                 return self._generate_fallback_letter(candidate, offer)
             except Exception as e:
                 logger.exception(f"❌ Erreur Génération Lettre: {e}")
                 return self._generate_fallback_letter(candidate, offer)
-    
-    def _generate_fallback_letter(self, candidate: CandidateProfile, offer: JobOffer) -> Dict[str, str]:
+
+    def _generate_fallback_letter(
+        self, candidate: CandidateProfile, offer: JobOffer
+    ) -> Dict[str, str]:
         """Génère une lettre basique en cas d'échec de l'IA."""
         return {
             "html_content": f"<p>Madame, Monsieur,</p><p>Je me permets de vous adresser ma candidature pour le poste de {offer.title} au sein de {offer.company}.</p><p>Mon profil de {candidate.job_title} avec une expérience {candidate.experience_level} correspond aux exigences de ce poste.</p><p>Je reste à votre disposition pour un entretien.</p><p>Cordialement,<br/>{candidate.first_name} {candidate.last_name}</p>",
-            "strategic_advice": "Lettre générée en mode fallback. Personnalisez-la avant envoi."
+            "strategic_advice": "Lettre générée en mode fallback. Personnalisez-la avant envoi.",
         }
+
 
 llm_engine = LLMEngine()

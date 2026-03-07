@@ -4,6 +4,7 @@ from core.logging_config import get_logger
 
 logger = get_logger()
 
+
 class WebSearchService:
     def __init__(self):
         self.ddgs = DDGS()
@@ -15,12 +16,12 @@ class WebSearchService:
         # NOUVELLE REQUÊTE : On cherche l'activité et ce que disent les employés
         # Ex: "Media-Start activité avis employé" -> remonte Glassdoor, LinkedIn, Societe.com
         query = f"{company_name} activité secteur avis employé recrutement"
-        
+
         logger.debug(f"🌐 Vérification web: {company_name}")
-        
+
         try:
             results = await asyncio.to_thread(self._search_sync, query)
-            
+
             if not results:
                 return "Aucune info web trouvée."
 
@@ -34,6 +35,7 @@ class WebSearchService:
 
     def _search_sync(self, query):
         # On demande des résultats en Français
-        return list(self.ddgs.text(query, region='fr-fr', max_results=4))
+        return list(self.ddgs.text(query, region="fr-fr", max_results=4))
+
 
 web_search = WebSearchService()

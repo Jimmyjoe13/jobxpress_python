@@ -6,8 +6,7 @@ les candidats à préparer leurs entretiens d'embauche.
 """
 
 import httpx
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
+from typing import List, Dict, Any
 from core.config import settings
 from core.logging_config import get_logger
 
@@ -58,12 +57,12 @@ class JobyJobaService:
     """
     Service de chat IA contextuel pour la préparation aux entretiens.
     """
-    
+
     API_URL = "https://api.deepseek.com/v1/chat/completions"
-    
+
     def __init__(self):
         self.api_key = settings.DEEPSEEK_API_KEY
-    
+
     def build_system_prompt(
         self,
         job_title: str,
@@ -72,7 +71,7 @@ class JobyJobaService:
         contract_type: str,
         cv_text: str,
         cover_letter: str,
-        remaining_messages: int
+        remaining_messages: int,
     ) -> str:
         """Construit le prompt système avec le contexte de la candidature."""
         return JOBYJOBA_SYSTEM_PROMPT.format(
@@ -82,32 +81,32 @@ class JobyJobaService:
             contract_type=contract_type or "Non spécifié",
             cv_text=cv_text[:3000] if cv_text else "Non fourni",
             cover_letter=cover_letter[:2000] if cover_letter else "Non générée",
-            remaining_messages=remaining_messages
+            remaining_messages=remaining_messages,
         )
-    
+
     async def chat(
         self,
         user_message: str,
         conversation_history: List[Dict[str, str]],
         context: Dict[str, Any],
-        remaining_messages: int
+        remaining_messages: int,
     ) -> str:
         """
         Génère une réponse de JobyJoba.
-        
+
         Args:
             user_message: Message de l'utilisateur
             conversation_history: Historique [{role, content}, ...]
             context: Contexte de la candidature
             remaining_messages: Messages restants pour l'utilisateur
-        
+
         Returns:
             Réponse de JobyJoba
         """
         if not self.api_key:
             logger.warning("⚠️ Clé API DeepSeek manquante")
             return "Je suis temporairement indisponible. Réessaie plus tard ! 🔧"
-        
+
         try:
             # Construire le prompt système
             system_prompt = self.build_system_prompt(
@@ -117,72 +116,81 @@ class JobyJobaService:
                 contract_type=context.get("contract_type"),
                 cv_text=context.get("cv_text", ""),
                 cover_letter=context.get("cover_letter", ""),
-                remaining_messages=remaining_messages
+                remaining_messages=remaining_messages,
             )
-            
+
             # Construire les messages pour l'API
             messages = [{"role": "system", "content": system_prompt}]
-            
+
             # Ajouter l'historique (limiter pour ne pas dépasser le contexte)
             for msg in conversation_history[-10:]:
-                messages.append({
-                    "role": msg.get("role", "user"),
-                    "content": msg.get("content", "")
-                })
-            
+                messages.append(
+                    {"role": msg.get("role", "user"), "content": msg.get("content", "")}
+                )
+
             # Ajouter le nouveau message
             messages.append({"role": "user", "content": user_message})
-            
+
             # Appel API DeepSeek avec httpx
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     self.API_URL,
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
                     },
                     json={
                         "model": "deepseek-chat",
                         "messages": messages,
                         "temperature": 0.7,
                         "max_tokens": 1000,
-                        "stream": False
-                    }
+                        "stream": False,
+                    },
                 )
                 response.raise_for_status()
                 data = response.json()
-            
+
             if data and "choices" in data:
                 assistant_response = data["choices"][0]["message"]["content"]
                 logger.info(f"💬 JobyJoba a répondu ({len(assistant_response)} chars)")
                 return assistant_response
             else:
                 logger.warning(f"⚠️ Réponse API invalide: {data}")
-                return "Oups, j'ai eu un petit souci technique. Reformule ta question ! 🔄"
-                
+                return (
+                    "Oups, j'ai eu un petit souci technique. Reformule ta question ! 🔄"
+                )
+
         except Exception as e:
             logger.exception(f"❌ Erreur JobyJoba: {e}")
             return "Je rencontre un problème technique. Réessaie dans quelques instants ! 🛠️"
-    
+
     def get_welcome_message(
-        self, 
-        job_title: str, 
+        self,
+        job_title: str,
         company: str,
         max_messages: int = 10,
-        is_daily_limit: bool = False
+        is_daily_limit: bool = False,
     ) -> str:
         """
         Message d'accueil de JobyJoba, adapté selon le plan utilisateur.
-        
+
         Args:
             job_title: Titre du poste
             company: Nom de l'entreprise
             max_messages: Nombre de messages disponibles
             is_daily_limit: True si limite journalière (Pro), False si par session
         """
-        limit_text = f"**{max_messages} messages par jour**" if is_daily_limit else f"**{max_messages} messages** pour cette session"
-        pro_bonus = "\n\n💎 En tant qu'utilisateur **Pro**, tu bénéficies du quota journalier renouvelé chaque jour !" if is_daily_limit else ""
-        
+        limit_text = (
+            f"**{max_messages} messages par jour**"
+            if is_daily_limit
+            else f"**{max_messages} messages** pour cette session"
+        )
+        pro_bonus = (
+            "\n\n💎 En tant qu'utilisateur **Pro**, tu bénéficies du quota journalier renouvelé chaque jour !"
+            if is_daily_limit
+            else ""
+        )
+
         return f"""Salut ! 👋 Je suis **JobyJoba**, ton coach emploi personnel !
 
 Je vois que tu candidates pour **{job_title}** chez **{company}**. Super choix ! 🎯

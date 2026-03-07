@@ -8,11 +8,10 @@ Features:
 - Monitoring Sentry (production)
 - Déduplication intelligente
 """
-import asyncio
-import time
+
 import httpx
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Depends
+from fastapi import FastAPI, BackgroundTasks, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -28,9 +27,8 @@ from services.email_service import email_service
 from services.ocr_service import ocr_service
 from services.cache_service import cache_service
 from core.config import settings
-from core.logging_config import setup_logging, get_logger
+from core.logging_config import setup_logging
 from core.error_handlers import register_exception_handlers
-from core.exceptions import DuplicateRequestError
 
 # --- INITIALISATION LOGGING ---
 logger = setup_logging(
@@ -38,18 +36,19 @@ logger = setup_logging(
     json_format=(settings.ENVIRONMENT == "production"),
     log_file=settings.LOG_FILE if settings.LOG_FILE else None,
     axiom_token=settings.AXIOM_TOKEN if settings.AXIOM_TOKEN else None,
-    axiom_dataset=settings.AXIOM_DATASET
+    axiom_dataset=settings.AXIOM_DATASET,
 )
 
 # --- SENTRY (Production uniquement) ---
 if settings.ENVIRONMENT == "production" and settings.SENTRY_DSN:
     try:
         import sentry_sdk
+
         sentry_sdk.init(
             dsn=settings.SENTRY_DSN,
             traces_sample_rate=0.1,
             profiles_sample_rate=0.1,
-            environment=settings.ENVIRONMENT
+            environment=settings.ENVIRONMENT,
         )
         logger.info("✅ Sentry monitoring activé")
     except ImportError:
@@ -58,32 +57,38 @@ if settings.ENVIRONMENT == "production" and settings.SENTRY_DSN:
 # --- RATE LIMITER ---
 limiter = Limiter(key_func=get_remote_address)
 
+
 # --- LIFECYCLE ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestion du cycle de vie de l'application."""
     logger.info(f"🚀 Démarrage JobXpress v{settings.VERSION} ({settings.ENVIRONMENT})")
-    
+
     # Nettoyage initial du cache
     cache_service.cleanup_expired()
-    
+
     # Récupération des tâches orphelines (crash recovery)
     orphans = cache_service.get_orphan_tasks(timeout_seconds=600)  # 10 min
     for orphan in orphans:
-        logger.warning(f"🔄 Reprise tâche orpheline ID={orphan['id']} (retries={orphan['retries']})")
-        if orphan['retries'] < 3:  # Max 3 tentatives
-            cache_service.reset_task(orphan['id'])
+        logger.warning(
+            f"🔄 Reprise tâche orpheline ID={orphan['id']} (retries={orphan['retries']})"
+        )
+        if orphan["retries"] < 3:  # Max 3 tentatives
+            cache_service.reset_task(orphan["id"])
         else:
-            cache_service.mark_task_failed(orphan['id'], "Max retries exceeded after crash recovery")
-    
+            cache_service.mark_task_failed(
+                orphan["id"], "Max retries exceeded after crash recovery"
+            )
+
     if orphans:
         logger.info(f"📋 {len(orphans)} tâche(s) orpheline(s) traitée(s)")
-    
+
     yield
-    
+
     # Nettoyage final
     cache_service.cleanup_expired()
     logger.info("👋 Arrêt de JobXpress")
+
 
 # --- APP FASTAPI ---
 app = FastAPI(
@@ -99,7 +104,7 @@ app = FastAPI(
     - Scoring IA avec DeepSeek
     - Génération de lettres personnalisées
     """,
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
@@ -128,6 +133,7 @@ from api.settings_endpoints import router as settings_router
 from api.stripe_webhook import router as stripe_router
 from api.search_endpoints import router as search_router
 from api.dashboard_endpoints import router as dashboard_router
+
 app.include_router(v2_router)
 app.include_router(notifications_router)
 app.include_router(profile_router)
@@ -150,6 +156,7 @@ COOLDOWN_SECONDS = 300  # 5 minutes
 # ===========================================
 # ENDPOINTS
 # ===========================================
+
 
 @app.get("/")
 def health_check_simple():
@@ -174,9 +181,9 @@ async def health_check_deep():
         "cache": "unknown",
         "supabase": "unknown",
         "deepseek": "unknown",
-        "rapidapi": "unknown"
+        "rapidapi": "unknown",
     }
-    
+
     # Test Cache SQLite
     try:
         cache_stats = cache_service.get_stats()
@@ -184,7 +191,7 @@ async def health_check_deep():
     except Exception as e:
         checks["cache"] = "unhealthy"
         logger.warning(f"Health check Cache failed: {e}")
-    
+
     # Test Supabase
     try:
         if db_service.client:
@@ -193,9 +200,9 @@ async def health_check_deep():
         else:
             checks["supabase"] = "not_configured"
     except Exception as e:
-        checks["supabase"] = f"unhealthy"
+        checks["supabase"] = "unhealthy"
         logger.warning(f"Health check Supabase failed: {e}")
-    
+
     # Test DeepSeek (ping léger)
     if settings.DEEPSEEK_API_KEY:
         try:
@@ -203,14 +210,16 @@ async def health_check_deep():
                 resp = await client.get(
                     "https://api.deepseek.com/v1/models",
                     headers={"Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}"},
-                    timeout=5.0
+                    timeout=5.0,
                 )
-                checks["deepseek"] = "healthy" if resp.status_code == 200 else "unhealthy"
+                checks["deepseek"] = (
+                    "healthy" if resp.status_code == 200 else "unhealthy"
+                )
         except Exception:
             checks["deepseek"] = "unreachable"
     else:
         checks["deepseek"] = "not_configured"
-    
+
     # Test RapidAPI (JSearch)
     if settings.RAPIDAPI_KEY:
         try:
@@ -219,26 +228,28 @@ async def health_check_deep():
                     "https://jsearch.p.rapidapi.com/search",
                     headers={
                         "X-RapidAPI-Key": settings.RAPIDAPI_KEY,
-                        "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
+                        "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
                     },
                     params={"query": "test", "num_pages": "1"},
-                    timeout=5.0
+                    timeout=5.0,
                 )
-                checks["rapidapi"] = "healthy" if resp.status_code == 200 else "unhealthy"
+                checks["rapidapi"] = (
+                    "healthy" if resp.status_code == 200 else "unhealthy"
+                )
         except Exception:
             checks["rapidapi"] = "unreachable"
     else:
         checks["rapidapi"] = "not_configured"
-    
+
     # Statut global
     unhealthy = [k for k, v in checks.items() if v == "unhealthy" or v == "unreachable"]
     overall = "healthy" if not unhealthy else "degraded"
-    
+
     return {
         "status": overall,
         "checks": checks,
         "version": settings.VERSION,
-        "environment": settings.ENVIRONMENT
+        "environment": settings.ENVIRONMENT,
     }
 
 
@@ -250,12 +261,12 @@ async def health_check_tasks():
     """
     task_stats = cache_service.get_task_stats()
     cache_stats = cache_service.get_stats()
-    
+
     return {
         "tasks": task_stats,
         "cache": cache_stats,
         "orphan_timeout_seconds": 600,
-        "max_retries": 3
+        "max_retries": 3,
     }
 
 
@@ -266,18 +277,18 @@ async def health_check_redis():
     Affiche le statut de connexion et les statistiques de cache.
     """
     from services.redis_cache import redis_cache
-    
+
     redis_health = redis_cache.health_check()
     redis_stats = redis_cache.get_stats() if redis_cache.is_available else {}
-    
+
     return {
         "redis": redis_health,
         "stats": redis_stats,
         "features": {
             "search_cache_ttl": "1 heure",
             "credits_cache_ttl": "1 minute",
-            "rate_limiting": redis_cache.is_available
-        }
+            "rate_limiting": redis_cache.is_available,
+        },
     }
 
 
@@ -285,13 +296,16 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
     """
     Tâche de traitement d'une candidature.
     Exécutée en arrière-plan après réception du webhook.
-    
+
     Args:
         payload: Données du webhook Tally
         task_id: ID de la tâche persistée (optionnel, pour tracking)
     """
     event_id = payload.eventId
-    logger.info(f"🚀 Démarrage traitement Event ID: {event_id}" + (f" (Task ID: {task_id})" if task_id else ""))
+    logger.info(
+        f"🚀 Démarrage traitement Event ID: {event_id}"
+        + (f" (Task ID: {task_id})" if task_id else "")
+    )
 
     # Marquer la tâche comme en cours de traitement
     if task_id:
@@ -300,7 +314,9 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
     try:
         # 1. PROFIL
         candidate = CandidateProfile.from_tally(payload)
-        logger.info(f"👤 Candidat: {candidate.first_name} {candidate.last_name} ({candidate.email})")
+        logger.info(
+            f"👤 Candidat: {candidate.first_name} {candidate.last_name} ({candidate.email})"
+        )
 
         # --- OCR ---
         if candidate.cv_url:
@@ -316,7 +332,9 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
         if not raw_jobs:
             logger.warning("❌ Aucune offre trouvée. Fin du traitement.")
             if task_id:
-                cache_service.mark_task_done(task_id)  # Pas d'erreur, juste pas d'offres
+                cache_service.mark_task_done(
+                    task_id
+                )  # Pas d'erreur, juste pas d'offres
             return
 
         # 3. ANALYSE - Avec garantie minimum d'offres
@@ -326,11 +344,11 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
 
         for i in range(0, total_found, BATCH_SIZE):
             batch = raw_jobs[i : i + BATCH_SIZE]
-            logger.info(f"🧠 Analyse lot {i+1}-{i+len(batch)}...")
+            logger.info(f"🧠 Analyse lot {i + 1}-{i + len(batch)}...")
 
             analyzed_batch = await llm_engine.analyze_offers_parallel(candidate, batch)
             all_analyzed_jobs.extend(analyzed_batch)
-            
+
             # Log informatif
             high_matches = [j for j in analyzed_batch if j.match_score > 0]
             logger.info(f"   -> {len(high_matches)} offre(s) avec score > 0")
@@ -370,7 +388,9 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
 
         if pdf_path:
             db_service.save_application(candidate, best_offer, pdf_path)
-            email_service.send_application_email(candidate, best_offer, other_offers, pdf_path)
+            email_service.send_application_email(
+                candidate, best_offer, other_offers, pdf_path
+            )
             logger.info(f"✅ Cycle terminé avec succès pour {candidate.email}")
 
         # Marquer la tâche comme terminée
@@ -389,25 +409,23 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
 @app.post("/webhook/tally")
 @limiter.limit("10/minute")
 async def receive_tally_webhook(
-    request: Request,
-    payload: TallyWebhookPayload,
-    background_tasks: BackgroundTasks
+    request: Request, payload: TallyWebhookPayload, background_tasks: BackgroundTasks
 ):
     """
     Endpoint principal - Réception des webhooks Tally.
-    
+
     Protection:
     - Rate limiting: 10 requêtes/minute par IP
     - Anti-doublon: 5 minutes de cooldown par email
     - Persistance: le payload est sauvegardé AVANT traitement
     """
     import json as json_module
-    
+
     try:
         # Extraction de l'email pour déduplication
         fields = {f.key: f.value for f in payload.data.fields}
         candidate_email = fields.get("question_D7V1kj", "unknown")
-        
+
         # Clé de cache unique
         cache_key = f"email_dedup:{candidate_email}"
 
@@ -416,7 +434,11 @@ async def receive_tally_webhook(
             logger.warning(f"⛔ Doublon bloqué pour {candidate_email}")
             return JSONResponse(
                 status_code=429,
-                content={"status": "ignored", "reason": "rate_limited", "retry_after": COOLDOWN_SECONDS}
+                content={
+                    "status": "ignored",
+                    "reason": "rate_limited",
+                    "retry_after": COOLDOWN_SECONDS,
+                },
             )
 
         # Enregistrer dans le cache avec TTL
@@ -424,8 +446,7 @@ async def receive_tally_webhook(
 
         # --- PERSISTANCE AVANT TRAITEMENT ---
         task_id = cache_service.enqueue_task(
-            task_type="tally_webhook",
-            payload=json_module.dumps(payload.model_dump())
+            task_type="tally_webhook", payload=json_module.dumps(payload.model_dump())
         )
         logger.info(f"📥 Tâche persistée en DB (Task ID: {task_id})")
 
@@ -433,7 +454,12 @@ async def receive_tally_webhook(
         background_tasks.add_task(process_application_task, payload, task_id)
 
         logger.info(f"📨 Webhook reçu pour {candidate_email}")
-        return {"status": "received", "message": "Processing started", "event_id": payload.eventId, "task_id": task_id}
+        return {
+            "status": "received",
+            "message": "Processing started",
+            "event_id": payload.eventId,
+            "task_id": task_id,
+        }
 
     except Exception as e:
         logger.exception(f"⚠️ Erreur webhook: {e}")
@@ -448,13 +474,14 @@ async def receive_tally_webhook(
 
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-import uuid
+
 
 class DirectApplicationRequest(BaseModel):
     """
     DEPRECATED: Use SearchStartRequest from api.v2_endpoints instead.
     Kept for backwards compatibility.
     """
+
     first_name: str
     last_name: str
     email: EmailStr
@@ -473,12 +500,12 @@ class DirectApplicationRequest(BaseModel):
 async def apply_direct_deprecated(request: Request, data: DirectApplicationRequest):
     """
     ⚠️ DEPRECATED: Cet endpoint est obsolète.
-    
+
     Utilisez le nouveau workflow V2 Human-in-the-Loop:
     1. POST /api/v2/search/start - Lancer la recherche
     2. GET /api/v2/applications/{id}/results - Récupérer les offres
     3. POST /api/v2/applications/{id}/select - Sélectionner les offres
-    
+
     Cet endpoint retourne maintenant une erreur 410 Gone.
     """
     return JSONResponse(
@@ -489,9 +516,9 @@ async def apply_direct_deprecated(request: Request, data: DirectApplicationReque
             "migration_guide": {
                 "step_1": "POST /api/v2/search/start avec job_title, location, etc.",
                 "step_2": "GET /api/v2/applications/{id}/results (polling)",
-                "step_3": "POST /api/v2/applications/{id}/select avec les IDs des offres"
-            }
-        }
+                "step_3": "POST /api/v2/applications/{id}/select avec les IDs des offres",
+            },
+        },
     )
 
 
@@ -499,51 +526,45 @@ async def apply_direct_deprecated(request: Request, data: DirectApplicationReque
 # API V2 - ENDPOINTS AUTHENTIFIÉS
 # ===========================================
 
-from core.auth import get_required_token, get_current_user_id, get_optional_token
+from core.auth import get_required_token, get_current_user_id
 
 
 @app.get("/api/v2/applications")
 async def get_my_applications(
     token: str = Depends(get_required_token),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Récupère les candidatures de l'utilisateur authentifié.
-    
+
     Nécessite un token JWT Supabase valide dans l'en-tête Authorization.
     Respecte les politiques RLS de Supabase.
-    
+
     Returns:
         Liste des candidatures de l'utilisateur
     """
     logger.info(f"📋 Récupération candidatures pour user_id: {user_id}")
-    
-    applications = db_service.get_user_applications(
-        user_id=user_id,
-        access_token=token
-    )
-    
+
+    applications = db_service.get_user_applications(user_id=user_id, access_token=token)
+
     return {
         "user_id": user_id,
         "count": len(applications),
-        "applications": applications
+        "applications": applications,
     }
 
 
 @app.get("/api/v2/me")
 async def get_current_user(
     token: str = Depends(get_required_token),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Retourne les informations de l'utilisateur authentifié.
-    
+
     Utile pour vérifier que l'authentification fonctionne.
     """
-    return {
-        "user_id": user_id,
-        "authenticated": True
-    }
+    return {"user_id": user_id, "authenticated": True}
 
 
 # ===========================================
@@ -552,4 +573,5 @@ async def get_current_user(
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

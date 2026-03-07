@@ -4,7 +4,6 @@ import os
 from typing import List
 from core.config import settings
 from core.logging_config import get_logger
-from core.exceptions import EmailError, EmailSendError
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 
@@ -18,7 +17,13 @@ class EmailService:
         self.api_key = settings.BREVO_API_KEY
         self.sender_email = settings.SENDER_EMAIL
 
-    def send_application_email(self, candidate: CandidateProfile, best_offer: JobOffer, other_offers: List[JobOffer], pdf_path: str):
+    def send_application_email(
+        self,
+        candidate: CandidateProfile,
+        best_offer: JobOffer,
+        other_offers: List[JobOffer],
+        pdf_path: str,
+    ):
         """
         Envoie l'email avec le PDF du Top 1 et la liste des autres offres pertinentes.
         Template moderne avec gradient et cards.
@@ -33,11 +38,10 @@ class EmailService:
             if pdf_path and os.path.exists(pdf_path):
                 with open(pdf_path, "rb") as f:
                     pdf_content = base64.b64encode(f.read()).decode("utf-8")
-                
-                attachment.append({
-                    "content": pdf_content,
-                    "name": os.path.basename(pdf_path)
-                })
+
+                attachment.append(
+                    {"content": pdf_content, "name": os.path.basename(pdf_path)}
+                )
 
             # 2. Construction des cards pour les autres offres
             other_jobs_html = ""
@@ -48,7 +52,7 @@ class EmailService:
                     analysis = job.ai_analysis or {}
                     s_tech = analysis.get("score_technical", "0")
                     s_struct = analysis.get("score_structural", "0")
-                    
+
                     job_cards += f'''
                     <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 15px;">
                         <div style="font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 8px;">{job.title}</div>
@@ -61,11 +65,11 @@ class EmailService:
                         <a href="{job.url}" style="color: #667eea; text-decoration: none; font-weight: 600; font-size: 14px;">👉 Voir l'offre →</a>
                     </div>
                     '''
-                
-                other_jobs_html = f'''
+
+                other_jobs_html = f"""
                 <h2 style="font-size: 18px; font-weight: 700; color: #1f2937; margin: 30px 0 20px;">📍 Autres opportunités ({len(other_offers)})</h2>
                 {job_cards}
-                '''
+                """
 
             # 3. Corps du message complet avec nouveau design
             total_offers = 1 + len(other_offers)
@@ -131,26 +135,33 @@ class EmailService:
             # 4. Payload API
             payload = {
                 "sender": {"email": self.sender_email, "name": "JobXpress AI"},
-                "to": [{"email": candidate.email, "name": f"{candidate.first_name} {candidate.last_name}"}],
+                "to": [
+                    {
+                        "email": candidate.email,
+                        "name": f"{candidate.first_name} {candidate.last_name}",
+                    }
+                ],
                 "subject": f"🎯 {best_offer.title} chez {best_offer.company} (+ {len(other_offers)} autres offres)",
                 "htmlContent": html_content,
-                "attachment": attachment
+                "attachment": attachment,
             }
 
             headers = {
                 "accept": "application/json",
                 "api-key": self.api_key,
-                "content-type": "application/json"
+                "content-type": "application/json",
             }
 
             # 5. Envoi
             with httpx.Client() as client:
                 response = client.post(self.API_URL, json=payload, headers=headers)
-                
+
                 if response.status_code in [200, 201]:
                     logger.info(f"✅ Email envoyé à {candidate.email}")
                 else:
-                    logger.error(f"❌ Erreur Brevo [{response.status_code}]: {response.text[:200]}")
+                    logger.error(
+                        f"❌ Erreur Brevo [{response.status_code}]: {response.text[:200]}"
+                    )
 
         except httpx.TimeoutException:
             logger.error(f"❌ Timeout envoi email à {candidate.email}")
@@ -158,5 +169,6 @@ class EmailService:
             logger.error(f"❌ Erreur HTTP Brevo [{e.response.status_code}]")
         except Exception as e:
             logger.exception(f"❌ Exception Email: {e}")
+
 
 email_service = EmailService()
