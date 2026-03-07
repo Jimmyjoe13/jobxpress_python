@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { MessageCircle, X, Send, Loader2, Sparkles, User, Briefcase } from "lucide-react"
 import { 
@@ -18,6 +19,25 @@ export function ChatWidget() {
   const [isLoading, setIsLoading] = useState(false)
   const [hasInit, setHasInit] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
+
+  // Redirection automatique si une recherche est effectuée via le chat
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1]
+    
+    // Vérifier si le message de l'assistant contient le signal de navigation
+    const hasSearchAction = 
+      lastMessage?.role === 'assistant' && 
+      (lastMessage.content.includes('[ACTION:NAVIGATE_SEARCH]') || 
+       lastMessage.tool_calls_executed?.some(t => t.result.includes('[ACTION:NAVIGATE_SEARCH]')))
+
+    if (hasSearchAction) {
+      const timer = setTimeout(() => {
+        router.push('/dashboard/search')
+      }, 2500)
+      return () => clearTimeout(timer)
+    }
+  }, [messages, router])
 
   // Initialisation à l'ouverture
   useEffect(() => {
@@ -140,7 +160,12 @@ export function ChatWidget() {
                         J'ai effectué une recherche pour toi
                       </div>
                       <div className="text-xs text-slate-600 dark:text-slate-400 line-clamp-4 whitespace-pre-wrap">
-                        {msg.tool_calls_executed[0].result}
+                        {msg.tool_calls_executed[0].result.replace(/\[ACTION:.*\]/g, '').trim()}
+                        {msg.tool_calls_executed[0].result.includes('[ACTION:NAVIGATE_SEARCH]') && (
+                          <div className="mt-2 text-indigo-600 dark:text-indigo-400 italic">
+                            Redirection vers tes résultats dans un instant...
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

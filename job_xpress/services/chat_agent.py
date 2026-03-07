@@ -8,6 +8,7 @@ from core.config import settings
 from services.search_engine_v2 import create_search_engine_v2
 from services.database import db_service
 from models.candidate import CandidateProfile, WorkType
+from fastapi import HTTPException
 
 search_engine_v2 = create_search_engine_v2()
 logger = logging.getLogger(__name__)
@@ -75,43 +76,71 @@ class ChatAgent:
             location = arguments.get("location", "")
             
             try:
-                # Utiliser la nouvelle méthode quick_search si elle existe, ou fallback sur find_jobs_v2
-                if hasattr(search_engine_v2, 'quick_search'):
-                    results = await search_engine_v2.quick_search(
-                        job_title=job_title,
-                        location=location
-                    )
-                else:
-                    # Fallback au cas où quick_search n'est pas encore implémenté
-                    # On crée un profil minimal pour satisfaire find_jobs_v2
-                    candidate = CandidateProfile(
-                        first_name="User",
-                        last_name=user_id[:8],
-                        email="chat@jobxpress.fr",
-                        job_title=job_title,
-                        location=location or "France",
-                        contract_type="Indifférent"
-                    )
-                    results = await search_engine_v2.find_jobs_v2(
-                        candidate=candidate,
-                        filters={},
-                        limit=5
-                    )
+                # 1. Vérifier le quota (Free ou Crédit)
+                client = db_service.admin_client
+                if not client:
+                    return "Erreur technique : impossible de vérifier tes crédits recherche."
                 
-                # Formater les résultats pour le LLM
+                quota_result = client.rpc(
+                    "check_and_use_search_quota",
+                    {"p_user_id": user_id}
+                ).execute()
+
+                if not quota_result.data or len(quota_result.data) == 0:
+                    return "Désolé, je n'ai pas pu valider ton quota de recherche."
+
+                quota = quota_result.data[0]
+                allowed = quota.get("allowed", False)
+                free_remaining = quota.get("free_remaining", 0)
+                used_credit = quota.get("used_credit", False)
+
+                if not allowed:
+                    return "Tu as épuisé tes recherches gratuites et tes crédits. Recharges ton compte pour continuer !"
+
+                # 2. Exécuter la recherche
+                # On crée un profil minimal pour satisfaire find_jobs_v2
+                candidate = CandidateProfile(
+                    first_name="ChatAgent",
+                    last_name=user_id[:8],
+                    email="chat@jobxpress.fr",
+                    job_title=job_title,
+                    location=location or "France",
+                    contract_type="Indifférent"
+                )
+                
+                results = await search_engine_v2.find_jobs_v2(
+                    candidate=candidate,
+                    filters={},
+                    limit=5
+                )
+                
+                # 3. Formater les résultats pour le LLM
                 if not results:
-                    return "Aucune offre trouvée pour ces critères."
+                    return "Je n'ai malheureusement trouvé aucune offre pour ces critères."
                 
                 formatted_results = []
                 for idx, job in enumerate(results[:5]):
+                    # On utilise getattr car ce sont des objets JobOffer, pas des dicts
+                    title = getattr(job, 'title', 'Poste inconnu')
+                    company = getattr(job, 'company', 'Entreprise inconnue')
+                    loc = getattr(job, 'location', 'Lieu inconnu')
+                    url = getattr(job, 'url', '#')
+                    
                     formatted_results.append(
-                        f"{idx+1}. {job.get('title', 'Titre inconnu')} chez {job.get('company', 'Entreprise inconnue')} "
-                        f"({job.get('location', 'Lieu inconnu')}) - URL: {job.get('url', '#')}"
+                        f"{idx+1}. {title} chez {company} ({loc}) - URL: {url}"
                     )
                 
-                return "Voici les offres trouvées :\n" + "\n".join(formatted_results)
+                quota_msg = ""
+                if used_credit:
+                    quota_msg = "\n(1 crédit utilisé)"
+                else:
+                    quota_msg = f"\n({free_remaining} recherche(s) gratuite(s) restante(s))"
+
+                # Signal ACTION:NAVIGATE_SEARCH pour que le frontend sache qu'il doit rediriger
+                return "\n".join(formatted_results) + quota_msg + "\n\n[ACTION:NAVIGATE_SEARCH]"
             except Exception as e:
-                logger.error(f"Erreur lors de la recherche : {e}")
+                logger.error(f"❌ Erreur recherche ChatAgent: {e}")
+                return f"Une erreur technique est survenue pendant la recherche : {str(e)}"
                 return f"Erreur lors de la recherche: {str(e)}"
                 
         return f"Outil '{function_name}' non reconnu."
