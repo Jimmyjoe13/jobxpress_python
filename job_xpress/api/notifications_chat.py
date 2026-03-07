@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
+import json
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -643,7 +644,7 @@ async def send_chat_message(
         response=assistant_response,
         remaining_messages=new_remaining,
         session_id=session["id"],
-    }
+    )
 
 
 @router.post("/chat/send/stream")
