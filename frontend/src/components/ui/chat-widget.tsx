@@ -32,8 +32,25 @@ export function ChatWidget() {
        lastMessage.tool_calls_executed?.some(t => t.result.includes('[ACTION:NAVIGATE_SEARCH]')))
 
     if (hasSearchAction) {
+      // Tenter d'extraire les paramètres de recherche pour pré-remplir la page
+      const searchTool = lastMessage.tool_calls_executed?.find(
+        (t: any) => t.tool_call?.function?.name === "search_jobs"
+      )
+      
+      let query = ""
+      if (searchTool?.tool_call?.function?.arguments) {
+        try {
+          const args = JSON.parse(searchTool.tool_call.function.arguments)
+          const q = encodeURIComponent(args.job_title || "")
+          const l = encodeURIComponent(args.location || "France")
+          query = `?q=${q}&l=${l}`
+        } catch (e) {
+          console.error("Erreur parse arguments recherche:", e)
+        }
+      }
+
       const timer = setTimeout(() => {
-        router.push('/dashboard/search')
+        router.push(`/dashboard/search${query}`)
       }, 2500)
       return () => clearTimeout(timer)
     }
@@ -85,12 +102,13 @@ export function ChatWidget() {
     setIsLoading(true)
 
     try {
-      const { response, quick_replies } = await sendGlobalChatMessage(text)
+      const { response, quick_replies, tool_calls_executed } = await sendGlobalChatMessage(text)
       
       const assistantMessage: GlobalChatMessage = {
         role: "assistant",
         content: response,
         quick_replies: quick_replies,
+        tool_calls_executed: tool_calls_executed,
         timestamp: new Date().toISOString()
       }
       

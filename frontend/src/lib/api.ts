@@ -705,6 +705,7 @@ export interface GlobalChatMessage {
 export interface GlobalChatResponse {
   response: string
   quick_replies?: { label: string; action: string }[]
+  tool_calls_executed?: any[]
   session_id: string
 }
 

@@ -350,12 +350,14 @@ async def send_global_chat(
     # Mettre à jour la session
     admin_client.table("chat_sessions").update({
         "messages": new_messages,
-        "updated_at": now
+        "updated_at": now,
+        "tool_calls_executed": agent_response.get("tool_calls_executed", [])
     }).eq("id", session["id"]).execute()
 
     return {
         "response": agent_response["content"],
         "quick_replies": agent_response.get("quick_replies", []),
+        "tool_calls_executed": agent_response.get("tool_calls_executed", []),
         "session_id": session["id"]
     }
 

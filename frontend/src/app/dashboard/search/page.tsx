@@ -64,9 +64,27 @@ export default function SearchPage() {
   const [quota, setQuota] = useState<SearchQuota | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
 
-  // Load Quota
+  // Load Quota & URL Params
   useEffect(() => {
     loadQuota()
+    
+    // Check for query params
+    const params = new URLSearchParams(window.location.search)
+    const q = params.get('q')
+    const l = params.get('l')
+    
+    if (q) {
+      setFormData(prev => ({
+        ...prev,
+        jobTitle: q,
+        location: l || prev.location
+      }))
+      // On déclenche la recherche après un court délai pour laisser le quota charger
+      setTimeout(() => {
+        const fakeEvent = { preventDefault: () => {} } as React.FormEvent
+        handleSearch(fakeEvent, q, l || "France")
+      }, 500)
+    }
   }, [])
 
   const loadQuota = async () => {
@@ -87,9 +105,12 @@ export default function SearchPage() {
     }))
   }
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent, overrideTitle?: string, overrideLocation?: string) => {
     e.preventDefault()
-    if (!formData.jobTitle) {
+    const title = overrideTitle || formData.jobTitle
+    const loc = overrideLocation || formData.location
+
+    if (!title) {
       setError("Veuillez indiquer un poste recherché.")
       return
     }
@@ -100,8 +121,8 @@ export default function SearchPage() {
 
     try {
       const request: QuickSearchRequest = {
-        job_title: formData.jobTitle,
-        location: formData.location,
+        job_title: title,
+        location: loc,
         contract_type: formData.contractType || undefined,
         experience_level: formData.experienceLevel || undefined,
         work_type: formData.workType !== "Tous" ? formData.workType : undefined,
