@@ -127,18 +127,21 @@ from api.profile_endpoints import router as profile_router
 from api.settings_endpoints import router as settings_router
 from api.stripe_webhook import router as stripe_router
 from api.search_endpoints import router as search_router
+from api.dashboard_endpoints import router as dashboard_router
 app.include_router(v2_router)
 app.include_router(notifications_router)
 app.include_router(profile_router)
 app.include_router(settings_router)
 app.include_router(stripe_router)
 app.include_router(search_router)
+app.include_router(dashboard_router)
 logger.info("✅ API V2 Human-in-the-Loop enregistrée")
 logger.info("✅ API Notifications & Chat enregistrée")
 logger.info("✅ API Profile enregistrée")
 logger.info("✅ API Settings enregistrée")
 logger.info("✅ API Stripe Webhooks enregistrée")
 logger.info("✅ API Recherche & Favoris enregistrée")
+logger.info("✅ API Dashboard & UX enregistrée")
 
 # --- CONFIGURATION DEDUPLICATION ---
 COOLDOWN_SECONDS = 300  # 5 minutes

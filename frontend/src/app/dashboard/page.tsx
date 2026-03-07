@@ -14,10 +14,20 @@ import {
   Zap,
   Target,
   Sparkles,
+  Search,
+  Bookmark,
+  CheckCircle2,
+  Circle
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/ui/skeleton"
 import { UpgradeBanner } from "@/components/ui/upgrade-banner"
-import { getApplicationsV2, type ApplicationV2 } from "@/lib/api"
+import { 
+  getApplicationsV2, 
+  type ApplicationV2,
+  getDashboardStats,
+  type DashboardStats
+} from "@/lib/api"
+import { TrackingBoard } from "@/components/dashboard/tracking-board"
 
 interface UserData {
   firstName: string
@@ -45,6 +55,7 @@ const itemVariants: Variants = {
 export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null)
   const [applications, setApplications] = useState<ApplicationV2[]>([])
+  const [stats, setStats] = useState<DashboardStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -78,12 +89,15 @@ export default function DashboardPage() {
             userId: authUser.id,
           })
 
-          // Récupérer les applications V2
           try {
-            const response = await getApplicationsV2(10)
-            setApplications(response.applications || [])
+            const [appRes, statsRes] = await Promise.all([
+              getApplicationsV2(10),
+              getDashboardStats()
+            ])
+            setApplications(appRes.applications || [])
+            setStats(statsRes)
           } catch (err) {
-            console.error("Error loading V2 applications:", err)
+            console.error("Error loading V2 applications or stats:", err)
             setApplications([])
           }
         } else {
@@ -183,30 +197,36 @@ export default function DashboardPage() {
         <motion.div
           variants={itemVariants}
           whileHover={{ y: -4, scale: 1.01 }}
-          className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/10"
+          className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/10 flex flex-col justify-between"
         >
-          <motion.div
-            whileHover={{ scale: 1.05, rotate: -3 }}
-            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/25"
-          >
-            <TrendingUp className="w-7 h-7 text-white" />
-          </motion.div>
-          <h3 className="text-lg font-semibold text-white mb-2">Statistiques</h3>
-          <p className="text-slate-400 text-sm mb-4">Suivez vos candidatures</p>
-          <div className="flex items-end gap-2">
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
-              className="text-4xl font-bold text-gradient"
+          <div>
+            <motion.div
+              whileHover={{ scale: 1.05, rotate: -3 }}
+              className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/25"
             >
-              {applicationCount}
-            </motion.span>
-            <span className="text-slate-500 pb-1">candidature{applicationCount > 1 ? "s" : ""}</span>
+              <TrendingUp className="w-7 h-7 text-white" />
+            </motion.div>
+            <h3 className="text-lg font-semibold text-white mb-2">Statistiques</h3>
+            <p className="text-slate-400 text-sm mb-4">Suivez vos candidatures</p>
+          </div>
+          
+          <div className="flex gap-4">
+            <div className="flex flex-col">
+              <span className="text-3xl font-bold text-gradient">
+                {stats?.total_applications || 0}
+              </span>
+              <span className="text-slate-500 text-sm">candidature{stats?.total_applications && stats.total_applications > 1 ? "s" : ""}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-3xl font-bold text-indigo-400">
+                {stats?.total_saved_jobs || 0}
+              </span>
+              <span className="text-slate-500 text-sm">favori{stats?.total_saved_jobs && stats.total_saved_jobs > 1 ? "s" : ""}</span>
+            </div>
           </div>
         </motion.div>
 
-        {/* Last Activity Card */}
+        {/* Onboarding Checklist Card */}
         <motion.div
           variants={itemVariants}
           whileHover={{ y: -4, scale: 1.01 }}
@@ -216,140 +236,97 @@ export default function DashboardPage() {
             whileHover={{ scale: 1.05, rotate: 3 }}
             className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4 shadow-lg shadow-purple-500/25"
           >
-            <Clock className="w-7 h-7 text-white" />
+            <CheckCircle2 className="w-7 h-7 text-white" />
           </motion.div>
-          <h3 className="text-lg font-semibold text-white mb-2">Dernière activité</h3>
-          {applications[0] ? (
-            <>
-              <p className="text-white font-medium truncate mb-1">
-                {applications[0].final_choice?.title || applications[0].job_title}
-              </p>
-              <p className="text-slate-400 text-sm truncate mb-2">
-                {applications[0].final_choice?.company || applications[0].location}
-              </p>
-              <span className="text-slate-500 text-sm">{formatDate(applications[0].created_at)}</span>
-            </>
-          ) : (
-            <>
-              <p className="text-slate-400 text-sm mb-2">Aucune candidature pour le moment</p>
-              <span className="text-sm text-slate-500">Lancez votre première recherche !</span>
-            </>
+          <h3 className="text-lg font-semibold text-white mb-3">Pour commencer</h3>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              {stats?.checklist.has_profile ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <Circle className="w-5 h-5 text-slate-500 flex-shrink-0" />
+              )}
+              <span className={`text-sm ${stats?.checklist.has_profile ? 'text-slate-300 line-through' : 'text-slate-200'}`}>Remplir son profil</span>
+            </div>
+            <div className="flex items-center gap-3">
+              {stats?.checklist.has_cv ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <Circle className="w-5 h-5 text-slate-500 flex-shrink-0" />
+              )}
+              <span className={`text-sm ${stats?.checklist.has_cv ? 'text-slate-300 line-through' : 'text-slate-200'}`}>Importer un CV</span>
+            </div>
+            <div className="flex items-center gap-3">
+              {stats?.checklist.has_searched ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <Circle className="w-5 h-5 text-slate-500 flex-shrink-0" />
+              )}
+              <span className={`text-sm ${stats?.checklist.has_searched ? 'text-slate-300 line-through' : 'text-slate-200'}`}>Lancer une recherche rapide</span>
+            </div>
+          </div>
+          {(!stats?.checklist.has_cv || !stats?.checklist.has_profile) && (
+            <div className="mt-5">
+              <Link href="/dashboard/profile" className="text-sm text-purple-400 hover:text-purple-300 font-medium hover:underline inline-flex items-center gap-1.5">
+                Mettre à jour mon profil <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           )}
         </motion.div>
       </motion.div>
 
-      {/* Recent Applications */}
+      {/* Recent Applications replace with TrackingBoard */}
       <motion.div
         variants={itemVariants}
-        className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl overflow-hidden"
+        className="mt-8 bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl overflow-hidden"
       >
         <div className="p-6 border-b border-slate-700/50">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between xl:flex-row flex-col gap-4 xl:gap-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
                 <Target className="w-5 h-5 text-indigo-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Dernières candidatures</h2>
-                <p className="text-sm text-slate-400">Historique de vos recherches</p>
+                <h2 className="text-lg font-semibold text-white">Suivi des candidatures</h2>
+                <p className="text-sm text-slate-400">Gérez vos candidatures générées par l&apos;IA</p>
               </div>
             </div>
             {applications.length > 0 && (
-              <a
-                href="#"
-                className="text-sm text-indigo-400 hover:text-indigo-300 font-medium transition-colors hover:underline"
+              <Link
+                href="/dashboard/search"
+                className="text-sm px-4 py-2 bg-slate-800 text-indigo-400 hover:text-indigo-300 font-medium rounded-lg transition-colors border border-slate-700 hover:border-indigo-500/30"
               >
-                Voir tout
-              </a>
+                Explorer de nouvelles offres
+              </Link>
             )}
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 overflow-x-auto min-h-[500px]">
           {applications.length > 0 ? (
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              className="space-y-3"
-            >
-              {applications.map((app, index) => (
-                <motion.div
-                  key={app.id}
-                  variants={itemVariants}
-                  whileHover={{ x: 4 }}
-                  custom={index}
-                  className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-slate-800 transition-all duration-200 group border border-transparent hover:border-slate-700/50 cursor-pointer"
-                >
-                  <div className="flex-1 min-w-0 mr-4">
-                    <div className="flex items-center gap-3 mb-1">
-                      <h4 className="font-semibold text-white truncate group-hover:text-indigo-400 transition-colors">
-                        {app.final_choice?.title || app.job_title}
-                      </h4>
-                      {app.final_choice?.score && (
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getScoreColor(app.final_choice.score)}`}
-                        >
-                          <Star className="w-3 h-3" />
-                          {app.final_choice.score}%
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-slate-400 truncate">
-                      {app.final_choice?.company || app.location}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="hidden sm:inline-block text-xs text-slate-500">
-                      {formatDate(app.created_at)}
-                    </span>
-                    <span className="px-2.5 py-1 bg-indigo-500/10 text-indigo-400 text-xs rounded-lg font-medium capitalize border border-indigo-500/20">
-                      {app.status}
-                    </span>
-                    {app.final_choice?.url && (
-                      <a
-                        href={app.final_choice.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
+            <TrackingBoard
+              applications={applications}
+              onUpdate={() => {
+                // Refresh applications
+                getApplicationsV2(10).then(res => setApplications(res.applications || []))
+              }}
+            />
           ) : (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 }}
-              className="text-center py-16"
-            >
-              <motion.div
-                animate={{ y: [0, -5, 0] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                className="w-20 h-20 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-6 border border-slate-700/50"
-              >
-                <Sparkles className="w-10 h-10 text-slate-600" />
-              </motion.div>
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700">
+                <FileText className="w-8 h-8 text-slate-500" />
+              </div>
               <h3 className="text-lg font-semibold text-white mb-2">Aucune candidature</h3>
-              <p className="text-slate-400 mb-6 max-w-sm mx-auto">
-                Commencez par lancer votre première recherche d&apos;emploi automatisée
+              <p className="text-slate-400 max-w-sm mb-6">
+                Vous n&apos;avez pas encore créé de lettre de motivation avec JobXpress.
               </p>
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.98 }}>
-                <Link
-                  href="/dashboard/apply"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all relative overflow-hidden group"
-                >
-                  <span className="relative z-10">Lancer une recherche</span>
-                  <ArrowRight className="w-4 h-4 relative z-10" />
-                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                </Link>
-              </motion.div>
-            </motion.div>
+              <Link
+                href="/dashboard/apply"
+                className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5"
+              >
+                Générer ma première candidature
+              </Link>
+            </div>
           )}
         </div>
       </motion.div>

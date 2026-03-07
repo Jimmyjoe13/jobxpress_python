@@ -160,6 +160,8 @@ export interface SelectJobsResponse {
 export interface ApplicationV2 {
   id: string
   status: string
+  tracking_status?: TrackingStatus
+  tracking_notes?: TrackingNote[]
   job_title: string
   location: string
   contract_type?: string
@@ -573,9 +575,89 @@ export async function updateSavedJobNotes(jobId: string, notes: string): Promise
 /**
  * Delete a saved job
  */
-export async function deleteSavedJob(jobId: string): Promise<{ status: string; id: string }> {
-  return apiRequest(`/api/v2/jobs/saved/${jobId}`, {
+export async function deleteSavedJob(id: string): Promise<{ status: string; id: string }> {
+  return apiRequest<{ status: string; id: string }>(`/api/v2/jobs/saved/${id}`, {
     method: 'DELETE'
+  }, true)
+}
+
+// --------------------------------------------------------------------------
+// DASHBOARD & TRACKING API (PHASE 3)
+// --------------------------------------------------------------------------
+
+export interface DashboardStats {
+  total_applications: number
+  total_saved_jobs: number
+  checklist: {
+    has_profile: boolean
+    has_cv: boolean
+    has_searched: boolean
+  }
+}
+
+export interface NotificationItem {
+  id: string
+  user_id: string
+  title: string
+  message: string
+  type: string
+  action_url?: string
+  is_read: boolean
+  created_at: string
+}
+
+export interface TrackingNote {
+  date: string
+  note: string
+  status: string
+}
+
+export type TrackingStatus = 'SAVED' | 'APPLIED' | 'INTERVIEW_SCHEDULED' | 'INTERVIEWED' | 'OFFER_RECEIVED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'
+
+/**
+ * Get user dashboard stats
+ */
+export async function getDashboardStats(): Promise<DashboardStats> {
+  return apiRequest<DashboardStats>('/api/v2/dashboard/stats', {
+    method: 'GET'
+  }, true)
+}
+
+/**
+ * Get user notifications
+ */
+export async function getNotifications(limit: number = 20): Promise<{ notifications: NotificationItem[] }> {
+  return apiRequest<{ notifications: NotificationItem[] }>(`/api/v2/notifications?limit=${limit}`, {
+    method: 'GET'
+  }, true)
+}
+
+/**
+ * Mark notification as read
+ */
+export async function markNotificationRead(notifId: string): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>(`/api/v2/notifications/${notifId}/read`, {
+    method: 'PATCH'
+  }, true)
+}
+
+/**
+ * Update tracking status for an application
+ */
+export async function updateTrackingStatus(appId: string, status: TrackingStatus): Promise<{ status: string; tracking_status: string }> {
+  return apiRequest<{ status: string; tracking_status: string }>(`/api/v2/applications/${appId}/tracking`, {
+    method: 'PATCH',
+    body: JSON.stringify({ tracking_status: status })
+  }, true)
+}
+
+/**
+ * Add tracking note for an application
+ */
+export async function addTrackingNote(appId: string, note: string): Promise<{ status: string; note: TrackingNote }> {
+  return apiRequest<{ status: string; note: TrackingNote }>(`/api/v2/applications/${appId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({ note })
   }, true)
 }
 

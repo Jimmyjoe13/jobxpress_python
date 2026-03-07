@@ -39,7 +39,10 @@ async function getAuthToken(): Promise<string | null> {
   }
 }
 
+import { useToast } from "@/components/ui/toast"
+
 export function NotificationsPopover() {
+  const { showToast } = useToast()
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -57,8 +60,9 @@ export function NotificationsPopover() {
       
       if (res.ok) {
         const data = await res.json()
-        setNotifications(data.notifications || [])
-        setUnreadCount(data.unread_count || 0)
+        const fetchedNotifs = data.notifications || []
+        setNotifications(fetchedNotifs)
+        setUnreadCount(fetchedNotifs.filter((n: Notification) => !n.read).length)
       }
     } catch (err) {
       console.error("Error fetching notifications:", err)
@@ -69,11 +73,50 @@ export function NotificationsPopover() {
 
   useEffect(() => {
     fetchNotifications()
-    
-    // Polling toutes les 30 secondes
-    const interval = setInterval(fetchNotifications, 30000)
-    return () => clearInterval(interval)
-  }, [fetchNotifications])
+
+    let channel: any = null
+
+    const setupRealtime = async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/client")
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (user) {
+          channel = supabase
+            .channel("user-notifications")
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "notifications",
+                filter: `user_id=eq.${user.id}`,
+              },
+              (payload: any) => {
+                const newNotif = payload.new as Notification
+                setNotifications(prev => [newNotif, ...prev])
+                setUnreadCount(prev => prev + 1)
+                
+                // Show a toast when a notification arrives
+                showToast(newNotif.title, "info")
+              }
+            )
+            .subscribe()
+        }
+      } catch (err) {
+        console.error("Error setting up realtime:", err)
+      }
+    }
+
+    setupRealtime()
+
+    return () => {
+      if (channel) {
+        channel.unsubscribe()
+      }
+    }
+  }, [fetchNotifications, showToast])
 
   const markAsRead = async (notificationId: string) => {
     try {
