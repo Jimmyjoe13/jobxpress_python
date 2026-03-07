@@ -299,6 +299,117 @@ class ChatAgent:
                 "content": "J'ai rencontré une petite erreur technique. Peux-tu reformuler ? 🛠️",
             }
 
+    async def stream_message(
+        self,
+        user_message: str,
+        conversation_history: List[Dict[str, Any]],
+        user_id: str,
+        token: str,
+    ):
+        """
+        Générateur asynchrone pour streamer la réponse au message.
+        """
+        if not self.api_key:
+            yield "Je suis en pause (API Key manquante). 🛠️"
+            return
+
+        try:
+            # 1. Préparer les messages
+            messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+            for msg in conversation_history[-10:]:
+                clean_msg = {"role": msg["role"]}
+                if "content" in msg and msg["content"]:
+                    clean_msg["content"] = msg["content"]
+                if "tool_calls" in msg:
+                    clean_msg["tool_calls"] = msg["tool_calls"]
+                if "tool_call_id" in msg:
+                    clean_msg["tool_call_id"] = msg["tool_call_id"]
+                messages.append(clean_msg)
+
+            messages.append({"role": "user", "content": user_message})
+
+            # 2. Appel initial (non-streamé pour gérer les outils facilement)
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.API_URL,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "deepseek-chat",
+                        "messages": messages,
+                        "tools": self.tools,
+                        "tool_choice": "auto",
+                        "temperature": 0.7,
+                        "max_tokens": 1000,
+                        "stream": False,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            response_message = data["choices"][0]["message"]
+
+            # 3. Exécution d'outils
+            if response_message.get("tool_calls"):
+                logger.info("🤖 L'agent streameur a décidé d'utiliser un outil.")
+                messages.append(response_message)
+
+                for tool_call in response_message["tool_calls"]:
+                    tool_call_id = tool_call["id"]
+                    tool_result_content = await self.execute_tool(
+                        tool_call, user_id, token
+                    )
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": tool_result_content,
+                    })
+
+                # Deuxième appel AVEC streaming
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with client.stream(
+                        "POST",
+                        self.API_URL,
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "deepseek-chat",
+                            "messages": messages,
+                            "temperature": 0.7,
+                            "max_tokens": 1000,
+                            "stream": True,
+                        },
+                    ) as stream_resp:
+                        async for line in stream_resp.aiter_lines():
+                            if line.startswith("data: "):
+                                data_str = line[6:]
+                                if data_str == "[DONE]":
+                                    break
+                                try:
+                                    chunk_data = json.loads(data_str)
+                                    delta = chunk_data["choices"][0]["delta"]
+                                    if "content" in delta:
+                                        yield delta["content"]
+                                except (KeyError, json.JSONDecodeError):
+                                    continue
+            else:
+                # Pas de tool, on simule le streaming du contenu
+                content = response_message.get("content", "")
+                import asyncio
+                # Chunkage pour l'effet "frappe"
+                words = content.split(' ')
+                for i, word in enumerate(words):
+                    yield word + (' ' if i < len(words) - 1 else '')
+                    await asyncio.sleep(0.01)
+
+        except Exception as e:
+            logger.exception(f"❌ Erreur stream ChatAgent: {e}")
+            yield "Désolé, j'ai rencontré un problème technique. 🛠️"
+
     async def get_proactive_message(self, user_id: str, token: str) -> Dict[str, Any]:
         """Gère le premier message d'accueil proactif selon le profil du user."""
         client = db_service.get_user_client(token)

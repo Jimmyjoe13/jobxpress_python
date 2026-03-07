@@ -15,6 +15,7 @@ import {
   Crown,
   Clock
 } from "lucide-react"
+import { sendJobyJobaMessageStream, getAuthToken } from "@/lib/api"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
@@ -34,17 +35,6 @@ interface ChatSession {
   max_messages?: number
 }
 
-async function getAuthToken(): Promise<string | null> {
-  if (typeof window === 'undefined') return null
-  try {
-    const { createClient } = await import("@/lib/supabase/client")
-    const supabase = createClient()
-    const { data } = await supabase.auth.getSession()
-    return data?.session?.access_token || null
-  } catch {
-    return null
-  }
-}
 
 export default function ChatPage() {
   const params = useParams()
@@ -125,38 +115,35 @@ export default function ChatPage() {
     setMessages(prev => [...prev, tempUserMsg])
 
     try {
-      const token = await getAuthToken()
-      if (!token) throw new Error("Non authentifié")
-
-      const res = await fetch(`${API_URL}/api/v2/chat/send`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          message: userMessage,
-          application_id: applicationId
-        })
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        
-        // Ajouter la réponse de l'assistant
-        const assistantMsg: ChatMessage = {
-          role: "assistant",
-          content: data.response,
-          timestamp: new Date().toISOString()
-        }
-        setMessages(prev => [...prev, assistantMsg])
-        setRemainingMessages(data.remaining_messages)
-      } else {
-        const data = await res.json()
-        setError(data.detail || "Erreur lors de l'envoi")
-        // Retirer le message utilisateur en cas d'erreur
-        setMessages(prev => prev.slice(0, -1))
+      // Ajouter un message assistant vide pour le streaming
+      const assistantMsg: ChatMessage = {
+        role: "assistant",
+        content: "",
+        timestamp: new Date().toISOString()
       }
+      setMessages(prev => [...prev, assistantMsg])
+
+      let fullContent = ""
+      const stream = sendJobyJobaMessageStream(applicationId, userMessage)
+      
+      for await (const chunk of stream) {
+        if (chunk.c) {
+          fullContent += chunk.c
+          setMessages(prev => {
+            const updated = [...prev]
+            const last = updated[updated.length - 1]
+            if (last && last.role === 'assistant') {
+              last.content = fullContent
+            }
+            return updated
+          })
+        }
+        
+        if (chunk.m && chunk.m.remaining_messages !== undefined) {
+          setRemainingMessages(chunk.m.remaining_messages)
+        }
+      }
+
     } catch (err) {
       setError("Erreur de connexion")
       setMessages(prev => prev.slice(0, -1))
@@ -283,7 +270,7 @@ export default function ChatPage() {
                   </div>
                   
                   {/* Message Bubble */}
-                  <div className={`px-4 py-3 rounded-2xl ${
+                  <div className={`px-4 py-3 rounded-2xl relative ${
                     msg.role === 'user'
                       ? 'bg-indigo-500 text-white rounded-tr-sm'
                       : 'bg-slate-700 text-slate-100 rounded-tl-sm'
@@ -296,6 +283,13 @@ export default function ChatPage() {
                           .replace(/\n/g, '<br/>')
                       }}
                     />
+                    {isSending && index === messages.length - 1 && msg.role === 'assistant' && (
+                      <motion.span 
+                        animate={{ opacity: [0, 1, 0] }}
+                        transition={{ repeat: Infinity, duration: 0.8 }}
+                        className="inline-block w-1.5 h-3.5 bg-indigo-500 ml-1 align-middle"
+                      />
+                    )}
                   </div>
                 </div>
               </motion.div>

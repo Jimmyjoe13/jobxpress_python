@@ -20,6 +20,16 @@ import hmac
 
 logger = get_logger()
 
+# --- Price to Plan Mapping ---
+# En production, il est recommandé d'utiliser les métadonnées Stripe
+# ou une table de correspondance en base de données.
+PRICE_TO_PLAN = {
+    "price_1Sg51YLlPGgejV8rz28oXmd4": "STARTER",  # Starter Mensuel
+    "price_1T8NYzLlPGgejV8r9SPh8d8A": "STARTER",  # Starter Annuel
+    "price_1T8NYzLlPGgejV8rtanc2YmU": "PRO",      # Pro Mensuel
+    "price_1T8NZ0LlPGgejV8rKZCj0ZQH": "PRO",      # Pro Annuel
+}
+
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
 
@@ -348,16 +358,38 @@ async def stripe_webhook(
                     "email": customer_email,
                 }
 
-            # Activer le plan Starter (Payment Link actuel)
-            success = await upgrade_user_subscription(user_id, "STARTER", customer_id)
+            # Déterminer le plan via le prix (V2 Multi-plans)
+            # Pour les Payment Links, Stripe envoie le prix dans la session 
+            # ou via les line_items (si expansé).
+            # Sinon, on peut utiliser des metadata personnalisées passées lors du checkout.
+            
+            # Tentative de récupération via line_items (plus robuste)
+            plan = "STARTER"  # Fallback
+            
+            # Note: En production, assurez-vous que les métadonnées 'plan' 
+            # sont présentes dans le Payment Link ou le Prix.
+            # Ici on utilise une correspondance par ID de prix.
+            
+            # Récupérer l'ID du prix via les line_items s'ils sont présents
+            line_items = data_object.get("line_items", {}).get("data", [])
+            if line_items:
+                price_id = line_items[0].get("price", {}).get("id")
+                plan = PRICE_TO_PLAN.get(price_id, "STARTER")
+            else:
+                # Fallback sur les metadata de l'objet data_object lui-même
+                # (Peuvent être passées lors de la création du Payment Link / Checkout Session)
+                plan = data_object.get("metadata", {}).get("plan", "STARTER")
+
+            # Activer l'abonnement correspondant (Starter ou Pro)
+            success = await upgrade_user_subscription(user_id, plan, customer_id)
 
             if success:
-                logger.info(f"🎉 Souscription Starter activée pour {customer_email}")
+                logger.info(f"🎉 Souscription {plan} activée pour {customer_email}")
                 # IMPORTANT: Enregistrer APRÈS le succès pour garantir l'atomicité
                 await mark_event_processed(
                     event_id, event_type, data_object, user_id=user_id
                 )
-                return {"status": "success", "plan": "STARTER"}
+                return {"status": "success", "plan": plan}
             else:
                 await mark_event_processed(
                     event_id, event_type, data_object, user_id=user_id, status="failed"

@@ -20,7 +20,8 @@ import {
   GlobalChatMessage, 
   getProactiveMessage, 
   getGlobalSession, 
-  sendGlobalChatMessage 
+  sendGlobalChatMessage,
+  sendGlobalChatMessageStream 
 } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -148,17 +149,43 @@ export function ChatWidget() {
     setIsLoading(true)
 
     try {
-      const { response, quick_replies, tool_calls_executed } = await sendGlobalChatMessage(text)
-      
+      // Ajouter un message assistant vide pour le streaming
       const assistantMessage: GlobalChatMessage = {
         role: "assistant",
-        content: response,
-        quick_replies: quick_replies,
-        tool_calls_executed: tool_calls_executed,
+        content: "",
         timestamp: new Date().toISOString()
       }
-      
       setMessages(prev => [...prev, assistantMessage])
+
+      let fullContent = ""
+      const stream = sendGlobalChatMessageStream(text)
+      
+      for await (const chunk of stream) {
+        if (chunk.c) {
+          fullContent += chunk.c
+          setMessages(prev => {
+            const updated = [...prev]
+            const lastMsg = updated[updated.length - 1]
+            if (lastMsg && lastMsg.role === 'assistant') {
+              lastMsg.content = fullContent
+            }
+            return updated
+          })
+        }
+        
+        if (chunk.m) {
+          setMessages(prev => {
+            const updated = [...prev]
+            const lastMsg = updated[updated.length - 1]
+            if (lastMsg && lastMsg.role === 'assistant') {
+              lastMsg.quick_replies = chunk.m.quick_replies
+              lastMsg.tool_calls_executed = chunk.m.tool_calls_executed
+            }
+            return updated
+          })
+        }
+      }
+
     } catch (error) {
       console.error("Erreur envoi message:", error)
       const errorMessage: GlobalChatMessage = {
@@ -220,6 +247,13 @@ export function ChatWidget() {
                         : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-white/10 dark:border-slate-700/50 rounded-tl-none"
                     )}>
                       {msg.content}
+                      {isLoading && idx === messages.length - 1 && msg.role === 'assistant' && (
+                        <motion.span 
+                          animate={{ opacity: [0, 1, 0] }}
+                          transition={{ repeat: Infinity, duration: 0.8 }}
+                          className="inline-block w-1.5 h-3.5 bg-indigo-500 ml-1 align-middle"
+                        />
+                      )}
                     </div>
                   )}
 

@@ -1,13 +1,22 @@
 "use client"
 
 import { useState } from "react"
-import { motion } from "framer-motion"
-import { Check, Zap, Sparkles, Star } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Check, Zap, Sparkles, Star, ArrowRight } from "lucide-react"
+
+const PAYMENTS = {
+  STARTER_MONTHLY: "https://buy.stripe.com/7sYaEY5UdavdaDU0gZ3F601",
+  STARTER_ANNUAL: "https://buy.stripe.com/dRm6oIbex9r913k4xf3F602",
+  PRO_MONTHLY: "https://buy.stripe.com/28E28saat8n5aDUgfX3F603",
+  PRO_ANNUAL: "https://buy.stripe.com/28EaEYciB46P3bs0gZ3F604",
+}
 
 const plans = [
   {
+    id: "FREE",
     name: "Freemium",
-    price: "0",
+    priceMonthly: "0",
+    priceAnnual: "0",
     description: "Pour tester la puissance de l'IA",
     features: [
       "5 crédits par semaine (reset lazy)",
@@ -23,8 +32,11 @@ const plans = [
     color: "slate"
   },
   {
+    id: "STARTER",
     name: "Starter",
-    price: "9.99",
+    priceMonthly: "9.99",
+    priceAnnual: "8.33", // (99.99 / 12)
+    fullPriceAnnual: "99.99",
     description: "Idéal pour booster sa recherche",
     features: [
       "100 crédits par mois",
@@ -35,14 +47,17 @@ const plans = [
       "Support prioritaire"
     ],
     cta: "Choisir Starter",
-    href: "/dashboard/upgrade?plan=STARTER",
+    href: PAYMENTS.STARTER_MONTHLY,
     popular: true,
     icon: Star,
     color: "indigo"
   },
   {
+    id: "PRO",
     name: "Pro",
-    price: "24.99",
+    priceMonthly: "24.99",
+    priceAnnual: "20.83", // (249.99 / 12)
+    fullPriceAnnual: "249.99",
     description: "Candidature 100% pilotée par IA",
     features: [
       "300 crédits par mois",
@@ -53,7 +68,7 @@ const plans = [
       "Account Manager dédié"
     ],
     cta: "Passer en Pro",
-    href: "/dashboard/upgrade?plan=PRO",
+    href: PAYMENTS.PRO_MONTHLY,
     popular: false,
     icon: Sparkles,
     color: "purple"
@@ -88,92 +103,143 @@ export function PricingSection() {
 
           {/* Pricing Toggle */}
           <div className="mt-8 flex items-center justify-center gap-4">
-            <span className={`text-sm ${!isAnnual ? 'text-white font-medium' : 'text-slate-500'}`}>Mensuel</span>
+            <span className={cn(
+              "text-sm transition-colors",
+              !isAnnual ? "text-white font-semibold" : "text-slate-500"
+            )}>
+              Mensuel
+            </span>
             <button
               onClick={() => setIsAnnual(!isAnnual)}
-              disabled // Désactivé car pas encore de plans annuels en backend
-              className="relative w-12 h-6 rounded-full bg-slate-700 p-1 transition-colors cursor-not-allowed opacity-50"
+              className="relative w-14 h-7 rounded-full bg-slate-800 border border-slate-700 p-1 transition-all hover:border-indigo-500/50"
             >
-              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${isAnnual ? 'translate-x-6' : 'translate-x-0'}`} />
+              <motion.div 
+                className="w-5 h-5 rounded-full bg-indigo-500 shadow-sm shadow-indigo-500/50"
+                animate={{ x: isAnnual ? 28 : 0 }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              />
             </button>
-            <span className={`text-sm ${isAnnual ? 'text-white font-medium' : 'text-slate-500'}`}>
-              Annuel <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Coming Soon</span>
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "text-sm transition-colors",
+                isAnnual ? "text-white font-semibold" : "text-slate-500"
+              )}>
+                Annuel
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase tracking-wider">
+                -20% Eco
+              </span>
+            </div>
           </div>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8">
-          {plans.map((plan, i) => (
-            <motion.div
-              key={plan.name}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              whileHover={{ y: -8 }}
-              className={`relative flex flex-col p-8 rounded-3xl border ${
-                plan.popular 
-                  ? 'bg-slate-800/80 border-indigo-500/50 shadow-2xl shadow-indigo-500/10' 
-                  : 'bg-slate-900/50 border-slate-800'
-              }`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold uppercase tracking-wider shadow-lg">
-                  Plus populaire
-                </div>
-              )}
+          {plans.map((plan, i) => {
+            const currentPrice = isAnnual ? plan.priceAnnual : plan.priceMonthly
+            const currentHref = plan.id === "FREE" 
+              ? plan.href 
+              : (isAnnual 
+                  ? (plan.id === "STARTER" ? PAYMENTS.STARTER_ANNUAL : PAYMENTS.PRO_ANNUAL) 
+                  : (plan.id === "STARTER" ? PAYMENTS.STARTER_MONTHLY : PAYMENTS.PRO_MONTHLY))
 
-              <div className="mb-8">
-                <div className={`w-12 h-12 rounded-2xl bg-${plan.color}-500/10 flex items-center justify-center mb-4`}>
-                  <plan.icon className={`w-6 h-6 text-${plan.color}-400`} />
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">{plan.name}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{plan.description}</p>
-              </div>
-
-              <div className="mb-8">
-                <div className="flex items-baseline">
-                  <span className="text-4xl font-bold text-white">{plan.price}€</span>
-                  <span className="text-slate-500 ml-2">/ mois</span>
-                </div>
-              </div>
-
-              <ul className="space-y-4 mb-8 flex-grow">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-3 text-sm text-slate-300">
-                    <Check className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <a
-                href={plan.href}
-                className={`w-full py-4 rounded-xl text-center font-bold transition-all ${
-                  plan.popular
-                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40'
-                    : 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700'
-                }`}
+            return (
+              <motion.div
+                key={plan.name}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                whileHover={{ y: -8 }}
+                className={cn(
+                  "relative flex flex-col p-8 rounded-3xl border transition-all duration-300",
+                  plan.popular 
+                    ? "bg-slate-800/40 border-indigo-500/50 shadow-2xl shadow-indigo-500/10 backdrop-blur-sm" 
+                    : "bg-slate-900/50 border-white/5 hover:border-white/10"
+                )}
               >
-                {plan.cta}
-              </a>
-            </motion.div>
-          ))}
+                {plan.popular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg">
+                    Recommandé
+                  </div>
+                )}
+
+                <div className="mb-8">
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center mb-6",
+                    plan.color === "indigo" ? "bg-indigo-500/10 text-indigo-400" : 
+                    plan.color === "purple" ? "bg-purple-500/10 text-purple-400" : "bg-slate-500/10 text-slate-400"
+                  )}>
+                    <plan.icon className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">{plan.name}</h3>
+                  <p className="text-slate-400 text-sm leading-relaxed">{plan.description}</p>
+                </div>
+
+                <div className="mb-8 h-[60px]">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-white">{currentPrice}€</span>
+                    <span className="text-slate-500 text-sm">/ mois</span>
+                  </div>
+                  <AnimatePresence mode="wait">
+                    {isAnnual && plan.id !== "FREE" && (
+                      <motion.p 
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 5 }}
+                        className="text-emerald-400/80 text-[11px] font-medium mt-1"
+                      >
+                        Facturé {plan.fullPriceAnnual}€/an
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <ul className="space-y-4 mb-10 flex-grow">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-3 text-sm text-slate-300">
+                      <div className="mt-1 w-4 h-4 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                        <Check className="w-3 h-3 text-emerald-500" />
+                      </div>
+                      <span className="opacity-80">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <a
+                  href={currentHref}
+                  className={cn(
+                    "group w-full py-4 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2",
+                    plan.popular
+                      ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/20"
+                      : "bg-white/5 hover:bg-white/10 text-white border border-white/10"
+                  )}
+                >
+                  {plan.cta}
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </a>
+              </motion.div>
+            )
+          })}
         </div>
         
-        {/* Money back guarantee / No cure no pay info */}
         <motion.div 
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="mt-16 text-center"
+          className="mt-20 text-center"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm">
-            <Check className="w-4 h-4" />
-            <span>Règle &quot;No cure, no pay&quot; : crédits débités uniquement si des résultats sont trouvés.</span>
+          <div className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-slate-900/50 border border-white/5 text-slate-400 text-xs backdrop-blur-sm">
+            <Zap className="w-4 h-4 text-amber-500" />
+            <p>
+              Règle <span className="text-white font-bold">&quot;No cure, no pay&quot;</span> : Vos crédits ne sont débités que si l&apos;IA identifie des opportunités réelles.
+            </p>
           </div>
         </motion.div>
       </div>
     </section>
   )
+}
+
+function cn(...classes: string[]) {
+  return classes.filter(Boolean).join(" ")
 }

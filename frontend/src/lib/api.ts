@@ -729,3 +729,96 @@ export async function sendGlobalChatMessage(message: string): Promise<GlobalChat
     body: JSON.stringify({ message })
   }, true)
 }
+
+export interface StreamChunk {
+  c?: string  // content
+  m?: any     // metadata
+}
+
+/**
+ * Version streamée du chatbot global (NDJSON)
+ */
+export async function* sendGlobalChatMessageStream(message: string): AsyncGenerator<StreamChunk> {
+  const token = await getAuthToken()
+  const response = await fetch(`${API_BASE_URL}/api/v2/chat/global/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ message })
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur stream' }))
+    throw new Error(error.detail || 'Erreur lors du streaming')
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) return
+
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split("\n")
+    buffer = lines.pop() || ""
+
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try {
+        yield JSON.parse(line) as StreamChunk
+      } catch (e) {
+        console.error("Erreur parse ligne stream:", e)
+      }
+    }
+  }
+}
+
+/**
+ * Version streamée de JobyJoba (NDJSON)
+ */
+export async function* sendJobyJobaMessageStream(applicationId: string, message: string): AsyncGenerator<StreamChunk> {
+  const token = await getAuthToken()
+  const response = await fetch(`${API_BASE_URL}/api/v2/chat/send/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ application_id: applicationId, message })
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Erreur stream' }))
+    throw new Error(error.detail || 'Erreur lors du streaming')
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) return
+
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split("\n")
+    buffer = lines.pop() || ""
+
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try {
+        yield JSON.parse(line) as StreamChunk
+      } catch (e) {
+        console.error("Erreur parse ligne stream:", e)
+      }
+    }
+  }
+}

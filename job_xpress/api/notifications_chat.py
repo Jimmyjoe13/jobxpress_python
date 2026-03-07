@@ -5,6 +5,7 @@ API Endpoints pour les notifications et le chat JobyJoba.
 from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -416,6 +417,84 @@ async def send_global_chat(
     }
 
 
+@router.post("/chat/global/stream")
+@limiter.limit(RATE_LIMIT_CHAT)
+async def send_global_chat_stream(
+    request: Request,
+    chat_request: GlobalChatRequest,
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Version streamée du chatbot global."""
+    admin_client = db_service.admin_client
+    if not admin_client:
+        raise HTTPException(status_code=500, detail="Erreur DB")
+
+    # Chercher la session
+    session_res = (
+        admin_client.table("chat_sessions")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("session_type", "global")
+        .eq("status", "active")
+        .limit(1)
+        .execute()
+    )
+
+    if not session_res.data:
+        session_res = (
+            admin_client.table("chat_sessions")
+            .insert({
+                "user_id": user_id,
+                "session_type": "global",
+                "messages": [],
+                "status": "active"
+            })
+            .execute()
+        )
+
+    session = session_res.data[0]
+    history = session.get("messages", [])
+
+    async def generate():
+        full_response = ""
+        # On va aussi essayer de récupérer les tools/replies du chat_agent si possible
+        # Pour l'instant, on se base sur les résultats du stream
+        async for chunk in chat_agent.stream_message(
+            chat_request.message, history, user_id, token
+        ):
+            full_response += chunk
+            yield json.dumps({"c": chunk}) + "\n"
+
+        # Final metadata call (sans ajout history car on le fera ici)
+        # Note: Dans une version idéale, l'agent retournerait les métadonnées à la fin de son générateur.
+        # Ici on simule ou on fait un appel léger.
+        final_state = await chat_agent.process_message(chat_request.message, history, user_id, token)
+        
+        metadata = {
+            "quick_replies": final_state.get("quick_replies", []),
+            "tool_calls_executed": final_state.get("tool_calls_executed", [])
+        }
+        yield json.dumps({"m": metadata}) + "\n"
+
+        # Callback de fin de stream pour sauver en DB
+        now = datetime.now(timezone.utc).isoformat()
+        new_messages = history + [
+            {"role": "user", "content": chat_request.message, "timestamp": now},
+            {"role": "assistant", "content": final_state["content"], "timestamp": now}
+        ]
+        
+        try:
+            admin_client.table("chat_sessions").update({
+                "messages": new_messages,
+                "updated_at": now
+            }).eq("id", session["id"]).execute()
+        except Exception as e:
+            logger.error(f"⚠️ Erreur update session global stream: {e}")
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+
 @router.get("/chat/session/{application_id}")
 async def get_chat_session(
     application_id: str,
@@ -564,4 +643,90 @@ async def send_chat_message(
         response=assistant_response,
         remaining_messages=new_remaining,
         session_id=session["id"],
+    }
+
+
+@router.post("/chat/send/stream")
+@limiter.limit(RATE_LIMIT_CHAT)
+async def send_chat_message_stream(
+    request: Request,
+    chat_request: ChatRequest,
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Version streamée de JobyJoba (Coach IA)."""
+    admin_client = db_service.admin_client
+    if not admin_client:
+        raise HTTPException(status_code=500, detail="Erreur DB")
+
+    session_res = (
+        admin_client.table("chat_sessions")
+        .select("*")
+        .eq("application_id", chat_request.application_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
     )
+
+    if not session_res.data:
+        raise HTTPException(status_code=404, detail="Session non trouvée")
+
+    session = session_res.data[0]
+    if session["status"] != "active":
+        raise HTTPException(status_code=400, detail="Session terminée")
+
+    remaining = session["max_messages"] - session["message_count"]
+    if remaining <= 0:
+        raise HTTPException(status_code=400, detail="Plus de messages disponibles")
+
+    # Contexte
+    app_res = admin_client.table("applications_v2").select("*").eq("id", chat_request.application_id).single().execute()
+    app_data = app_res.data or {}
+    final_choice = app_data.get("final_choice", {})
+
+    context = {
+        "job_title": final_choice.get("title", app_data.get("job_title")),
+        "company": final_choice.get("company"),
+        "location": app_data.get("location"),
+        "contract_type": app_data.get("contract_type"),
+        "cv_text": app_data.get("cv_text", ""),
+        "cover_letter": app_data.get("cover_letter_html", ""),
+    }
+
+    history = session.get("messages", [])
+
+    async def generate():
+        full_response = ""
+        async for chunk in joby_joba_service.stream_chat(
+            chat_request.message, history, context, remaining - 1
+        ):
+            full_response += chunk
+            yield json.dumps({"c": chunk}) + "\n"
+
+        # Metadata
+        # Pour JobyJoba on peut juste renvoyer le remaining messages actualisé
+        metadata = {
+            "remaining_messages": remaining - 1
+        }
+        yield json.dumps({"m": metadata}) + "\n"
+
+        # Update DB
+        now = datetime.now(timezone.utc).isoformat()
+        new_messages = history + [
+            {"role": "user", "content": chat_request.message, "timestamp": now},
+            {"role": "assistant", "content": full_response, "timestamp": now}
+        ]
+        new_count = session["message_count"] + 1
+        new_status = "active" if (session["max_messages"] - new_count) > 0 else "completed"
+
+        try:
+            admin_client.table("chat_sessions").update({
+                "messages": new_messages,
+                "message_count": new_count,
+                "status": new_status,
+                "updated_at": now
+            }).eq("id", session["id"]).execute()
+        except Exception as e:
+            logger.error(f"⚠️ Erreur update session jobyjoba stream: {e}")
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")

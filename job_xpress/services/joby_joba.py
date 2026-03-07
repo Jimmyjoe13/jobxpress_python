@@ -164,6 +164,72 @@ class JobyJobaService:
             logger.exception(f"❌ Erreur JobyJoba: {e}")
             return "Je rencontre un problème technique. Réessaie dans quelques instants ! 🛠️"
 
+    async def stream_chat(
+        self,
+        user_message: str,
+        conversation_history: List[Dict[str, str]],
+        context: Dict[str, Any],
+        remaining_messages: int,
+    ):
+        """
+        Générateur asynchrone pour streamer la réponse de JobyJoba.
+        """
+        if not self.api_key:
+            yield "Je suis temporairement indisponible. 🔧"
+            return
+
+        try:
+            system_prompt = self.build_system_prompt(
+                job_title=context.get("job_title"),
+                company=context.get("company"),
+                location=context.get("location"),
+                contract_type=context.get("contract_type"),
+                cv_text=context.get("cv_text", ""),
+                cover_letter=context.get("cover_letter", ""),
+                remaining_messages=remaining_messages,
+            )
+
+            messages = [{"role": "system", "content": system_prompt}]
+            for msg in conversation_history[-10:]:
+                messages.append(
+                    {"role": msg.get("role", "user"), "content": msg.get("content", "")}
+                )
+            messages.append({"role": "user", "content": user_message})
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                async with client.stream(
+                    "POST",
+                    self.API_URL,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "deepseek-chat",
+                        "messages": messages,
+                        "temperature": 0.7,
+                        "max_tokens": 1000,
+                        "stream": True,
+                    },
+                ) as response:
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                import json as json_module
+                                chunk_data = json_module.loads(data_str)
+                                delta = chunk_data["choices"][0]["delta"]
+                                if "content" in delta:
+                                    yield delta["content"]
+                            except (KeyError, json_module.JSONDecodeError):
+                                continue
+
+        except Exception as e:
+            logger.exception(f"❌ Erreur stream JobyJoba: {e}")
+            yield "Oups, j'ai rencontré un problème technique. 🛠️"
+
     def get_welcome_message(
         self,
         job_title: str,
