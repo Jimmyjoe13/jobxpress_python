@@ -25,9 +25,13 @@ import {
   getApplicationsV2, 
   type ApplicationV2,
   getDashboardStats,
-  type DashboardStats
+  type DashboardStats,
+  getSubscriptionDetails,
+  type SubscriptionDetails
 } from "@/lib/api"
 import { TrackingBoard } from "@/components/dashboard/tracking-board"
+import { QuotaWidget } from "@/components/dashboard/QuotaWidget"
+import { EmptyStateDashboard } from "@/components/dashboard/EmptyStateDashboard"
 
 interface UserData {
   firstName: string
@@ -56,6 +60,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null)
   const [applications, setApplications] = useState<ApplicationV2[]>([])
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -90,14 +95,16 @@ export default function DashboardPage() {
           })
 
           try {
-            const [appRes, statsRes] = await Promise.all([
+            const [appRes, statsRes, subRes] = await Promise.all([
               getApplicationsV2(10),
-              getDashboardStats()
+              getDashboardStats(),
+              getSubscriptionDetails()
             ])
             setApplications(appRes.applications || [])
             setStats(statsRes)
+            setSubscription(subRes)
           } catch (err) {
-            console.error("Error loading V2 applications or stats:", err)
+            console.error("Error loading dashboard data:", err)
             setApplications([])
           }
         } else {
@@ -121,6 +128,15 @@ export default function DashboardPage() {
 
   const firstName = user?.firstName || "Utilisateur"
   const applicationCount = applications.length
+
+  // Checklist progress
+  const checklistItems = [
+    { label: "Remplir son profil", done: !!stats?.checklist.has_profile },
+    { label: "Importer un CV", done: !!stats?.checklist.has_cv },
+    { label: "Lancer une recherche", done: !!stats?.checklist.has_searched },
+  ]
+  const completedCount = checklistItems.filter(i => i.done).length
+  const progressPercent = (completedCount / checklistItems.length) * 100
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -163,6 +179,18 @@ export default function DashboardPage() {
         />
       </motion.div>
 
+      {/* Quota Widgets */}
+      <motion.div variants={itemVariants} className="mb-8">
+        <QuotaWidget 
+          credits={subscription?.credits || 0}
+          maxCredits={subscription?.max_credits || 5}
+          planName={subscription?.plan_name || "FREE"}
+          jobyJobaMessages={subscription?.jobyjoba_messages_limit ? (subscription.jobyjoba_messages_limit - 1) : 0} // Fake current usage for UI demo
+          jobyJobaLimit={subscription?.jobyjoba_messages_limit || 10}
+          isDailyLimit={subscription?.jobyjoba_is_daily_limit || false}
+        />
+      </motion.div>
+
       {/* Quick Actions Grid */}
       <motion.div variants={containerVariants} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {/* New Application Card */}
@@ -171,24 +199,28 @@ export default function DashboardPage() {
           whileHover={{ y: -4, scale: 1.01 }}
           className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-indigo-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/10"
         >
-          <motion.div
-            whileHover={{ scale: 1.05, rotate: 3 }}
-            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/25"
-          >
-            <FileText className="w-7 h-7 text-white" />
-          </motion.div>
-          <h3 className="text-lg font-semibold text-white mb-2">Nouvelle candidature</h3>
-          <p className="text-slate-400 text-sm mb-5">
-            Lancez une nouvelle recherche d&apos;emploi automatisée avec l&apos;IA
+          <div className="flex items-center gap-4 mb-4">
+            <motion.div
+              whileHover={{ scale: 1.05, rotate: 3 }}
+              className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/25"
+            >
+              <FileText className="w-7 h-7 text-white" />
+            </motion.div>
+            <div>
+               <h3 className="text-lg font-semibold text-white">Nouvelle candidature</h3>
+               <p className="text-slate-500 text-[10px] uppercase font-bold tracking-widest leading-none">IA Automatisée</p>
+            </div>
+          </div>
+          <p className="text-slate-400 text-sm mb-6">
+            Lancer une nouvelle recherche d&apos;emploi pilotée par l&apos;IA
           </p>
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.98 }}>
             <Link
               href="/dashboard/apply"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all text-sm group/btn relative overflow-hidden"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all text-sm group/btn relative overflow-hidden w-full justify-center"
             >
-              <span className="relative z-10">Commencer</span>
+              <span className="relative z-10">Démarrer maintenant</span>
               <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform relative z-10" />
-              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700" />
             </Link>
           </motion.div>
         </motion.div>
@@ -200,14 +232,18 @@ export default function DashboardPage() {
           className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/10 flex flex-col justify-between"
         >
           <div>
-            <motion.div
-              whileHover={{ scale: 1.05, rotate: -3 }}
-              className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/25"
-            >
-              <TrendingUp className="w-7 h-7 text-white" />
-            </motion.div>
-            <h3 className="text-lg font-semibold text-white mb-2">Statistiques</h3>
-            <p className="text-slate-400 text-sm mb-4">Suivez vos candidatures</p>
+            <div className="flex items-center gap-4 mb-4">
+              <motion.div
+                whileHover={{ scale: 1.05, rotate: -3 }}
+                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/25"
+              >
+                <TrendingUp className="w-7 h-7 text-white" />
+              </motion.div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Performance</h3>
+                <p className="text-slate-500 text-[10px] uppercase font-bold tracking-widest leading-none">Statut de recherche</p>
+              </div>
+            </div>
           </div>
           
           <div className="flex gap-4">
@@ -215,13 +251,13 @@ export default function DashboardPage() {
               <span className="text-3xl font-bold text-gradient">
                 {stats?.total_applications || 0}
               </span>
-              <span className="text-slate-500 text-sm">candidature{stats?.total_applications && stats.total_applications > 1 ? "s" : ""}</span>
+              <span className="text-slate-500 text-sm italic">Candidatures</span>
             </div>
             <div className="flex flex-col">
               <span className="text-3xl font-bold text-indigo-400">
                 {stats?.total_saved_jobs || 0}
               </span>
-              <span className="text-slate-500 text-sm">favori{stats?.total_saved_jobs && stats.total_saved_jobs > 1 ? "s" : ""}</span>
+              <span className="text-slate-500 text-sm italic">Favoris</span>
             </div>
           </div>
         </motion.div>
@@ -232,43 +268,37 @@ export default function DashboardPage() {
           whileHover={{ y: -4, scale: 1.01 }}
           className="group sm:col-span-2 lg:col-span-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-2xl p-6 hover:border-purple-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/10"
         >
-          <motion.div
-            whileHover={{ scale: 1.05, rotate: 3 }}
-            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4 shadow-lg shadow-purple-500/25"
-          >
-            <CheckCircle2 className="w-7 h-7 text-white" />
-          </motion.div>
-          <h3 className="text-lg font-semibold text-white mb-3">Pour commencer</h3>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              {stats?.checklist.has_profile ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-              ) : (
-                <Circle className="w-5 h-5 text-slate-500 flex-shrink-0" />
-              )}
-              <span className={`text-sm ${stats?.checklist.has_profile ? 'text-slate-300 line-through' : 'text-slate-200'}`}>Remplir son profil</span>
-            </div>
-            <div className="flex items-center gap-3">
-              {stats?.checklist.has_cv ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-              ) : (
-                <Circle className="w-5 h-5 text-slate-500 flex-shrink-0" />
-              )}
-              <span className={`text-sm ${stats?.checklist.has_cv ? 'text-slate-300 line-through' : 'text-slate-200'}`}>Importer un CV</span>
-            </div>
-            <div className="flex items-center gap-3">
-              {stats?.checklist.has_searched ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-              ) : (
-                <Circle className="w-5 h-5 text-slate-500 flex-shrink-0" />
-              )}
-              <span className={`text-sm ${stats?.checklist.has_searched ? 'text-slate-300 line-through' : 'text-slate-200'}`}>Lancer une recherche rapide</span>
-            </div>
+          <div className="flex items-center justify-between mb-2">
+             <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Progression profil</div>
+             <div className="text-[10px] font-bold text-purple-400">{completedCount} / {checklistItems.length}</div>
           </div>
-          {(!stats?.checklist.has_cv || !stats?.checklist.has_profile) && (
-            <div className="mt-5">
-              <Link href="/dashboard/profile" className="text-sm text-purple-400 hover:text-purple-300 font-medium hover:underline inline-flex items-center gap-1.5">
-                Mettre à jour mon profil <ArrowRight className="w-4 h-4" />
+          <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mb-5">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${progressPercent}%` }}
+                className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+              />
+          </div>
+          
+          <div className="space-y-3">
+            {checklistItems.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-3">
+                {item.done ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                ) : (
+                  <Circle className="w-4 h-4 text-slate-600 flex-shrink-0" />
+                )}
+                <span className={`text-[13px] ${item.done ? 'text-slate-500 line-through' : 'text-slate-300'}`}>
+                  {item.label}
+                </span>
+              </div>
+            ))}
+          </div>
+          
+          {progressPercent < 100 && (
+            <div className="mt-5 pt-4 border-t border-white/5">
+              <Link href="/dashboard/profile" className="text-xs text-purple-400 hover:text-purple-300 font-medium hover:underline inline-flex items-center gap-1.5">
+                Compléter mon profil <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
           )}
@@ -312,21 +342,7 @@ export default function DashboardPage() {
               }}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700">
-                <FileText className="w-8 h-8 text-slate-500" />
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Aucune candidature</h3>
-              <p className="text-slate-400 max-w-sm mb-6">
-                Vous n&apos;avez pas encore créé de lettre de motivation avec JobXpress.
-              </p>
-              <Link
-                href="/dashboard/apply"
-                className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5"
-              >
-                Générer ma première candidature
-              </Link>
-            </div>
+            <EmptyStateDashboard />
           )}
         </div>
       </motion.div>
