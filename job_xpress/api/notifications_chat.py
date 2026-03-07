@@ -14,6 +14,7 @@ from core.logging_config import get_logger
 from services.database import db_service
 from services.billing import BillingService
 from services.joby_joba import joby_joba_service
+from services.chat_agent import chat_agent
 
 logger = get_logger()
 
@@ -57,6 +58,10 @@ class ChatResponse(BaseModel):
     response: str
     remaining_messages: int
     session_id: str
+
+
+class GlobalChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
 
 
 class ChatSessionResponse(BaseModel):
@@ -255,6 +260,104 @@ async def accept_jobyjoba_offer(
 # ===========================================
 # CHAT ENDPOINTS
 # ===========================================
+
+@router.get("/chat/proactive")
+async def get_proactive_chat(
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id)
+):
+    """Retourne le message proactif à afficher dans le widget chat."""
+    message = await chat_agent.get_proactive_message(user_id, token)
+    return {"message": message}
+
+@router.get("/chat/global/session")
+async def get_global_session(
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id)
+):
+    """Retourne la session de chat globale active pour l'utilisateur."""
+    admin_client = db_service.admin_client
+    if not admin_client:
+        raise HTTPException(status_code=500, detail="Erreur DB")
+        
+    session_result = admin_client.table("chat_sessions") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .eq("session_type", "global") \
+        .eq("status", "active") \
+        .limit(1).execute()
+        
+    if not session_result.data or len(session_result.data) == 0:
+         return {"messages": []}
+         
+    return {
+        "messages": session_result.data[0].get("messages", []), 
+        "session_id": session_result.data[0]["id"]
+    }
+
+@router.post("/chat/global")
+@limiter.limit(RATE_LIMIT_CHAT)
+async def send_global_chat(
+    request: Request,
+    chat_request: GlobalChatRequest,
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id)
+):
+    """Envoie un message au chatbot global (avec support des outils)."""
+    admin_client = db_service.admin_client
+    if not admin_client:
+        raise HTTPException(status_code=500, detail="Erreur DB")
+
+    # Chercher la session globale active
+    session_result = admin_client.table("chat_sessions")\
+        .select("*")\
+        .eq("user_id", user_id)\
+        .eq("session_type", "global")\
+        .eq("status", "active")\
+        .limit(1).execute()
+
+    if not session_result.data or len(session_result.data) == 0:
+        # Créer une nouvelle session
+        session_result = admin_client.table("chat_sessions").insert({
+            "user_id": user_id,
+            "session_type": "global",
+            "messages": [],
+            "status": "active"
+        }).execute()
+
+    session = session_result.data[0]
+    messages_history = session.get("messages", [])
+
+    # Appel au ChatAgent
+    agent_response = await chat_agent.process_message(
+        user_message=chat_request.message,
+        conversation_history=messages_history,
+        user_id=user_id,
+        token=token
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_messages = messages_history + [
+        {"role": "user", "content": chat_request.message, "timestamp": now},
+        {
+            "role": "assistant", 
+            "content": agent_response["content"], 
+            "timestamp": now, 
+            "quick_replies": agent_response.get("quick_replies", [])
+        }
+    ]
+
+    # Mettre à jour la session
+    admin_client.table("chat_sessions").update({
+        "messages": new_messages,
+        "updated_at": now
+    }).eq("id", session["id"]).execute()
+
+    return {
+        "response": agent_response["content"],
+        "quick_replies": agent_response.get("quick_replies", []),
+        "session_id": session["id"]
+    }
 
 @router.get("/chat/session/{application_id}")
 async def get_chat_session(

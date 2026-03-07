@@ -680,7 +680,50 @@ export async function deleteSearchHistoryItem(historyId: string): Promise<{ stat
 /**
  * Get user's search quota
  */
+export interface SearchQuota {
+  remaining: number
+  max_daily: number
+  reset_in_hours: number
+}
+
 export async function getSearchQuota(): Promise<SearchQuota> {
   return apiRequest<SearchQuota>('/api/v2/search/quota', {}, true)
 }
 
+// --------------------------------------------------------------------------
+// GLOBAL CHAT API
+// --------------------------------------------------------------------------
+
+export interface GlobalChatMessage {
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+  timestamp?: string
+  tool_calls_executed?: any[]
+  quick_replies?: { label: string; action: string }[]
+}
+
+export interface GlobalChatResponse {
+  response: string
+  quick_replies?: { label: string; action: string }[]
+  session_id: string
+}
+
+export interface GlobalChatSession {
+  messages: GlobalChatMessage[]
+  session_id?: string
+}
+
+export async function getProactiveMessage(): Promise<{ message: GlobalChatMessage }> {
+  return apiRequest<{ message: GlobalChatMessage }>('/api/v2/chat/proactive', {}, true)
+}
+
+export async function getGlobalSession(): Promise<GlobalChatSession> {
+  return apiRequest<GlobalChatSession>('/api/v2/chat/global/session', {}, true)
+}
+
+export async function sendGlobalChatMessage(message: string): Promise<GlobalChatResponse> {
+  return apiRequest<GlobalChatResponse>('/api/v2/chat/global', {
+    method: 'POST',
+    body: JSON.stringify({ message })
+  }, true)
+}

@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { CreditsBadge } from "@/components/ui/credits-badge"
 import { NotificationsPopover } from "@/components/ui/notifications-popover"
+import { ChatWidget } from "@/components/ui/chat-widget"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -197,12 +198,15 @@ export default function DashboardLayout({
         </header>
 
         {/* Page Content */}
-        <main className="p-4 sm:p-6 lg:p-8">
+        <main className="p-4 sm:p-6 lg:p-8 relative">
           <div className="max-w-6xl mx-auto">
             {children}
           </div>
         </main>
       </div>
+      
+      {/* Widget Global Chat */}
+      <ChatWidget />
     </div>
   )
 }
