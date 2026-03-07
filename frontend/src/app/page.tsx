@@ -1,21 +1,21 @@
 import { Metadata } from "next"
 import { Navbar, Footer } from "@/components/layout"
-import { HeroSection, FeaturesSection, HowItWorksSection, CtaSection } from "@/components/sections/home"
+import { HeroSection, FeaturesSection, HowItWorksSection, PricingSection, CtaSection } from "@/components/sections/home"
 import StructuredData from "@/components/seo/StructuredData"
 
 // Métadonnées SEO complètes pour la landing page
 export const metadata: Metadata = {
   title: "jobXpress | Boostez votre Recherche d'Emploi avec l'IA",
   description:
-    "Automatisez vos candidatures, générez des lettres de motivation personnalisées et trouvez le job de vos rêves 10x plus vite avec notre assistant IA.",
+    "Automatisez vos candidatures, générez des lettres de motivation personnalisées et trouvez le job de vos rêves 10x plus vite avec notre assistant IA JobyJoba.",
   keywords: [
     "IA emploi",
     "recherche job",
     "lettre de motivation IA",
     "assistant carrière",
     "automatisation candidature",
-    "lettre de motivation",
-    "trouver un travail rapidement",
+    "job search AI",
+    "trouver un travail",
     "deepseek",
   ],
   openGraph: {
@@ -47,14 +47,35 @@ export const metadata: Metadata = {
 }
 
 export default function Home() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "jobXpress",
+    "operatingSystem": "Web",
+    "applicationCategory": "BusinessApplication",
+    "description": "Assistant de recherche d'emploi propulsé par l'IA pour automatiser les candidatures et optimiser les CV.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "EUR"
+    }
+  }
+
   return (
-    <div className="min-h-screen mesh-gradient">
+    <div className="min-h-screen mesh-gradient relative overflow-hidden">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <StructuredData />
       <Navbar />
-      <HeroSection />
-      <FeaturesSection />
-      <HowItWorksSection />
-      <CtaSection />
+      <main>
+        <HeroSection />
+        <FeaturesSection />
+        <HowItWorksSection />
+        <PricingSection />
+        <CtaSection />
+      </main>
       <Footer />
     </div>
   )

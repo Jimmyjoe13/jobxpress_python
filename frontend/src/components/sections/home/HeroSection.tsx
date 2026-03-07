@@ -1,154 +1,229 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { motion } from "framer-motion"
-import { Zap, ArrowRight, CheckCircle, Shield, Clock, Play } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Zap, ArrowRight, CheckCircle, Shield, Clock, Play, Search, Sparkles } from "lucide-react"
 import { ParticlesBackground, FloatingOrbs } from "@/components/ui/particles"
 
 const trustIndicators = [
-  { icon: CheckCircle, text: "Gratuit pour commencer" },
-  { icon: Shield, text: "Données sécurisées" },
-  { icon: Clock, text: "Résultats en 5 min" },
+  { icon: CheckCircle, text: "Sans engagement" },
+  { icon: Shield, text: "Données chiffrées" },
+  { icon: Clock, text: "Matching en 30s" },
 ]
 
 const stats = [
-  { value: "10K+", label: "Candidatures générées" },
-  { value: "85%", label: "Taux de matching" },
-  { value: "< 5min", label: "Temps moyen" },
-  { value: "4.9/5", label: "Satisfaction" },
+  { value: "15k+", label: "Candidatures IA" },
+  { value: "92%", label: "Satisfaction" },
+  { value: "4.9/5", label: "Note moyenne" },
+  { value: "24/7", label: "Assistant Joby" },
 ]
 
-import type { Variants } from "framer-motion"
-
-// Animation variants
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.15,
-      delayChildren: 0.2,
-    },
-  },
-}
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, type: "tween" },
-  },
-}
+const searchPlaceholders = [
+  "Développeur Fullstack React...",
+  "Product Manager Sénior...",
+  "Data Scientist Python...",
+  "Commercial B2B SaaS...",
+]
 
 export function HeroSection() {
+  const [placeholderIndex, setPlaceholderIndex] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % searchPlaceholders.length)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
-    <section className="relative pt-32 pb-20 md:pt-44 md:pb-32 overflow-hidden">
-      {/* Animated Background */}
+    <section className="relative pt-32 pb-20 md:pt-48 md:pb-40 overflow-hidden">
+      {/* Background Elements */}
       <FloatingOrbs />
-      <ParticlesBackground count={30} />
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
-      >
-        <div className="text-center max-w-4xl mx-auto">
-          {/* Badge */}
+      <ParticlesBackground count={40} />
+      
+      {/* Radial Gradient overlay for depth */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(99,102,241,0.05),transparent_70%)] pointer-events-none" />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-2 gap-16 items-center">
+          
+          {/* Left Column: Content */}
           <motion.div
-            variants={itemVariants}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/30 mb-8"
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
           >
-            <Zap className="w-4 h-4 text-yellow-400" />
-            <span className="text-sm text-slate-300">Propulsé par l&apos;Intelligence Artificielle</span>
-          </motion.div>
-
-          {/* Main Heading */}
-          <motion.h1
-            variants={itemVariants}
-            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight"
-          >
-            <span className="text-white">Votre recherche d&apos;emploi,</span>
-            <br />
-            <span className="text-gradient-animated">automatisée.</span>
-          </motion.h1>
-
-          {/* Subheading */}
-          <motion.p
-            variants={itemVariants}
-            className="text-lg sm:text-xl text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed"
-          >
-            JobXpress trouve les meilleures offres, analyse leur pertinence et génère des lettres de motivation
-            personnalisées.{" "}
-            <span className="text-white font-semibold">En quelques minutes.</span>
-          </motion.p>
-
-          {/* CTA Buttons */}
-          <motion.div
-            variants={itemVariants}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
-          >
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.98 }}>
-              <Link
-                href="/dashboard/apply"
-                className="group w-full sm:w-auto bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 text-white px-8 py-4 rounded-full text-lg font-semibold shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all flex items-center justify-center gap-2 relative overflow-hidden"
-              >
-                <span className="relative z-10">Lancer ma recherche</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform relative z-10" />
-                {/* Shine effect on hover */}
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-              </Link>
-            </motion.div>
-            <motion.a
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.98 }}
-              href="#how-it-works"
-              className="group w-full sm:w-auto px-8 py-4 rounded-full text-lg font-semibold text-white border border-slate-600 hover:border-slate-500 hover:bg-slate-800/50 transition-all flex items-center justify-center gap-2"
+            {/* Badge */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/30 mb-8 backdrop-blur-md"
             >
-              <Play className="w-5 h-5" />
-              Voir la démo
-            </motion.a>
+              <Zap className="w-4 h-4 text-yellow-400" />
+              <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest">Nouvelle Version V2 - IA Hybride</span>
+            </motion.div>
+
+            <h1 className="text-5xl md:text-7xl font-bold mb-8 leading-[1.1] tracking-tight text-white">
+              Ne cherchez plus, <br />
+              <span className="text-gradient-animated">soyez trouvé.</span>
+            </h1>
+
+            <p className="text-xl text-slate-400 mb-10 max-w-xl leading-relaxed">
+              Le premier assistant de carrière piloté par IA qui <span className="text-white font-medium">automatise le sourcing</span>, 
+              l'analyse et la candidature de bout en bout. 
+              <span className="text-indigo-400"> 10x plus de résultats, 0 fatigue.</span>
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center gap-5 mb-12">
+              <Link
+                href="/register"
+                className="group relative w-full sm:w-auto bg-white text-slate-950 px-8 py-4 rounded-2xl text-lg font-bold hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
+              >
+                Commencer gratuitement
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
+              
+              <Link
+                href="#pricing"
+                className="w-full sm:w-auto px-8 py-4 rounded-2xl text-lg font-semibold text-white border border-slate-700 hover:border-indigo-400/50 hover:bg-indigo-500/5 transition-all text-center"
+              >
+                Voir les tarifs
+              </Link>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-6">
+              {trustIndicators.map((item, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-slate-500">
+                  <item.icon className="w-4 h-4 text-indigo-500" />
+                  <span>{item.text}</span>
+                </div>
+              ))}
+            </div>
           </motion.div>
 
-          {/* Trust Indicators */}
+          {/* Right Column: Visual Interaction */}
           <motion.div
-            variants={itemVariants}
-            className="flex flex-wrap items-center justify-center gap-8 text-sm text-slate-400"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1, delay: 0.2 }}
+            className="relative lg:block"
           >
-            {trustIndicators.map((item, i) => (
-              <motion.div
-                key={i}
-                whileHover={{ scale: 1.05, color: "#fff" }}
-                className="flex items-center gap-2 cursor-default"
-              >
-                <item.icon className="w-5 h-5 text-emerald-400" />
-                <span>{item.text}</span>
-              </motion.div>
-            ))}
+            {/* Main Interactive Card */}
+            <div className="glass rounded-[2rem] p-1 border border-white/5 shadow-2xl overflow-hidden">
+               <div className="bg-slate-950/40 rounded-[1.8rem] p-8 md:p-10">
+                  {/* Pseudo Browser Header */}
+                  <div className="flex items-center gap-2 mb-8">
+                    <div className="flex gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-red-500/50" />
+                      <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
+                      <div className="w-3 h-3 rounded-full bg-green-500/50" />
+                    </div>
+                    <div className="ml-4 flex-grow h-7 bg-slate-900/50 rounded-lg border border-white/5 flex items-center px-3">
+                       <span className="text-[10px] text-slate-600 truncate">jobxpress.fr/ai-search-v2</span>
+                    </div>
+                  </div>
+
+                  {/* AI Search Animation UI */}
+                  <div className="space-y-6">
+                    <div className="relative group">
+                      <div className="absolute inset-0 bg-indigo-500/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="relative bg-slate-900/80 border border-white/10 rounded-2xl p-6">
+                         <div className="flex items-center gap-4 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
+                               <Search className="w-5 h-5 text-slate-900" />
+                            </div>
+                            <div className="flex-grow">
+                               <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">IA en action</div>
+                               <div className="h-6 flex items-center text-white font-medium overflow-hidden">
+                                  <AnimatePresence mode="wait">
+                                    <motion.span
+                                      key={placeholderIndex}
+                                      initial={{ y: 20, opacity: 0 }}
+                                      animate={{ y: 0, opacity: 1 }}
+                                      exit={{ y: -20, opacity: 0 }}
+                                      className="text-indigo-300"
+                                    >
+                                      {searchPlaceholders[placeholderIndex]}
+                                    </motion.span>
+                                  </AnimatePresence>
+                               </div>
+                            </div>
+                         </div>
+                         <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                            <motion.div 
+                              animate={{ x: ["-100%", "100%"] }}
+                              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                              className="h-full w-1/3 bg-gradient-to-r from-transparent via-indigo-500 to-transparent" 
+                            />
+                         </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <motion.div 
+                         initial={{ opacity: 0, y: 10 }}
+                         animate={{ opacity: 1, y: 0 }}
+                         transition={{ delay: 1 }}
+                         className="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl"
+                      >
+                         <div className="text-[10px] text-emerald-400 font-bold mb-1 uppercase">Score Match</div>
+                         <div className="text-2xl font-bold text-white leading-none">98%</div>
+                      </motion.div>
+                      <motion.div 
+                         initial={{ opacity: 0, y: 10 }}
+                         animate={{ opacity: 1, y: 0 }}
+                         transition={{ delay: 1.2 }}
+                         className="bg-indigo-500/5 border border-indigo-500/20 p-4 rounded-xl"
+                      >
+                         <div className="text-[10px] text-indigo-400 font-bold mb-1 uppercase">Analyse CV</div>
+                         <div className="text-sm font-medium text-white">Optimal</div>
+                      </motion.div>
+                    </div>
+
+                    <motion.div 
+                       initial={{ opacity: 0 }}
+                       animate={{ opacity: 1 }}
+                       transition={{ delay: 1.5 }}
+                       className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border border-white/5"
+                    >
+                       <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                          <Sparkles className="w-4 h-4 text-indigo-400" />
+                       </div>
+                       <div className="text-xs text-slate-400 italic">
+                          &quot;JobyJoba a identifié 4 compétences clés manquantes...&quot;
+                       </div>
+                    </motion.div>
+                  </div>
+               </div>
+            </div>
+
+            {/* Decorative Floating Elements */}
+            <motion.div 
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute -top-6 -right-6 w-24 h-24 bg-purple-500/20 rounded-full blur-3xl" 
+            />
+            <motion.div 
+              animate={{ y: [0, 10, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+              className="absolute -bottom-10 -left-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl" 
+            />
           </motion.div>
+
         </div>
 
-        {/* Stats */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto"
-        >
-          {stats.map((stat, i) => (
-            <motion.div
-              key={i}
-              variants={itemVariants}
-              whileHover={{ y: -5, scale: 1.02 }}
-              className="stat-card cursor-default"
-            >
-              <div className="text-2xl sm:text-3xl font-bold text-gradient mb-1">{stat.value}</div>
-              <div className="text-sm text-slate-400">{stat.label}</div>
-            </motion.div>
-          ))}
-        </motion.div>
-      </motion.div>
+        {/* Bottom Stats */}
+        <div className="mt-24 pt-10 border-t border-white/5 grid grid-cols-2 md:grid-cols-4 gap-8">
+            {stats.map((stat, i) => (
+              <div key={i} className="text-center md:text-left">
+                <div className="text-3xl font-bold text-white mb-1">{stat.value}</div>
+                <div className="text-sm text-slate-500 tracking-wide font-medium">{stat.label}</div>
+              </div>
+            ))}
+        </div>
+      </div>
     </section>
   )
 }
