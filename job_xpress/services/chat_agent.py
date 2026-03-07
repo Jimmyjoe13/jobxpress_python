@@ -5,9 +5,10 @@ from datetime import datetime, timezone
 import logging
 
 from core.config import settings
-from services.search_engine_v2 import search_engine_v2
+from services.search_engine_v2 import create_search_engine_v2
 from services.database import db_service
 
+search_engine_v2 = create_search_engine_v2()
 logger = logging.getLogger(__name__)
 
 AGENT_SYSTEM_PROMPT = """Tu es l'assistant IA de JobXpress, conçu pour accompagner les chercheurs d'emploi de manière proactive.
