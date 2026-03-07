@@ -473,3 +473,132 @@ export async function getSubscriptionDetails(): Promise<SubscriptionDetails> {
   return apiRequest<SubscriptionDetails>('/api/v2/subscription', {}, true)
 }
 
+// ============================================
+// API V2 - QUICK SEARCH & FAVORITES
+// ============================================
+
+export interface QuickSearchRequest {
+  job_title: string
+  location?: string
+  contract_type?: string
+  experience_level?: string
+  work_type?: string
+  filters?: JobFilters
+}
+
+export interface QuickSearchResponse {
+  jobs: JobResultItem[]
+  total_found: number
+  free_searches_remaining: number
+  used_credit: boolean
+  message: string
+}
+
+export interface SaveJobRequest {
+  job_data: JobResultItem
+  notes?: string
+  source?: string
+}
+
+export interface SavedJobResponse {
+  id: string
+  job_data: JobResultItem
+  notes?: string
+  source: string
+  created_at: string
+}
+
+export interface SearchHistoryItem {
+  id: string
+  query_params: Record<string, any>
+  results_count: number
+  created_at: string
+}
+
+export interface SearchQuota {
+  plan: string
+  searches_unlimited: boolean
+  free_searches_remaining: number
+  free_searches_total?: number
+  free_searches_used?: number
+  credits: number
+  reset_at: string | null
+}
+
+/**
+ * Execute a quick search
+ */
+export async function quickSearch(data: QuickSearchRequest): Promise<QuickSearchResponse> {
+  return apiRequest<QuickSearchResponse>('/api/v2/search/quick', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...data,
+      location: data.location || "France",
+      contract_type: data.contract_type || "CDI",
+      work_type: data.work_type || "Tous",
+      experience_level: data.experience_level || "Non spécifié"
+    })
+  }, true)
+}
+
+/**
+ * Save a job to favorites
+ */
+export async function saveJob(data: SaveJobRequest): Promise<SavedJobResponse> {
+  return apiRequest<SavedJobResponse>('/api/v2/jobs/save', {
+    method: 'POST',
+    body: JSON.stringify({
+      source: "search",
+      ...data
+    })
+  }, true)
+}
+
+/**
+ * Get all saved jobs
+ */
+export async function getSavedJobs(limit: number = 50): Promise<{ count: number; saved_jobs: SavedJobResponse[] }> {
+  return apiRequest(`/api/v2/jobs/saved?limit=${limit}`, {}, true)
+}
+
+/**
+ * Update notes on a saved job
+ */
+export async function updateSavedJobNotes(jobId: string, notes: string): Promise<{ status: string; id: string }> {
+  return apiRequest(`/api/v2/jobs/saved/${jobId}?notes=${encodeURIComponent(notes)}`, {
+    method: 'PUT'
+  }, true)
+}
+
+/**
+ * Delete a saved job
+ */
+export async function deleteSavedJob(jobId: string): Promise<{ status: string; id: string }> {
+  return apiRequest(`/api/v2/jobs/saved/${jobId}`, {
+    method: 'DELETE'
+  }, true)
+}
+
+/**
+ * Get user's search history
+ */
+export async function getSearchHistory(limit: number = 20): Promise<{ count: number; history: SearchHistoryItem[] }> {
+  return apiRequest(`/api/v2/search/history?limit=${limit}`, {}, true)
+}
+
+/**
+ * Delete a search history item
+ */
+export async function deleteSearchHistoryItem(historyId: string): Promise<{ status: string; id: string }> {
+  return apiRequest(`/api/v2/search/history/${historyId}`, {
+    method: 'DELETE'
+  }, true)
+}
+
+/**
+ * Get user's search quota
+ */
+export async function getSearchQuota(): Promise<SearchQuota> {
+  return apiRequest<SearchQuota>('/api/v2/search/quota', {}, true)
+}
+

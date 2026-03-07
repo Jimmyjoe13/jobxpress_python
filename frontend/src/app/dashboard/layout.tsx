@@ -13,13 +13,17 @@ import {
   X,
   User,
   ChevronRight,
-  CreditCard
+  CreditCard,
+  Search,
+  Bookmark
 } from "lucide-react"
 import { CreditsBadge } from "@/components/ui/credits-badge"
 import { NotificationsPopover } from "@/components/ui/notifications-popover"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Recherche d'offres", href: "/dashboard/search", icon: Search },
+  { name: "Offres sauvegardées", href: "/dashboard/search/saved", icon: Bookmark },
   { name: "Nouvelle candidature", href: "/dashboard/apply", icon: FileText },
   { name: "Mon profil", href: "/dashboard/profile", icon: User },
   { name: "Abonnement", href: "/dashboard/subscription", icon: CreditCard },
