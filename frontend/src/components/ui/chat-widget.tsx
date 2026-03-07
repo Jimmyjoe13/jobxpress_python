@@ -74,7 +74,16 @@ export function ChatWidget() {
       const session = await getGlobalSession()
       
       if (session.messages && session.messages.length > 0) {
-        setMessages(session.messages)
+        // Restaurer le contexte des outils pour le dernier message assistant
+        const updatedMessages = [...session.messages]
+        const lastIndex = updatedMessages.length - 1
+        if (updatedMessages[lastIndex].role === 'assistant' && session.tool_calls_executed) {
+          updatedMessages[lastIndex] = {
+            ...updatedMessages[lastIndex],
+            tool_calls_executed: session.tool_calls_executed
+          }
+        }
+        setMessages(updatedMessages)
       } else {
         // Aucune session, récupérer le message proactif
         const { message } = await getProactiveMessage()

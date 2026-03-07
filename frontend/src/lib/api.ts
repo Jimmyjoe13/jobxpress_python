@@ -711,6 +711,7 @@ export interface GlobalChatResponse {
 
 export interface GlobalChatSession {
   messages: GlobalChatMessage[]
+  tool_calls_executed?: any[]
   session_id?: string
 }
 

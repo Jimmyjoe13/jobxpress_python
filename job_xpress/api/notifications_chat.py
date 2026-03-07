@@ -292,6 +292,7 @@ async def get_global_session(
          
     return {
         "messages": session_result.data[0].get("messages", []), 
+        "tool_calls_executed": session_result.data[0].get("tool_calls_executed", []),
         "session_id": session_result.data[0]["id"]
     }
 
