@@ -340,6 +340,41 @@ async def get_global_session(
     }
 
 
+@router.delete("/chat/global/session")
+async def clear_global_session(
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Efface l'historique de la session globale (remet les messages à zéro)."""
+    admin_client = db_service.admin_client
+    if not admin_client:
+        raise HTTPException(status_code=500, detail="Erreur DB")
+
+    session_result = (
+        admin_client.table("chat_sessions")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("session_type", "global")
+        .eq("status", "active")
+        .limit(1)
+        .execute()
+    )
+
+    if not session_result.data or len(session_result.data) == 0:
+        return {"status": "success", "message": "Aucune session à effacer."}
+
+    session_id = session_result.data[0]["id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    admin_client.table("chat_sessions").update({
+        "messages": [],
+        "tool_calls_executed": [],
+        "updated_at": now
+    }).eq("id", session_id).execute()
+
+    return {"status": "success", "message": "Historique effacé avec succès."}
+
+
 @router.post("/chat/global")
 @limiter.limit(RATE_LIMIT_CHAT)
 async def send_global_chat(

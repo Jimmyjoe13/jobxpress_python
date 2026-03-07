@@ -723,6 +723,13 @@ export async function getGlobalSession(): Promise<GlobalChatSession> {
   return apiRequest<GlobalChatSession>('/api/v2/chat/global/session', {}, true)
 }
 
+export async function clearGlobalSession(): Promise<{ status: string; message: string }> {
+  return apiRequest<{ status: string; message: string }>('/api/v2/chat/global/session', {
+    method: 'DELETE'
+  }, true)
+}
+
+
 export async function sendGlobalChatMessage(message: string): Promise<GlobalChatResponse> {
   return apiRequest<GlobalChatResponse>('/api/v2/chat/global', {
     method: 'POST',

@@ -14,14 +14,15 @@ import {
   Search,
   FileText,
   Zap,
+  Trash2,
   ArrowRight
 } from "lucide-react"
 import { 
   GlobalChatMessage, 
   getProactiveMessage, 
   getGlobalSession, 
-  sendGlobalChatMessage,
-  sendGlobalChatMessageStream 
+  sendGlobalChatMessageStream,
+  clearGlobalSession
 } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -39,6 +40,7 @@ export function ChatWidget() {
   const [isLoading, setIsLoading] = useState(false)
   const [hasInit, setHasInit] = useState(false)
   const [showNotification, setShowNotification] = useState(true)
+  const [isClearing, setIsClearing] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const pathname = usePathname()
@@ -95,6 +97,19 @@ export function ChatWidget() {
       console.error("Erreur initialisation chat:", error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleClearChat = async () => {
+    try {
+      setIsClearing(true)
+      await clearGlobalSession()
+      const { message } = await getProactiveMessage()
+      setMessages([message])
+    } catch (error) {
+      console.error("Erreur lors de l'effacement:", error)
+    } finally {
+      setIsClearing(false)
     }
   }
 
@@ -217,12 +232,22 @@ export function ChatWidget() {
                   </div>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="p-2 hover:bg-white/20 rounded-xl transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={handleClearChat}
+                  disabled={isClearing || messages.length <= 1}
+                  className="p-2 hover:bg-white/20 text-white/80 hover:text-white rounded-xl transition-all disabled:opacity-50"
+                  title="Effacer la conversation"
+                >
+                  {isClearing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                </button>
+                <button 
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 hover:bg-white/20 text-white/80 hover:text-white rounded-xl transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Messages Area */}
