@@ -25,10 +25,11 @@ import {
   XCircle,
   GripHorizontal,
   Sparkles,
-  Loader2
+  Loader2,
+  Trash2
 } from "lucide-react"
 import type { ApplicationV2, TrackingStatus } from "@/lib/api"
-import { updateTrackingStatus } from "@/lib/api"
+import { updateTrackingStatus, deleteApplicationTracker } from "@/lib/api"
 import { useToast } from "@/components/ui/toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
@@ -116,12 +117,14 @@ function DraggableCard({
   app, 
   column,
   updatingId, 
-  handleStatusChange 
+  handleStatusChange,
+  onDeleteClick
 }: { 
   app: ApplicationV2, 
   column: typeof COLUMNS[0],
   updatingId: string | null,
-  handleStatusChange: (id: string, st: TrackingStatus) => void 
+  handleStatusChange: (id: string, st: TrackingStatus) => void,
+  onDeleteClick: () => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: app.id,
@@ -183,6 +186,14 @@ function DraggableCard({
                     {c.label}
                   </DropdownMenuItem>
                 ))}
+                <div className="h-px bg-white/10 my-1 mx-2" />
+                <DropdownMenuItem 
+                  onClick={() => onDeleteClick()}
+                  className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer flex items-center gap-3 rounded-lg"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Supprimer
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -260,6 +271,9 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
   const [localApps, setLocalApps] = useState<ApplicationV2[]>(applications)
   const [activeApp, setActiveApp] = useState<ApplicationV2 | null>(null)
 
+  const [appToDelete, setAppToDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
   // Sensors configuration (Desktop: distance 8px / Mobile: long press 250ms)
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -291,6 +305,23 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
       showToast(message, "error")
     } finally {
       setUpdatingId(null)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!appToDelete) return
+    setIsDeleting(true)
+    try {
+      await deleteApplicationTracker(appToDelete)
+      showToast("Candidature supprimée de votre suivi", "success")
+      setLocalApps(prev => prev.filter(app => app.id !== appToDelete))
+      onUpdate()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Impossible de supprimer la carte."
+      showToast(message, "error")
+    } finally {
+      setIsDeleting(false)
+      setAppToDelete(null)
     }
   }
 
@@ -415,6 +446,7 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
                   column={column} 
                   updatingId={updatingId}
                   handleStatusChange={handleStatusChange} 
+                  onDeleteClick={() => setAppToDelete(app.id)}
                 />
               ))}
             </DroppableColumn>
@@ -425,6 +457,52 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
       <DragOverlay>
         {activeApp && activeColumn ? <CardPreview app={activeApp} column={activeColumn} /> : null}
       </DragOverlay>
+
+      <AnimatePresence>
+        {appToDelete && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isDeleting && setAppToDelete(null)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 cursor-pointer"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-sm"
+            >
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl">
+                <h2 className="text-xl font-bold text-white mb-2">
+                  Supprimer la carte
+                </h2>
+                <p className="text-slate-400 mb-6 font-normal text-sm">
+                  Voulez-vous vraiment supprimer cette carte ? Cette action est définitive.
+                </p>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setAppToDelete(null)}
+                    disabled={isDeleting}
+                    className="px-4 py-2 border border-slate-700 hover:bg-slate-800 text-slate-300 rounded-xl transition-colors disabled:opacity-50 text-sm font-semibold"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50 text-sm font-semibold"
+                  >
+                    {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    Supprimer
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </DndContext>
   )
 }

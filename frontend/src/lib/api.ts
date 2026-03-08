@@ -662,6 +662,15 @@ export async function addTrackingNote(appId: string, note: string): Promise<{ st
 }
 
 /**
+ * Delete an application from the tracking board
+ */
+export async function deleteApplicationTracker(appId: string): Promise<{ status: string; id: string }> {
+  return apiRequest<{ status: string; id: string }>(`/api/v2/applications/${appId}`, {
+    method: 'DELETE'
+  }, true)
+}
+
+/**
  * Get user's search history
  */
 export async function getSearchHistory(limit: number = 20): Promise<{ count: number; history: SearchHistoryItem[] }> {
