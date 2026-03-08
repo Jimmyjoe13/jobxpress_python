@@ -58,10 +58,9 @@ class JobyJobaService:
     Service de chat IA contextuel pour la préparation aux entretiens.
     """
 
-    API_URL = "https://api.deepseek.com/v1/chat/completions"
-
     def __init__(self):
-        self.api_key = settings.DEEPSEEK_API_KEY
+        from services.llm_providers.openai_provider import OpenAIProvider
+        self.provider = OpenAIProvider()
 
     def build_system_prompt(
         self,
@@ -103,8 +102,8 @@ class JobyJobaService:
         Returns:
             Réponse de JobyJoba
         """
-        if not self.api_key:
-            logger.warning("⚠️ Clé API DeepSeek manquante")
+        if not self.provider.api_key:
+            logger.warning("⚠️ Clé API LLM manquante")
             return "Je suis temporairement indisponible. Réessaie plus tard ! 🔧"
 
         try:
@@ -131,34 +130,16 @@ class JobyJobaService:
             # Ajouter le nouveau message
             messages.append({"role": "user", "content": user_message})
 
-            # Appel API DeepSeek avec httpx
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    self.API_URL,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": "deepseek-chat",
-                        "messages": messages,
-                        "temperature": 0.7,
-                        "max_tokens": 1000,
-                        "stream": False,
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
+            assistant_response = await self.provider.chat(
+                messages=messages,
+                model=settings.OPENAI_MODEL_MAIN,
+                temperature=0.7,
+                max_tokens=1000,
+                timeout=30.0
+            )
 
-            if data and "choices" in data:
-                assistant_response = data["choices"][0]["message"]["content"]
-                logger.info(f"💬 JobyJoba a répondu ({len(assistant_response)} chars)")
-                return assistant_response
-            else:
-                logger.warning(f"⚠️ Réponse API invalide: {data}")
-                return (
-                    "Oups, j'ai eu un petit souci technique. Reformule ta question ! 🔄"
-                )
+            logger.info(f"💬 JobyJoba a répondu ({len(assistant_response)} chars)")
+            return assistant_response
 
         except Exception as e:
             logger.exception(f"❌ Erreur JobyJoba: {e}")
@@ -174,7 +155,7 @@ class JobyJobaService:
         """
         Générateur asynchrone pour streamer la réponse de JobyJoba.
         """
-        if not self.api_key:
+        if not self.provider.api_key:
             yield "Je suis temporairement indisponible. 🔧"
             return
 
@@ -196,35 +177,14 @@ class JobyJobaService:
                 )
             messages.append({"role": "user", "content": user_message})
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                async with client.stream(
-                    "POST",
-                    self.API_URL,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": "deepseek-chat",
-                        "messages": messages,
-                        "temperature": 0.7,
-                        "max_tokens": 1000,
-                        "stream": True,
-                    },
-                ) as response:
-                    async for line in response.aiter_lines():
-                        if line.startswith("data: "):
-                            data_str = line[6:]
-                            if data_str == "[DONE]":
-                                break
-                            try:
-                                import json as json_module
-                                chunk_data = json_module.loads(data_str)
-                                delta = chunk_data["choices"][0]["delta"]
-                                if "content" in delta:
-                                    yield delta["content"]
-                            except (KeyError, json_module.JSONDecodeError):
-                                continue
+            async for chunk in self.provider.stream_chat(
+                messages=messages,
+                model=settings.OPENAI_MODEL_MAIN,
+                temperature=0.7,
+                max_tokens=1000,
+                timeout=30.0
+            ):
+                yield chunk
 
         except Exception as e:
             logger.exception(f"❌ Erreur stream JobyJoba: {e}")

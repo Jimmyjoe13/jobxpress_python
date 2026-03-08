@@ -21,8 +21,16 @@ class Settings(BaseSettings):
     # SerpAPI (Google Jobs)
     SERPAPI_KEY: str = ""
 
-    # IA & Search
+    # IA & LLM Provider Settings
+    LLM_PROVIDER: str = "openai"  # "openai" ou "deepseek"
     DEEPSEEK_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL_MAIN: str = "gpt-5-mini"  # scoring, standard letter, chat
+    OPENAI_MODEL_PREMIUM: str = "gpt-5"    # premium, retry qualité
+    OPENAI_MODEL_FAST: str = "gpt-5-nano"  # pre-filtre, normalisation
+
+    # Search & Extraction
     MISTRAL_API_KEY: str = ""
     RAPIDAPI_KEY: str = ""
 

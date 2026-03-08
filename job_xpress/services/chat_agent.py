@@ -42,10 +42,9 @@ N'invente **jamais** de fausses offres. Utilise toujours l'outil `search_jobs` p
 class ChatAgent:
     """Agent IA global avec capacités de router des actions / function calling."""
 
-    API_URL = "https://api.deepseek.com/v1/chat/completions"
-
     def __init__(self):
-        self.api_key = settings.DEEPSEEK_API_KEY
+        from services.llm_providers.openai_provider import OpenAIProvider
+        self.provider = OpenAIProvider()
 
         self.tools = [
             {
@@ -176,7 +175,7 @@ class ChatAgent:
         """
         Gère un message utilisateur, en utilisant éventuellement des outils.
         """
-        if not self.api_key:
+        if not self.provider.api_key:
             return {
                 "role": "assistant",
                 "content": "Je suis en pause (API Key manquante). 🛠️",
@@ -202,26 +201,14 @@ class ChatAgent:
             messages.append({"role": "user", "content": user_message})
 
             # 2. Premier appel au LLM
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    self.API_URL,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": "deepseek-chat",
-                        "messages": messages,
-                        "tools": self.tools,
-                        "tool_choice": "auto",
-                        "temperature": 0.7,
-                        "max_tokens": 1000,
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
-
-            response_message = data["choices"][0]["message"]
+            response_message = await self.provider.chat_with_tools(
+                messages=messages,
+                tools=self.tools,
+                model=settings.OPENAI_MODEL_MAIN,
+                temperature=0.7,
+                max_tokens=1000,
+                timeout=30.0
+            )
 
             # 3. Vérifier s'il y a un appel d'outil
             if response_message.get("tool_calls"):
@@ -250,24 +237,13 @@ class ChatAgent:
                     )
 
                 # 4. Deuxième appel au LLM avec le résultat de l'outil
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    second_response = await client.post(
-                        self.API_URL,
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": "deepseek-chat",
-                            "messages": messages,
-                            "temperature": 0.7,
-                            "max_tokens": 1000,
-                        },
-                    )
-                    second_response.raise_for_status()
-                    second_data = second_response.json()
-
-                final_content = second_data["choices"][0]["message"]["content"]
+                final_content = await self.provider.chat(
+                    messages=messages,
+                    model=settings.OPENAI_MODEL_MAIN,
+                    temperature=0.7,
+                    max_tokens=1000,
+                    timeout=30.0
+                )
 
                 # Si la recherche a retourné des offres, ajouter des quick replies
                 quick_replies = []
@@ -309,7 +285,7 @@ class ChatAgent:
         """
         Générateur asynchrone pour streamer la réponse au message.
         """
-        if not self.api_key:
+        if not self.provider.api_key:
             yield "Je suis en pause (API Key manquante). 🛠️"
             return
 
@@ -329,27 +305,14 @@ class ChatAgent:
             messages.append({"role": "user", "content": user_message})
 
             # 2. Appel initial (non-streamé pour gérer les outils facilement)
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    self.API_URL,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": "deepseek-chat",
-                        "messages": messages,
-                        "tools": self.tools,
-                        "tool_choice": "auto",
-                        "temperature": 0.7,
-                        "max_tokens": 1000,
-                        "stream": False,
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
-
-            response_message = data["choices"][0]["message"]
+            response_message = await self.provider.chat_with_tools(
+                messages=messages,
+                tools=self.tools,
+                model=settings.OPENAI_MODEL_MAIN,
+                temperature=0.7,
+                max_tokens=1000,
+                timeout=30.0
+            )
 
             # 3. Exécution d'outils
             if response_message.get("tool_calls"):
@@ -368,37 +331,18 @@ class ChatAgent:
                     })
 
                 # Deuxième appel AVEC streaming
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    async with client.stream(
-                        "POST",
-                        self.API_URL,
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": "deepseek-chat",
-                            "messages": messages,
-                            "temperature": 0.7,
-                            "max_tokens": 1000,
-                            "stream": True,
-                        },
-                    ) as stream_resp:
-                        async for line in stream_resp.aiter_lines():
-                            if line.startswith("data: "):
-                                data_str = line[6:]
-                                if data_str == "[DONE]":
-                                    break
-                                try:
-                                    chunk_data = json.loads(data_str)
-                                    delta = chunk_data["choices"][0]["delta"]
-                                    if "content" in delta:
-                                        yield delta["content"]
-                                except (KeyError, json.JSONDecodeError):
-                                    continue
+                async for chunk in self.provider.stream_chat(
+                    messages=messages,
+                    model=settings.OPENAI_MODEL_MAIN,
+                    temperature=0.7,
+                    max_tokens=1000,
+                    timeout=30.0
+                ):
+                    yield chunk
             else:
                 # Pas de tool, on simule le streaming du contenu
                 content = response_message.get("content", "")
+
                 import asyncio
                 # Chunkage pour l'effet "frappe"
                 words = content.split(' ')

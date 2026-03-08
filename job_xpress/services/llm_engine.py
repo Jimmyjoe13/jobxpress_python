@@ -19,10 +19,9 @@ deepseek_circuit = CircuitBreaker(failure_threshold=3, recovery_timeout=180)
 
 
 class LLMEngine:
-    API_URL = "https://api.deepseek.com/v1/chat/completions"
-
     def __init__(self):
-        self.api_key = settings.DEEPSEEK_API_KEY
+        from services.llm_providers.openai_provider import OpenAIProvider
+        self.provider = OpenAIProvider()
 
     async def analyze_offers_parallel(
         self, candidate: CandidateProfile, offers: List[JobOffer]
@@ -89,72 +88,57 @@ class LLMEngine:
         }}
         """
 
-        if not self.api_key:
+        if not self.provider.api_key:
             offer.match_score = 50
             offer.ai_analysis = {"summary": "Simulation", "reasoning": "Mode Mock"}
             return offer
 
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": "Tu es un analyste JSON strict."},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }
+        messages = [
+            {"role": "system", "content": "Tu es un analyste JSON strict."},
+            {"role": "user", "content": prompt},
+        ]
 
-        async with httpx.AsyncClient() as client:
+        try:
+            score_dict = await self.provider.generate_json(
+                messages=messages,
+                model=settings.OPENAI_MODEL_MAIN,
+                temperature=0.1,
+                timeout=60.0
+            )
+
+            # --- VALIDATION PYDANTIC ---
             try:
-                response = await client.post(
-                    self.API_URL,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                    timeout=60.0,
+                score_data = LLMScoreResponse.model_validate(score_dict)
+            except ValidationError as ve:
+                logger.warning(
+                    f"⚠️ Validation Pydantic échouée pour '{offer.title}': {ve.error_count()} erreurs"
                 )
-                response.raise_for_status()
-                raw_content = response.json()["choices"][0]["message"]["content"]
-
-                # --- VALIDATION PYDANTIC ---
-                # Garantit que la réponse LLM est conforme au schéma attendu
-                try:
-                    score_data = LLMScoreResponse.model_validate_json(raw_content)
-                except ValidationError as ve:
-                    logger.warning(
-                        f"⚠️ Validation Pydantic échouée pour '{offer.title}': {ve.error_count()} erreurs"
-                    )
-                    logger.debug(f"Détails validation: {ve.errors()}")
-                    return self._fallback_scoring(candidate, offer)
-
-                # --- CALCUL DU SCORE PONDÉRÉ via le modèle ---
-                final_score = score_data.calculate_weighted_score(
-                    w_tech=0.4,  # 40% Compétences
-                    w_struct=0.3,  # 30% Contrat/Lieu
-                    w_exp=0.3,  # 30% Expérience
-                )
-
-                offer.match_score = final_score
-                # On stocke les détails pour l'affichage dans l'email
-                offer.ai_analysis = score_data.model_dump()
-
-            except httpx.TimeoutException:
-                logger.warning(f"⚠️ Timeout IA sur '{offer.title}'")
+                logger.debug(f"Détails validation: {ve.errors()}")
                 return self._fallback_scoring(candidate, offer)
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    logger.warning("⚠️ Quota DeepSeek dépassé")
-                else:
-                    logger.warning(f"⚠️ Erreur HTTP DeepSeek: {e.response.status_code}")
-                return self._fallback_scoring(candidate, offer)
-            except json.JSONDecodeError:
-                logger.warning(f"⚠️ Réponse LLM invalide pour '{offer.title}'")
-                return self._fallback_scoring(candidate, offer)
-            except Exception as e:
-                logger.warning(f"⚠️ Erreur IA sur '{offer.title}': {e}")
-                return self._fallback_scoring(candidate, offer)
+
+            # --- CALCUL DU SCORE PONDÉRÉ via le modèle ---
+            final_score = score_data.calculate_weighted_score(
+                w_tech=0.4,  # 40% Compétences
+                w_struct=0.3,  # 30% Contrat/Lieu
+                w_exp=0.3,  # 30% Expérience
+            )
+
+            offer.match_score = final_score
+            # On stocke les détails pour l'affichage dans l'email
+            offer.ai_analysis = score_data.model_dump()
+
+        except httpx.TimeoutException:
+            logger.warning(f"⚠️ Timeout IA sur '{offer.title}'")
+            return self._fallback_scoring(candidate, offer)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                logger.warning("⚠️ Quota LLM dépassé")
+            else:
+                logger.warning(f"⚠️ Erreur HTTP LLM: {e.response.status_code}")
+            return self._fallback_scoring(candidate, offer)
+        except Exception as e:
+            logger.warning(f"⚠️ Erreur IA sur '{offer.title}': {e}")
+            return self._fallback_scoring(candidate, offer)
 
         return offer
 
@@ -256,49 +240,33 @@ class LLMEngine:
         }}
         """
 
-        if not self.api_key:
+        if not self.provider.api_key:
             return {
                 "html_content": f"<p>Lettre générée (Simulation) pour {offer.company}.</p>",
                 "strategic_advice": "Ceci est un conseil factice.",
             }
 
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": "Tu es un assistant JSON strict."},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.7,
-            "response_format": {"type": "json_object"},
-        }
+        messages = [
+            {"role": "system", "content": "Tu es un assistant JSON strict."},
+            {"role": "user", "content": prompt},
+        ]
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.API_URL,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                    timeout=120.0,
-                )
-                response.raise_for_status()
-                return json.loads(response.json()["choices"][0]["message"]["content"])
-            except httpx.TimeoutException:
-                logger.error("❌ Timeout génération lettre")
-                return self._generate_fallback_letter(candidate, offer)
-            except httpx.HTTPStatusError as e:
-                logger.error(
-                    f"❌ Erreur HTTP génération lettre: {e.response.status_code}"
-                )
-                return self._generate_fallback_letter(candidate, offer)
-            except json.JSONDecodeError:
-                logger.error("❌ Réponse JSON invalide pour lettre")
-                return self._generate_fallback_letter(candidate, offer)
-            except Exception as e:
-                logger.exception(f"❌ Erreur Génération Lettre: {e}")
-                return self._generate_fallback_letter(candidate, offer)
+        try:
+            return await self.provider.generate_json(
+                messages=messages,
+                model=settings.OPENAI_MODEL_MAIN,
+                temperature=0.7,
+                timeout=120.0
+            )
+        except httpx.TimeoutException:
+            logger.error("❌ Timeout génération lettre")
+            return self._generate_fallback_letter(candidate, offer)
+        except httpx.HTTPStatusError as e:
+            logger.error(f"❌ Erreur HTTP génération lettre: {e.response.status_code}")
+            return self._generate_fallback_letter(candidate, offer)
+        except Exception as e:
+            logger.exception(f"❌ Erreur Génération Lettre: {e}")
+            return self._generate_fallback_letter(candidate, offer)
 
     def _generate_fallback_letter(
         self, candidate: CandidateProfile, offer: JobOffer

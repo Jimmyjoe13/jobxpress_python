@@ -40,7 +40,7 @@ class TestHealthEndpoints:
         assert "api" in checks
         assert "cache" in checks
         assert "supabase" in checks
-        assert "deepseek" in checks
+        assert "llm_api" in checks
         assert "rapidapi" in checks
 
     def test_health_api_always_healthy(self, test_client):

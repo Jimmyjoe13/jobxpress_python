@@ -180,7 +180,7 @@ async def health_check_deep():
         "api": "healthy",
         "cache": "unknown",
         "supabase": "unknown",
-        "deepseek": "unknown",
+        "llm_api": "unknown",
         "rapidapi": "unknown",
     }
 
@@ -203,22 +203,24 @@ async def health_check_deep():
         checks["supabase"] = "unhealthy"
         logger.warning(f"Health check Supabase failed: {e}")
 
-    # Test DeepSeek (ping léger)
-    if settings.DEEPSEEK_API_KEY:
+    # --- Vérification API LLM ---
+    provider_url = settings.OPENAI_BASE_URL.rstrip('/') + "/models"
+    api_key_to_check = settings.OPENAI_API_KEY or settings.DEEPSEEK_API_KEY
+    if api_key_to_check:
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
-                    "https://api.deepseek.com/v1/models",
-                    headers={"Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}"},
+                    provider_url,
+                    headers={"Authorization": f"Bearer {api_key_to_check}"},
                     timeout=5.0,
                 )
-                checks["deepseek"] = (
+                checks["llm_api"] = (
                     "healthy" if resp.status_code == 200 else "unhealthy"
                 )
         except Exception:
-            checks["deepseek"] = "unreachable"
+            checks["llm_api"] = "unreachable"
     else:
-        checks["deepseek"] = "not_configured"
+        checks["llm_api"] = "not_configured"
 
     # Test RapidAPI (JSearch)
     if settings.RAPIDAPI_KEY:
