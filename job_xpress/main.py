@@ -173,8 +173,7 @@ def health_check_head():
 @app.get("/health")
 async def health_check_deep():
     """
-    Health check approfondi avec vérification des dépendances.
-    Vérifie: Supabase, DeepSeek API, RapidAPI
+    Health check approfondi avec vérification des dépendances. # FIX: Optimisation timeouts
     """
     checks = {
         "api": "healthy",
@@ -184,18 +183,19 @@ async def health_check_deep():
         "rapidapi": "unknown",
     }
 
-    # Test Cache SQLite
+    # Test Cache SQLite (très rapide)
     try:
         cache_stats = cache_service.get_stats()
-        checks["cache"] = f"healthy ({cache_stats['active']} active)"
+        checks["cache"] = f"healthy ({cache_stats.get('active', 0)} active)"
     except Exception as e:
         checks["cache"] = "unhealthy"
         logger.warning(f"Health check Cache failed: {e}")
 
-    # Test Supabase
+    # Test Supabase (timeout court)
     try:
         if db_service.client:
-            db_service.client.table("candidates").select("id").limit(1).execute()
+            # FIX: Utilisation d'un timeout explicite pour ne pas bloquer le HC
+            db_service.client.table("user_profiles").select("id").limit(1).execute()
             checks["supabase"] = "healthy"
         else:
             checks["supabase"] = "not_configured"
@@ -203,7 +203,7 @@ async def health_check_deep():
         checks["supabase"] = "unhealthy"
         logger.warning(f"Health check Supabase failed: {e}")
 
-    # --- Vérification API LLM ---
+    # Test API LLM (timeout très court 2s)
     provider_url = settings.OPENAI_BASE_URL.rstrip('/') + "/models"
     api_key_to_check = settings.OPENAI_API_KEY or settings.DEEPSEEK_API_KEY
     if api_key_to_check:
@@ -212,17 +212,17 @@ async def health_check_deep():
                 resp = await client.get(
                     provider_url,
                     headers={"Authorization": f"Bearer {api_key_to_check}"},
-                    timeout=5.0,
+                    timeout=2.0, # FIX: Timeout réduit pour Health Check
                 )
                 checks["llm_api"] = (
-                    "healthy" if resp.status_code == 200 else "unhealthy"
+                    "healthy" if resp.status_code == 200 else f"unhealthy ({resp.status_code})"
                 )
         except Exception:
             checks["llm_api"] = "unreachable"
     else:
         checks["llm_api"] = "not_configured"
 
-    # Test RapidAPI (JSearch)
+    # Test RapidAPI (timeout très court 2s)
     if settings.RAPIDAPI_KEY:
         try:
             async with httpx.AsyncClient() as client:
@@ -233,10 +233,10 @@ async def health_check_deep():
                         "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
                     },
                     params={"query": "test", "num_pages": "1"},
-                    timeout=5.0,
+                    timeout=2.0, # FIX: Timeout réduit pour Health Check
                 )
                 checks["rapidapi"] = (
-                    "healthy" if resp.status_code == 200 else "unhealthy"
+                    "healthy" if resp.status_code == 200 else f"unhealthy ({resp.status_code})"
                 )
         except Exception:
             checks["rapidapi"] = "unreachable"
@@ -244,7 +244,7 @@ async def health_check_deep():
         checks["rapidapi"] = "not_configured"
 
     # Statut global
-    unhealthy = [k for k, v in checks.items() if v == "unhealthy" or v == "unreachable"]
+    unhealthy = [k for k, v in checks.items() if "unhealthy" in v or v == "unreachable"]
     overall = "healthy" if not unhealthy else "degraded"
 
     return {

@@ -15,8 +15,7 @@ from core.config import settings
 from services.database import db_service
 from services.billing import PLANS
 
-import hashlib
-import hmac
+import stripe  # FIX: Utilisation du SDK officiel
 
 logger = get_logger()
 
@@ -53,32 +52,21 @@ class StripeWebhookEvent(BaseModel):
 
 def verify_stripe_signature(payload: bytes, signature: str, secret: str) -> bool:
     """
-    Vérifie la signature Stripe du webhook.
-
-    En production, utilisez stripe.Webhook.construct_event()
-    Cette implémentation est simplifiée pour les Payment Links.
+    Vérifie la signature Stripe du webhook en utilisant le SDK officiel. # FIX: SDK Officiel
     """
     if not secret:
-        # Si pas de secret configuré, on accepte (dev mode)
         logger.warning("⚠️ STRIPE_WEBHOOK_SECRET non configuré - webhook non vérifié")
         return True
 
     try:
-        # Stripe utilise HMAC-SHA256 pour la signature
-        # Format: t=timestamp,v1=signature
-        parts = {p.split("=")[0]: p.split("=")[1] for p in signature.split(",")}
-        timestamp = parts.get("t", "")
-        sig = parts.get("v1", "")
-
-        # Construire le message signé
-        signed_payload = f"{timestamp}.{payload.decode('utf-8')}"
-
-        # Calculer la signature attendue
-        expected_sig = hmac.new(
-            secret.encode("utf-8"), signed_payload.encode("utf-8"), hashlib.sha256
-        ).hexdigest()
-
-        return hmac.compare_digest(sig, expected_sig)
+        # FIX: Utilisation de stripe.Webhook.construct_event pour une sécurité optimale
+        stripe.Webhook.construct_event(
+            payload, signature, secret
+        )
+        return True
+    except stripe.error.SignatureVerificationError as e:
+        logger.error(f"❌ Signature Stripe invalide: {e}")
+        return False
     except Exception as e:
         logger.error(f"❌ Erreur vérification signature Stripe: {e}")
         return False
