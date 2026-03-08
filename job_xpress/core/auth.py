@@ -142,3 +142,19 @@ async def get_current_user_id(token: str = Depends(get_required_token)) -> str:
             detail="Erreur de validation du token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def get_current_admin_user(
+    user_id: str = Depends(get_current_user_id),
+) -> str:
+    """
+    Vérifie que l'utilisateur actuel est un administrateur.
+    L'ID de l'admin est défini dans SUPABASE_ADMIN_USER_ID.
+    """
+    if str(user_id) != str(settings.SUPABASE_ADMIN_USER_ID):
+        logger.warning(f"⛔ Tentative d'accès admin refusée pour {user_id}")
+        raise HTTPException(
+            status_code=403,
+            detail="Accès réservé aux administrateurs",
+        )
+    return user_id

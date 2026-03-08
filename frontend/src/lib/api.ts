@@ -301,9 +301,23 @@ export async function getCurrentUser(): Promise<{ user_id: string; authenticated
 }
 
 /**
+ * Supprime définitivement le compte utilisateur.
+ */
+export async function deleteAccount(): Promise<{ success: boolean; message: string }> {
+  return apiRequest<{ success: boolean; message: string }>('/api/v2/profile', {
+    method: 'DELETE'
+  }, true)
+}
+
+/**
+ * Récupère les statistiques d'utilisation globales (Admin uniquement)
+ */
+export async function getAdminUsageStats(days: number = 30): Promise<any> {
+  return apiRequest(`/api/v2/admin/usage-stats?days=${days}`, {}, true)
+}
+
+/**
  * Get user's applications history via API authentifiée
- * 
- * Utilise le JWT pour respecter les RLS Supabase côté backend.
  */
 export async function getMyApplications(): Promise<UserApplicationsResponse> {
   return apiRequest<UserApplicationsResponse>('/api/v2/applications', {}, true)

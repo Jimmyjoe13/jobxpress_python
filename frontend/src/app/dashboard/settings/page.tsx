@@ -23,6 +23,10 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useUserSettings } from "@/lib/hooks/useUserSettings"
+import { deleteAccount } from "@/lib/api"
+import { useRouter } from "next/navigation"
+import { AnimatePresence } from "framer-motion"
+import { Trash2, AlertTriangle, X as XIcon } from "lucide-react"
 
 // ============================================
 // CONSTANTS
@@ -135,6 +139,11 @@ export default function SettingsPage() {
   
   // Toast state
   const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  
+  // Account deletion state
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const router = useRouter()
 
   // Show toast helper
   const showToast = (type: 'success' | 'error', message: string) => {
@@ -206,6 +215,31 @@ export default function SettingsPage() {
       showToast('error', message)
     } finally {
       setIsChangingPassword(false)
+    }
+  }
+
+  // Handle account deletion
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true)
+    try {
+      const result = await deleteAccount()
+      if (result.success) {
+        // Déconnexion Supabase
+        const { createClient } = await import("@/lib/supabase/client")
+        const supabase = createClient()
+        await supabase.auth.signOut()
+        
+        // Redirection
+        router.push("/")
+      } else {
+        showToast('error', "Impossible de supprimer le compte. Contactez le support.")
+      }
+    } catch (err) {
+      console.error('Account deletion error:', err)
+      showToast('error', "Impossible de supprimer le compte. Contactez le support.")
+    } finally {
+      setIsDeleting(false)
+      setIsDeleteModalOpen(false)
     }
   }
 
@@ -500,6 +534,101 @@ export default function SettingsPage() {
           </TabsContent>
         </Tabs>
       </motion.div>
+
+      {/* Zone dangereuse */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="pt-12 border-t border-slate-800"
+      >
+        <h2 className="text-xl font-semibold text-red-400 mb-4 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5" />
+          Zone dangereuse
+        </h2>
+        <Card className="border-red-500/20 bg-red-500/5">
+          <CardContent className="p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-1">
+              <h3 className="text-white font-medium">Supprimer mon compte</h3>
+              <p className="text-slate-400 text-sm">
+                Une fois votre compte supprimé, il n&apos;y a aucun retour en arrière possible. Soyez-en certain.
+              </p>
+            </div>
+            <Button 
+              variant="outline" 
+              className="border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white"
+              onClick={() => setIsDeleteModalOpen(true)}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Supprimer mon compte
+            </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Modal de confirmation de suppression */}
+      <AnimatePresence>
+        {isDeleteModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isDeleting && setIsDeleteModalOpen(false)}
+              className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[101] w-full max-w-md px-4"
+            >
+              <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-8 shadow-2xl overflow-hidden relative">
+                <div className="absolute top-0 left-0 w-full h-1 bg-red-500" />
+                
+                <button
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  disabled={isDeleting}
+                  className="absolute top-4 right-4 p-1 text-slate-500 hover:text-white transition-colors"
+                >
+                  <XIcon className="w-5 h-5" />
+                </button>
+
+                <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <AlertTriangle className="w-8 h-8 text-red-500" />
+                </div>
+
+                <h2 className="text-2xl font-bold text-white text-center mb-3">
+                  Supprimer définitivement mon compte
+                </h2>
+
+                <p className="text-slate-400 text-center mb-8">
+                  Cette action est irréversible. Toutes vos données, candidatures et historique seront supprimés.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 order-2 sm:order-1"
+                    onClick={() => setIsDeleteModalOpen(false)}
+                    disabled={isDeleting}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    variant="gradient"
+                    className="flex-1 from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border-none order-1 sm:order-2"
+                    onClick={handleDeleteAccount}
+                    isLoading={isDeleting}
+                  >
+                    Oui, supprimer mon compte
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

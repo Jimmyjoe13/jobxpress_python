@@ -32,6 +32,9 @@ import {
 import { TrackingBoard } from "@/components/dashboard/tracking-board"
 import { QuotaWidget } from "@/components/dashboard/QuotaWidget"
 import { EmptyStateDashboard } from "@/components/dashboard/EmptyStateDashboard"
+import { getAdminUsageStats } from "@/lib/api"
+import { DollarSign, BarChart3, Activity } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
 interface UserData {
   firstName: string
@@ -62,6 +65,8 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminStats, setAdminStats] = useState<any>(null)
 
   useEffect(() => {
     const loadData = async () => {
@@ -106,6 +111,18 @@ export default function DashboardPage() {
           } catch (err) {
             console.error("Error loading dashboard data:", err)
             setApplications([])
+          }
+
+          // Check if admin and load admin stats
+          const adminId = process.env.NEXT_PUBLIC_ADMIN_USER_ID || '0427c3e2-9b0d-4f1b-a53c-7c012891d4e0' 
+          if (authUser.id === adminId) {
+            setIsAdmin(true)
+            try {
+              const adminRes = await getAdminUsageStats(30)
+              setAdminStats(adminRes)
+            } catch (e) {
+              console.error("Admin stats load error:", e)
+            }
           }
         } else {
           setUser({ firstName: "Utilisateur", email: "", userId: null })
@@ -346,6 +363,54 @@ export default function DashboardPage() {
           )}
         </div>
       </motion.div>
+
+      {/* Admin Monitoring Section (si admin) */}
+      {isAdmin && adminStats && (
+        <motion.div variants={itemVariants} className="mt-12 pt-12 border-t border-slate-800/50">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-12 h-12 bg-indigo-500/10 rounded-2xl flex items-center justify-center">
+              <BarChart3 className="w-6 h-6 text-indigo-400" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-1">Cost Monitoring</h2>
+              <p className="text-slate-400 text-sm">Vue globale de l&apos;utilisation des APIs IA (30 jours)</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card variant="gradient" className="bg-indigo-500/5 border-indigo-500/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-slate-400 text-xs font-semibold uppercase tracking-wider flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                  COÛT TOTAL ESTIMÉ
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-black text-white tracking-tight">${adminStats.total_cost_usd}</div>
+                <div className="text-slate-500 text-xs mt-2 flex items-center gap-1">
+                  <Activity className="w-3 h-3" />
+                  Basé sur {adminStats.total_calls} appels API
+                </div>
+              </CardContent>
+            </Card>
+
+            {Object.entries(adminStats.by_model || {}).map(([model, data]: [string, any]) => (
+              <Card key={model} className="bg-slate-800/40 border-slate-700/50 hover:border-slate-600/50 transition-colors">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-slate-400 text-xs font-semibold uppercase tracking-wider flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    {model}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-white tracking-tight">${data.cost}</div>
+                  <div className="text-slate-500 text-xs mt-2">{data.calls} requêtes exécutées</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   )
 }

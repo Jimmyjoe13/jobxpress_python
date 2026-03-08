@@ -11,6 +11,18 @@ from typing import Generator
 # Ajouter le dossier parent au path pour les imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import sys
+from unittest.mock import MagicMock
+
+# Mock dependencies that break on Python 3.14 (due to Pydantic v1)
+# Must be done BEFORE any imports from the app
+sys.modules['supabase'] = MagicMock()
+sys.modules['realtime'] = MagicMock()
+sys.modules['gotrue'] = MagicMock()
+sys.modules['postgrest'] = MagicMock()
+sys.modules['storage3'] = MagicMock()
+sys.modules['supafunc'] = MagicMock()
+
 from fastapi.testclient import TestClient
 
 
