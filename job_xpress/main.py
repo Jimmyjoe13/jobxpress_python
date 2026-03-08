@@ -66,6 +66,7 @@ async def lifespan(app: FastAPI):
 
     # Nettoyage initial du cache
     cache_service.cleanup_expired()
+    cache_service.purge_old_tasks(days=7)
 
     # Récupération des tâches orphelines (crash recovery)
     orphans = cache_service.get_orphan_tasks(timeout_seconds=600)  # 10 min

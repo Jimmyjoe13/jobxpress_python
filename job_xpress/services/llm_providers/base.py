@@ -15,6 +15,7 @@ class BaseLLMProvider(ABC):
         model: str,
         temperature: float = 0.1,
         timeout: float = 60.0,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Gère un appel LLM qui attend spécifiquement une réponse en JSON structuré.
@@ -29,6 +30,7 @@ class BaseLLMProvider(ABC):
         temperature: float = 0.7,
         max_tokens: int = 1000,
         timeout: float = 30.0,
+        user_id: Optional[str] = None,
     ) -> str:
         """
         Gère un appel LLM textuel standard (ex: pour le chat JobyJoba).
@@ -43,6 +45,7 @@ class BaseLLMProvider(ABC):
         temperature: float = 0.7,
         max_tokens: int = 1000,
         timeout: float = 30.0,
+        user_id: Optional[str] = None,
     ):
         """
         Générateur asynchrone pour streamer la réponse textuelle.
@@ -59,6 +62,7 @@ class BaseLLMProvider(ABC):
         temperature: float = 0.7,
         max_tokens: int = 1000,
         timeout: float = 30.0,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Gère un appel LLM avec function calling / tools.

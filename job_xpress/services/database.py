@@ -10,9 +10,15 @@ Architecture à deux clients :
 """
 
 from supabase import create_client, Client
-from typing import Optional
+from typing import Optional, Dict, Any
 from core.config import settings
 from core.logging_config import get_logger
+from core.exceptions import (
+    DatabaseError, 
+    DatabaseConnectionError, 
+    DatabaseQueryError,
+    QuotaError
+)
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 
@@ -227,6 +233,80 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"❌ Erreur récupération applications: {e}")
             return []
+
+    async def check_and_consume_search_quota(self, user_id: str) -> Dict[str, Any]:
+        """
+        Vérifie et consomme le quota de recherche d'un utilisateur (Free monthly or credits).
+        Standardise l'appel RPC 'check_and_use_search_quota'.
+        """
+        if not self.admin_client:
+            raise DatabaseConnectionError("Client admin non initialisé")
+
+        try:
+            result = self.admin_client.rpc(
+                "check_and_use_search_quota", {"p_user_id": user_id}
+            ).execute()
+
+            if not result.data or len(result.data) == 0:
+                raise DatabaseQueryError("check_and_use_search_quota", "Réponse quota vide")
+
+            quota = result.data[0]
+            if not quota.get("allowed", False):
+                raise QuotaError("Quota de recherches épuisé ce mois.")
+
+            return quota
+        except QuotaError:
+            raise
+        except Exception as e:
+            logger.error(f"❌ Erreur RPC quota pour {user_id}: {e}")
+            raise DatabaseQueryError("check_and_use_search_quota", str(e))
+
+    def delete_user_account(self, user_id: str) -> bool:
+        """
+        Supprime définitivement un compte utilisateur et toutes ses données.
+        # FIX: Conformité RGPD.
+
+        Cette opération:
+        1. Supprime l'utilisateur de Supabase Auth (via admin client).
+        2. Les cascades SQL se chargeront de supprimer les données dans public.
+        3. Supprime les fichiers dans Storage (CV, Avatar).
+
+        Args:
+            user_id: ID de l'utilisateur à supprimer
+
+        Returns:
+            True si succès
+        """
+        if not self.admin_client:
+            logger.error("❌ Admin client requis pour suppression de compte")
+            return False
+
+        try:
+            logger.warning(f"🗑️ Suppression totale du compte: {user_id}")
+
+            # 1. Optionnel: Nettoyage Storage (Supabase ne cascade pas automatiquement sur Storage)
+            try:
+                # Lister les fichiers dans les dossiers de l'utilisateur
+                buckets = ["cvs", "avatars"]
+                for bucket in buckets:
+                    files = self.admin_client.storage.from_(bucket).list(user_id)
+                    if files:
+                        paths = [f"{user_id}/{f['name']}" for f in files]
+                        self.admin_client.storage.from_(bucket).remove(paths)
+                        logger.info(f"   -> {len(paths)} fichiers supprimés dans bucket '{bucket}'")
+            except Exception as e:
+                logger.warning(f"⚠️ Erreur lors du nettoyage Storage (non-bloquant): {e}")
+
+            # 2. Suppression de l'utilisateur dans Supabase Auth
+            # Cela déclenche les triggers DELETE CASCADE dans la DB public
+            self.admin_client.auth.admin.delete_user(user_id)
+            
+            logger.info(f"✅ Compte {user_id} supprimé avec succès")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de la suppression du compte: {e}")
+            return False
 
 
 # Instance globale du service

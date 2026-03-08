@@ -350,6 +350,32 @@ class CacheService:
             logger.error(f"Reset task error: {e}")
             return False
 
+    def purge_old_tasks(self, days: int = 7) -> int:
+        """
+        Supprime les tâches terminées ou échouées depuis plus de X jours.
+
+        Returns:
+            Nombre de tâches supprimées
+        """
+        cutoff_time = time.time() - (days * 86400)
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    DELETE FROM pending_tasks 
+                    WHERE (status = 'done' OR status = 'failed') 
+                      AND processed_at < ?
+                """,
+                    (cutoff_time,),
+                )
+                count = cursor.rowcount
+                if count > 0:
+                    logger.info(f"🧹 Cache Tasks: {count} ancienne(s) tâche(s) purgée(s)")
+                return count
+        except Exception as e:
+            logger.error(f"Purge old tasks error: {e}")
+            return 0
+
     def get_task_stats(self) -> dict:
         """Retourne des statistiques sur les tâches."""
         try:

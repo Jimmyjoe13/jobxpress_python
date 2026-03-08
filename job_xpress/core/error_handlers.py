@@ -18,6 +18,7 @@ from core.exceptions import (
     RateLimitError,
     DuplicateRequestError,
     PayloadValidationError,
+    QuotaError,
     SearchError,
     LLMError,
     OCRError,
@@ -118,6 +119,15 @@ async def duplicate_request_handler(
     response_data["error"]["request_id"] = request_id
 
     return JSONResponse(status_code=429, content=response_data)
+
+
+async def quota_exception_handler(request: Request, exc: QuotaError) -> JSONResponse:
+    """Handler pour les erreurs de quota (402)."""
+    request_id = add_request_id(request)
+    logger.warning(f"[{request_id}] Quota Error: {exc.message}")
+    response_data = exc.to_dict()
+    response_data["error"]["request_id"] = request_id
+    return JSONResponse(status_code=402, content=response_data)
 
 
 async def service_exception_handler(
@@ -247,6 +257,7 @@ def register_exception_handlers(app):
     # Erreurs API spécifiques
     app.add_exception_handler(RateLimitError, rate_limit_exception_handler)
     app.add_exception_handler(DuplicateRequestError, duplicate_request_handler)
+    app.add_exception_handler(QuotaError, quota_exception_handler)
     app.add_exception_handler(PayloadValidationError, api_exception_handler)
 
     # Erreurs d'API externes

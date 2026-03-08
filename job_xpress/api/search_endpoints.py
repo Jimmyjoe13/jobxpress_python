@@ -18,6 +18,7 @@ from slowapi.util import get_remote_address
 
 from core.auth import get_required_token, get_current_user_id
 from core.logging_config import get_logger
+from core.exceptions import QuotaError
 from models.application_v2 import JobFilters, JobResultItem
 from services.database import db_service
 from services.search_engine_v2 import create_search_engine_v2
@@ -113,55 +114,42 @@ class SearchHistoryItem(BaseModel):
 # ===========================================
 
 
-@router.post("/search/quick", response_model=QuickSearchResponse)
+@router.post(
+    "/search/quick",
+    response_model=QuickSearchResponse,
+    summary="Recherche rapide d'offres",
+    responses={
+        200: {"description": "Recherche réussie"},
+        400: {"description": "Paramètres de recherche invalides"},
+        402: {"description": "Quota de recherche épuisé"},
+        500: {"description": "Erreur serveur interne"},
+    },
+)
 @limiter.limit(RATE_LIMIT_QUICK_SEARCH)
 async def quick_search(
-    request: Request,  # Requis pour rate limiter
+    request: Request,
     search_request: QuickSearchRequest,
     token: str = Depends(get_required_token),
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Recherche rapide d'offres d'emploi depuis le dashboard.
-
-    - Ne crée **pas** de candidature (pas de workflow complet)
-    - Retourne les offres avec déduplication et filtres intelligents
-    - **Quota FREE** : 5 recherches gratuites/mois, puis 1 crédit/recherche
-    - **STARTER/PRO** : Illimité
+    Lance une recherche d'emploi multi-sources sans créer de dossier de candidature.
+    
+    Cette version **V2** inclut :
+    - Déduplication intelligente
+    - Détection des cabinets de recrutement
+    - Scoring de matching (optionnel)
+    
+    **Quotas :**
+    - Plan FREE : 5 recherches gratuites/mois
+    - Au-delà : 1 crédit par recherche
     """
-    # 1. Vérifier et consommer le quota via RPC
-    try:
-        client = db_service.admin_client
-        if not client:
-            raise HTTPException(
-                status_code=500, detail="Erreur connexion base de données"
-            )
-
-        quota_result = client.rpc(
-            "check_and_use_search_quota", {"p_user_id": user_id}
-        ).execute()
-
-        if not quota_result.data or len(quota_result.data) == 0:
-            raise HTTPException(status_code=500, detail="Erreur vérification quota")
-
-        quota = quota_result.data[0]
-        allowed = quota.get("allowed", False)
-        free_remaining = quota.get("free_remaining", 0)
-        used_credit = quota.get("used_credit", False)
-
-        if not allowed:
-            raise HTTPException(
-                status_code=402,
-                detail="Quota de recherches épuisé ce mois. Passez à un plan payant ou attendez le renouvellement.",
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Erreur quota recherche: {e}")
-        raise HTTPException(
-            status_code=500, detail="Erreur vérification quota de recherche"
-        )
+    # 1. Vérifier et consomme le quota via DatabaseService (lève QuotaError si épuisé)
+    quota = await db_service.check_and_consume_search_quota(user_id)
+    
+    # On récupère les infos pour la réponse API
+    free_remaining = quota.get("free_remaining", 0)
+    used_credit = quota.get("used_credit", False)
 
     # 2. Exécuter la recherche via SearchEngineV2
     logger.info(

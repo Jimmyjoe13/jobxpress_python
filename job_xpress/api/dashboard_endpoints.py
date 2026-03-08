@@ -35,8 +35,64 @@ class TrackingNoteRequest(BaseModel):
 class ProfileChecklistResponse(BaseModel):
     has_profile: bool
     has_cv: bool
-    has_first_search: bool
+    has_searched: bool
 
+
+@router.get("/profile/checklist", response_model=ProfileChecklistResponse)
+async def get_profile_checklist(
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Vérifie l'état de complétion du profil utilisateur (Onboarding).
+    
+    Aide le frontend à guider l'utilisateur pour :
+    1. Créer son profil de base
+    2. Uploader un CV
+    3. Lancer sa première recherche
+    """
+    client = db_service.get_user_client(token)
+    if not client:
+        raise HTTPException(status_code=500, detail="Erreur base de données")
+
+    try:
+        # 1. Vérifier profil et CV
+        profile_res = (
+            client.table("user_profiles")
+            .select("first_name, cv_url")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+        
+        has_profile = False
+        has_cv = False
+        if profile_res.data:
+            has_profile = bool(profile_res.data.get("first_name"))
+            has_cv = bool(profile_res.data.get("cv_url"))
+
+        # 2. Vérifier si au moins une recherche a été faite
+        search_res = (
+            client.table("search_history")
+            .select("id")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        has_search = len(search_res.data) > 0 if search_res.data else False
+
+        return ProfileChecklistResponse(
+            has_profile=has_profile,
+            has_cv=has_cv,
+            has_searched=has_search
+        )
+    except Exception as e:
+        logger.error(f"❌ Erreur checklist: {e}")
+        return ProfileChecklistResponse(
+            has_profile=False,
+            has_cv=False,
+            has_first_search=False
+        )
 
 # ===========================================
 # DASHBOARD STATS
@@ -89,7 +145,7 @@ async def get_dashboard_stats(
         if profile_res.data and len(profile_res.data) > 0:
             p = profile_res.data[0]
             has_profile = bool(p.get("job_title"))
-            has_cv = bool(p.get("current_cv_id"))
+            has_cv = bool(p.get("current_cv_id") or p.get("cv_url"))
             has_searched = p.get("free_searches_used", 0) > 0
 
         return {

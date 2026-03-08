@@ -4,13 +4,12 @@ import logging
 from typing import Dict, Any, List, Optional
 from core.config import settings
 from .base import BaseLLMProvider
+from services.database import db_service
 
 logger = logging.getLogger(__name__)
 
 class OpenAIProvider(BaseLLMProvider):
     def __init__(self):
-        # Pour une flexibilité totale, on prend la clé OpenAI, ou on retombe sur DeepSeek si OpenAI n'est pas configuré.
-        # Cela permet un fallback natif pendant la transition.
         self.api_key = settings.OPENAI_API_KEY or settings.DEEPSEEK_API_KEY
         self.base_url = settings.OPENAI_BASE_URL.rstrip('/')
         self.api_url = f"{self.base_url}/chat/completions"
@@ -53,12 +52,40 @@ class OpenAIProvider(BaseLLMProvider):
                 
             return response
 
+    async def _handle_usage(self, response_data: Dict[str, Any], user_id: Optional[str], feature: str = "llm_generation"):
+        """Enregistre l'utilisation des tokens dans la base de données."""
+        if not user_id or "usage" not in response_data:
+            return
+
+        try:
+            usage = response_data["usage"]
+            payload = {
+                "user_id": user_id,
+                "feature": feature,
+                "provider": "openai",
+                "model": response_data.get("model", "unknown"),
+                "input_tokens": usage.get("prompt_tokens", 0),
+                "output_tokens": usage.get("completion_tokens", 0),
+                "metadata": {
+                    "total_tokens": usage.get("total_tokens", 0),
+                    "system_fingerprint": response_data.get("system_fingerprint")
+                }
+            }
+            
+            # Utilisation du client admin pour bypasser RLS sur les logs techniques
+            if db_service.admin_client:
+                db_service.admin_client.table("usage_logs").insert(payload).execute()
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Impossible d'enregistrer l'usage LLM: {e}")
+
     async def generate_json(
         self,
         messages: List[Dict[str, str]],
         model: str,
         temperature: float = 0.1,
         timeout: float = 60.0,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         payload = {
             "model": model,
@@ -69,7 +96,12 @@ class OpenAIProvider(BaseLLMProvider):
         
         response = await self._handle_request(payload, timeout)
         response.raise_for_status()
-        raw_content = response.json()["choices"][0]["message"]["content"]
+        data = response.json()
+        
+        # Tracking usage
+        await self._handle_usage(data, user_id, feature="generate_json")
+        
+        raw_content = data["choices"][0]["message"]["content"]
         return json.loads(raw_content)
 
     async def chat(
@@ -79,6 +111,7 @@ class OpenAIProvider(BaseLLMProvider):
         temperature: float = 0.7,
         max_tokens: int = 1000,
         timeout: float = 30.0,
+        user_id: Optional[str] = None,
     ) -> str:
         payload = {
             "model": model,
@@ -90,7 +123,12 @@ class OpenAIProvider(BaseLLMProvider):
         
         response = await self._handle_request(payload, timeout)
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        data = response.json()
+        
+        # Tracking usage
+        await self._handle_usage(data, user_id, feature="chat")
+        
+        return data["choices"][0]["message"]["content"]
 
     async def stream_chat(
         self,
@@ -99,6 +137,7 @@ class OpenAIProvider(BaseLLMProvider):
         temperature: float = 0.7,
         max_tokens: int = 1000,
         timeout: float = 30.0,
+        user_id: Optional[str] = None,
     ):
         payload = {
             "model": model,
@@ -106,6 +145,7 @@ class OpenAIProvider(BaseLLMProvider):
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": True,
+            "stream_options": {"include_usage": True}
         }
         
         payload = self._clean_payload_for_model(payload, model)
@@ -137,9 +177,15 @@ class OpenAIProvider(BaseLLMProvider):
                             break
                         try:
                             chunk_data = json.loads(data_str)
-                            delta = chunk_data["choices"][0]["delta"]
-                            if "content" in delta:
-                                yield delta["content"]
+                            
+                            # Gérer les stats d'usage (dernier chunk)
+                            if "usage" in chunk_data:
+                                await self._handle_usage(chunk_data, user_id, feature="stream_chat")
+                            
+                            if "choices" in chunk_data and len(chunk_data["choices"]) > 0:
+                                delta = chunk_data["choices"][0].get("delta", {})
+                                if "content" in delta:
+                                    yield delta["content"]
                         except (KeyError, json.JSONDecodeError):
                             continue
 
@@ -151,6 +197,7 @@ class OpenAIProvider(BaseLLMProvider):
         temperature: float = 0.7,
         max_tokens: int = 1000,
         timeout: float = 30.0,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         payload = {
             "model": model,
@@ -164,4 +211,9 @@ class OpenAIProvider(BaseLLMProvider):
         
         response = await self._handle_request(payload, timeout)
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]
+        data = response.json()
+        
+        # Tracking usage
+        await self._handle_usage(data, user_id, feature="chat_with_tools")
+        
+        return data["choices"][0]["message"]

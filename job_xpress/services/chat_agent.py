@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import logging
 
 from core.config import settings
+from core.exceptions import QuotaError
 from services.search_engine_v2 import create_search_engine_v2
 from services.database import db_service
 from models.candidate import CandidateProfile
@@ -84,25 +85,15 @@ class ChatAgent:
             location = arguments.get("location", "")
 
             try:
-                # 1. Vérifier le quota (Free ou Crédit)
-                client = db_service.admin_client
-                if not client:
-                    return "Erreur technique : impossible de vérifier tes crédits recherche."
-
-                quota_result = client.rpc(
-                    "check_and_use_search_quota", {"p_user_id": user_id}
-                ).execute()
-
-                if not quota_result.data or len(quota_result.data) == 0:
-                    return "Désolé, je n'ai pas pu valider ton quota de recherche."
-
-                quota = quota_result.data[0]
+                # 1. Vérifier le quota via le service standardisé
+                quota = await db_service.check_and_consume_search_quota(user_id)
+                
                 allowed = quota.get("allowed", False)
                 free_remaining = quota.get("free_remaining", 0)
                 used_credit = quota.get("used_credit", False)
 
                 if not allowed:
-                    return "Tu as épuisé tes recherches gratuites et tes crédits. Recharges ton compte pour continuer !"
+                    return "Tu as épuisé tes recherches gratuites et tes crédits. Recharge ton compte pour continuer !"
 
                 # 2. Exécuter la recherche
                 # On crée un profil minimal pour satisfaire find_jobs_v2
@@ -156,12 +147,13 @@ class ChatAgent:
                     + quota_msg
                     + "\n\n[ACTION:NAVIGATE_SEARCH]"
                 )
+            except QuotaError as e:
+                return str(e)
             except Exception as e:
                 logger.error(f"❌ Erreur recherche ChatAgent: {e}")
                 return (
                     f"Une erreur technique est survenue pendant la recherche : {str(e)}"
                 )
-                return f"Erreur lors de la recherche: {str(e)}"
 
         return f"Outil '{function_name}' non reconnu."
 
@@ -207,8 +199,10 @@ class ChatAgent:
                 model=settings.OPENAI_MODEL_MAIN,
                 temperature=0.7,
                 max_tokens=1000,
-                timeout=30.0
+                timeout=30.0,
+                user_id=user_id
             )
+
 
             # 3. Vérifier s'il y a un appel d'outil
             if response_message.get("tool_calls"):
@@ -242,7 +236,8 @@ class ChatAgent:
                     model=settings.OPENAI_MODEL_MAIN,
                     temperature=0.7,
                     max_tokens=1000,
-                    timeout=30.0
+                    timeout=30.0,
+                    user_id=user_id
                 )
 
                 # Si la recherche a retourné des offres, ajouter des quick replies
@@ -311,7 +306,8 @@ class ChatAgent:
                 model=settings.OPENAI_MODEL_MAIN,
                 temperature=0.7,
                 max_tokens=1000,
-                timeout=30.0
+                timeout=30.0,
+                user_id=user_id
             )
 
             # 3. Exécution d'outils
@@ -336,7 +332,8 @@ class ChatAgent:
                     model=settings.OPENAI_MODEL_MAIN,
                     temperature=0.7,
                     max_tokens=1000,
-                    timeout=30.0
+                    timeout=30.0,
+                    user_id=user_id
                 ):
                     yield chunk
             else:

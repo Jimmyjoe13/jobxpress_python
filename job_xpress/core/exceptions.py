@@ -98,6 +98,16 @@ class PayloadValidationError(APIError):
         )
 
 
+class QuotaError(APIError):
+    """Quota de recherches épuisé."""
+
+    def __init__(self, message: str = "Quota de recherches épuisé"):
+        super().__init__(
+            error_code="QUOTA-001",
+            message=message,
+        )
+
+
 # ===========================================
 # ERREURS SERVICES
 # ===========================================

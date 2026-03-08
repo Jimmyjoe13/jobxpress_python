@@ -103,7 +103,8 @@ class LLMEngine:
                 messages=messages,
                 model=settings.OPENAI_MODEL_MAIN,
                 temperature=0.1,
-                timeout=60.0
+                timeout=60.0,
+                user_id=candidate.user_id
             )
 
             # --- VALIDATION PYDANTIC ---
@@ -256,7 +257,8 @@ class LLMEngine:
                 messages=messages,
                 model=settings.OPENAI_MODEL_MAIN,
                 temperature=0.7,
-                timeout=120.0
+                timeout=120.0,
+                user_id=candidate.user_id
             )
         except httpx.TimeoutException:
             logger.error("❌ Timeout génération lettre")

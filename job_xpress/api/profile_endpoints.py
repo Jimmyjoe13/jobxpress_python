@@ -24,6 +24,12 @@ from models.user_profile import (
 )
 from services.database import db_service
 from services.billing import PLANS
+from core.exceptions import (
+    DatabaseError, 
+    APIError, 
+    PayloadValidationError,
+    JobXpressError
+)
 
 logger = get_logger()
 
@@ -94,7 +100,11 @@ async def _get_user_email(client, user_id: str) -> Optional[str]:
 # ===========================================
 
 
-@router.get("", response_model=UserProfileRead)
+@router.get(
+    "",
+    response_model=UserProfileRead,
+    summary="Récupérer le profil complet",
+)
 async def get_profile(
     token: str = Depends(get_required_token),
     user_id: str = Depends(get_current_user_id),
@@ -143,9 +153,15 @@ async def get_profile(
         logger.info(f"👤 Profil récupéré pour {user_id[:8]}...")
         return _build_profile_response(result.data, email)
 
+    except JobXpressError:
+        raise
     except Exception as e:
         logger.error(f"❌ Erreur récupération profil: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+        raise DatabaseError(
+            "DB-005", 
+            f"Impossible de récupérer le profil: {str(e)}",
+            details={"user_id": user_id}
+        )
 
 
 @router.put("", response_model=ProfileUpdateResponse)
@@ -205,11 +221,15 @@ async def update_profile(
             profile=updated_profile,
         )
 
-    except HTTPException:
+    except JobXpressError:
         raise
     except Exception as e:
         logger.error(f"❌ Erreur mise à jour profil: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+        raise DatabaseError(
+            "DB-006", 
+            f"Impossible de mettre à jour le profil: {str(e)}",
+            details={"user_id": user_id, "fields": list(update_data.keys())}
+        )
 
 
 @router.post("/avatar", response_model=AvatarUploadResponse)
@@ -305,11 +325,15 @@ async def upload_avatar(
             avatar_url=avatar_url, message="Avatar uploadé avec succès"
         )
 
-    except HTTPException:
+    except JobXpressError:
         raise
     except Exception as e:
         logger.error(f"❌ Erreur upload avatar: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur upload: {str(e)}")
+        raise APIError(
+            "API-001",
+            f"Échec de l'upload de l'avatar: {str(e)}",
+            details={"user_id": user_id}
+        )
 
 
 @router.post("/cv", response_model=CVUploadResponse)
@@ -383,9 +407,15 @@ async def upload_cv(
             cv_url=cv_url, cv_uploaded_at=now, message="CV uploadé avec succès"
         )
 
+    except JobXpressError:
+        raise
     except Exception as e:
         logger.error(f"❌ Erreur upload CV: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur upload: {str(e)}")
+        raise APIError(
+            "API-002",
+            f"Échec de l'upload du CV: {str(e)}",
+            details={"user_id": user_id}
+        )
 
 
 @router.delete("/avatar")
@@ -409,9 +439,15 @@ async def delete_avatar(
 
         return {"success": True, "message": "Avatar supprimé"}
 
+    except JobXpressError:
+        raise
     except Exception as e:
         logger.error(f"❌ Erreur suppression avatar: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+        raise DatabaseError(
+            "DB-007",
+            f"Impossible de supprimer l'avatar: {str(e)}",
+            details={"user_id": user_id}
+        )
 
 
 @router.delete("/cv")
@@ -442,3 +478,45 @@ async def delete_cv(
     except Exception as e:
         logger.error(f"❌ Erreur suppression CV: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.delete("", status_code=200)
+async def delete_account(
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Supprime définitivement le compte de l'utilisateur connecté. # FIX: RGPD.
+
+    **Action irréversible:**
+    - Supprime le profil et les préférences.
+    - Supprime toutes les candidatures et l'historique de recherche.
+    - Supprime les crédits restants.
+    - Supprime les fichiers stockés (CV, Avatar).
+    - Supprime l'accès à l'application.
+
+    Note: Les factures Stripe sont conservées pour des raisons comptables légales.
+    """
+    try:
+        # Appel du service de suppression
+        success = db_service.delete_user_account(user_id)
+
+        if not success:
+            raise HTTPException(
+                status_code=500, detail="Échec de la suppression du compte"
+            )
+
+        logger.warning(f"⚠️ Compte supprimé par l'utilisateur: {user_id}")
+
+        return {
+            "success": True,
+            "message": "Votre compte a été supprimé avec succès. Vos données personnelles ont été effacées.",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de la suppression du compte user={user_id}: {e}")
+        raise HTTPException(
+            status_code=500, detail="Une erreur est survenue lors de la suppression"
+        )
