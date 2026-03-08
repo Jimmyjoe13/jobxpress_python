@@ -15,9 +15,24 @@ class OpenAIProvider(BaseLLMProvider):
         self.base_url = settings.OPENAI_BASE_URL.rstrip('/')
         self.api_url = f"{self.base_url}/chat/completions"
 
+    def _clean_payload_for_model(self, payload: Dict[str, Any], model: str) -> Dict[str, Any]:
+        """ Retire les paramètres non compatibles pour la génération 'gpt-5' (ou o1-like). """
+        if "gpt-5" in model.lower():
+            # Les modèles orientés 'reasoning' interdisent ces paramètres
+            payload.pop("temperature", None)
+            payload.pop("max_tokens", None)
+            
+            # Si jamais on utilise structuré json format qui poserait problème, on peut le commenter
+            # Selon la doc OpenAI certains modèles ne supportent pas de response_format
+            
+        return payload
+
     async def _handle_request(self, payload: Dict[str, Any], timeout: float) -> httpx.Response:
+        model = payload.get("model", "")
+        payload = self._clean_payload_for_model(payload, model)
+
         async with httpx.AsyncClient() as client:
-            return await client.post(
+            response = await client.post(
                 self.api_url,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
@@ -26,6 +41,17 @@ class OpenAIProvider(BaseLLMProvider):
                 json=payload,
                 timeout=timeout,
             )
+            
+            # --- LOG AVANT LE RAISE DE L'EXCEPTION ---
+            if not response.is_success:
+                try:
+                    error_details = response.json()
+                except Exception:
+                    error_details = response.text
+                logger.error(f"❌ OpenAI HTTP {response.status_code} Error: {json.dumps(error_details)}")
+                logger.error(f"🔎 Sent Payload: {json.dumps(payload, default=str)}")
+                
+            return response
 
     async def generate_json(
         self,
@@ -82,6 +108,8 @@ class OpenAIProvider(BaseLLMProvider):
             "stream": True,
         }
         
+        payload = self._clean_payload_for_model(payload, model)
+
         async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream(
                 "POST",
@@ -92,6 +120,15 @@ class OpenAIProvider(BaseLLMProvider):
                 },
                 json=payload,
             ) as response:
+                if not response.is_success:
+                    await response.aread()
+                    try:
+                        error_details = response.json()
+                    except Exception:
+                        error_details = response.text
+                    logger.error(f"❌ OpenAI HTTP Stream {response.status_code} Error: {json.dumps(error_details)}")
+                    logger.error(f"🔎 Sent Payload: {json.dumps(payload, default=str)}")
+                    
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
