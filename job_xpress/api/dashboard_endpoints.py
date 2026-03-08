@@ -237,3 +237,39 @@ async def add_tracking_note(
     except Exception as e:
         logger.error(f"❌ Erreur add tracking note: {e}")
         raise HTTPException(status_code=500, detail="Erreur lors de l'ajout de la note")
+
+
+@router.delete("/applications/{app_id}")
+async def delete_application(
+    app_id: str,
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Supprime une candidature du Kanban."""
+    client = db_service.get_user_client(token)
+    if not client:
+        raise HTTPException(status_code=500, detail="Erreur base de données")
+
+    try:
+        res = (
+            client.table("applications_v2")
+            .delete()
+            .eq("id", app_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if not res.data:
+            # Note: Si RLS ou ID introuvable, res.data est vide
+            raise HTTPException(
+                status_code=404, detail="Candidature introuvable ou déjà supprimée"
+            )
+
+        return {"status": "success", "id": app_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur suppression candidature: {e}")
+        raise HTTPException(
+            status_code=500, detail="Erreur lors de la suppression de la candidature"
+        )
+
