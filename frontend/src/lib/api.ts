@@ -227,11 +227,21 @@ async function apiRequest<T>(
 
   if (!response.ok) {
     if (response.status === 401) {
+      // Redirection automatique vers la page de connexion
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/login?reason=session_expired'
+      }
       throw new Error('Session expirée, veuillez vous reconnecter')
     }
+    if (response.status === 403) {
+      throw new Error('Accès refusé. Vous n\'avez pas les droits nécessaires.')
+    }
     if (response.status === 429) {
-      const data = await response.json()
+      const data = await response.json().catch(() => ({}))
       throw new Error(`Trop de requêtes. Réessayez dans ${data.retry_after || 60} secondes`)
+    }
+    if (response.status === 503 || response.status === 502) {
+      throw new Error('Service temporairement indisponible. Réessayez dans quelques instants.')
     }
     const error = await response.json().catch(() => ({ detail: 'Erreur serveur' }))
     throw new Error(error.detail || `Erreur ${response.status}`)

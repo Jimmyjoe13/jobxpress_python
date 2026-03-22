@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -60,6 +61,17 @@ class Settings(BaseSettings):
     REDIS_URL: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
+
+    @model_validator(mode="after")
+    def validate_production_requirements(self) -> "Settings":
+        """Vérifie que les variables critiques sont présentes en production."""
+        if self.ENVIRONMENT == "production":
+            if not self.REDIS_URL:
+                raise ValueError(
+                    "REDIS_URL est obligatoire en production. "
+                    "Utilisez Upstash, Redis Cloud ou Railway."
+                )
+        return self
 
 
 @lru_cache()

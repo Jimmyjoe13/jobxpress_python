@@ -246,6 +246,26 @@ export default function ChatPage() {
       <div className="flex-1 bg-slate-800/30 border border-slate-700/50 rounded-2xl overflow-hidden flex flex-col">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Welcome message when no messages yet */}
+          {messages.length === 0 && !isLoading && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4 }}
+              className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-4"
+            >
+              <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-purple-500/25">
+                <span className="text-3xl">🤖</span>
+              </div>
+              <h2 className="text-xl font-semibold text-white mb-2">
+                Bonjour ! Je suis JobyJoba 🤖
+              </h2>
+              <p className="text-slate-400 max-w-sm text-sm leading-relaxed">
+                Votre assistant IA pour préparer vos entretiens. Posez-moi toutes vos questions !
+              </p>
+            </motion.div>
+          )}
+
           <AnimatePresence>
             {messages.map((msg, index) => (
               <motion.div

@@ -11,17 +11,36 @@ from typing import Generator
 # Ajouter le dossier parent au path pour les imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Forcer l'environnement de test avant tout import d'app.
+# Cela empêche le validator Redis (obligatoire en prod) de bloquer la collecte.
+os.environ.setdefault("ENVIRONMENT", "test")
+# Fournir un REDIS_URL factice si non défini (le validator ne s'active qu'en production)
+os.environ.setdefault("REDIS_URL", "")
+
 import sys
 from unittest.mock import MagicMock
 
-# Mock dependencies that break on Python 3.14 (due to Pydantic v1)
-# Must be done BEFORE any imports from the app
-sys.modules['supabase'] = MagicMock()
-sys.modules['realtime'] = MagicMock()
-sys.modules['gotrue'] = MagicMock()
-sys.modules['postgrest'] = MagicMock()
-sys.modules['storage3'] = MagicMock()
-sys.modules['supafunc'] = MagicMock()
+# Mock dependencies that break on Python 3.14 (due to Pydantic v1) or are not
+# installed in the test environment. Must be done BEFORE any imports from the app.
+_MOCK_MODULES = [
+    'supabase', 'realtime', 'gotrue', 'postgrest', 'storage3', 'supafunc',
+    # jwt (pyjwt) and slowapi are installed in the venv — do not mock them
+    'stripe', 'stripe.error',
+    'redis',
+    'weasyprint',
+    'xhtml2pdf', 'xhtml2pdf.pisa',
+    'mistralai',
+    'sentry_sdk', 'sentry_sdk.integrations', 'sentry_sdk.integrations.fastapi',
+    'trafilatura',
+    'lxml_html_clean',
+    'thefuzz', 'thefuzz.fuzz',
+    'Levenshtein',
+    'slugify',
+    'ddgs',
+]
+for _mod in _MOCK_MODULES:
+    if _mod not in sys.modules:
+        sys.modules[_mod] = MagicMock()
 
 from fastapi.testclient import TestClient
 

@@ -9,12 +9,13 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className = "", label, error, icon, type = "text", ...props }, ref) => {
+  ({ className = "", label, error, icon, type = "text", required, ...props }, ref) => {
     return (
       <div className="w-full">
         {label && (
           <label className="block text-sm font-medium text-slate-300 mb-2">
             {label}
+            {required && <span className="text-red-400 ml-0.5">*</span>}
           </label>
         )}
         <div className="relative">
@@ -26,27 +27,28 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             type={type}
+            required={required}
             className={`
-              w-full px-4 py-3 
+              w-full px-4 py-3
               ${icon ? 'pl-10' : ''}
-              bg-slate-800/50 
-              border border-slate-700 
-              rounded-xl 
-              text-white 
+              bg-slate-800/50
+              border border-slate-700
+              rounded-xl
+              text-white
               placeholder:text-slate-500
-              focus:outline-none 
-              focus:ring-2 
-              focus:ring-indigo-500/50 
+              focus:outline-none
+              focus:ring-2
+              focus:ring-indigo-500/50
               focus:border-indigo-500
               transition-all duration-200
-              ${error ? 'border-red-500 focus:ring-red-500/50 focus:border-red-500' : ''}
+              ${error ? 'border-red-500/70 focus:ring-red-500/30 focus:border-red-500' : ''}
               ${className}
             `}
             {...props}
           />
         </div>
         {error && (
-          <p className="mt-2 text-sm text-red-400">{error}</p>
+          <p className="text-red-400 text-xs mt-1">{error}</p>
         )}
       </div>
     )

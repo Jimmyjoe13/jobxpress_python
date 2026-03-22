@@ -188,8 +188,8 @@ export default function PricingPage() {
                 variants={cardVariants}
                 whileHover={!plan.disabled ? { y: -8, scale: 1.02 } : {}}
                 className={`
-                  relative rounded-2xl p-8 transition-all duration-300
-                  ${plan.comingSoon ? "opacity-80" : ""}
+                  relative rounded-2xl p-8 transition-all duration-300 overflow-hidden
+                  ${plan.comingSoon ? "opacity-70 grayscale-[30%]" : ""}
                   ${
                     plan.popular
                       ? "bg-gradient-to-b from-slate-800/90 to-slate-900/90 border-2 border-indigo-500 shadow-2xl shadow-indigo-500/20"
@@ -197,6 +197,14 @@ export default function PricingPage() {
                   }
                 `}
               >
+                {/* Coming Soon overlay */}
+                {plan.comingSoon && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+                    <div className="bg-slate-900/60 backdrop-blur-[2px] rounded-xl px-5 py-2 border border-amber-500/30">
+                      <span className="text-amber-400 font-semibold text-sm tracking-wide">Bientôt disponible</span>
+                    </div>
+                  </div>
+                )}
                 {/* Badge */}
                 {plan.badge && (
                   <motion.div
@@ -308,10 +316,14 @@ export default function PricingPage() {
                     </Link>
                   )
                 ) : (
-                  <Link href={plan.disabled ? "#" : plan.href}>
-                    <Button 
-                      variant={plan.popular ? "gradient" : plan.disabled ? "outline" : "outline"} 
-                      className={`w-full ${plan.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                  <Link
+                    href={plan.disabled ? "#" : plan.href}
+                    onClick={(e) => plan.disabled && e.preventDefault()}
+                    className={plan.disabled ? "cursor-not-allowed" : ""}
+                  >
+                    <Button
+                      variant={plan.popular ? "gradient" : plan.disabled ? "outline" : "outline"}
+                      className={`w-full ${plan.disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
                       size="lg"
                       disabled={plan.disabled}
                     >

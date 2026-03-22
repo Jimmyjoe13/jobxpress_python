@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Navbar, Footer } from "@/components/layout"
+import { ToastProvider, useToast } from "@/components/ui/toast"
 
 const subjects = [
   { value: "general", label: "Question générale" },
@@ -57,7 +58,8 @@ const itemVariants: Variants = {
   },
 }
 
-export default function ContactPage() {
+function ContactContent() {
+  const { showToast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
@@ -77,8 +79,7 @@ export default function ContactPage() {
     setFormData({ name: "", email: "", subject: "", message: "" })
     setIsSubmitting(false)
 
-    // You could add a toast notification here
-    alert("Message envoyé avec succès !")
+    showToast("Message envoyé avec succès !", "success")
   }
 
   return (
@@ -242,5 +243,13 @@ export default function ContactPage() {
 
       <Footer />
     </div>
+  )
+}
+
+export default function ContactPage() {
+  return (
+    <ToastProvider>
+      <ContactContent />
+    </ToastProvider>
   )
 }

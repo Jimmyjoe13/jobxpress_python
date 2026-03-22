@@ -46,25 +46,28 @@ def mock_stripe():
 class TestStripeWebhookCore:
     """Tests pour la sécurité et l'entrée principale du webhook."""
 
-    async def test_webhook_rejects_invalid_signature(self, mock_stripe):
-        """Une signature invalide doit lever une exception ou retourner une erreur."""
-        from api.stripe_webhook import stripe_webhook
-        
-        # Simuler un échec de signature
-        mock_stripe.Webhook.construct_event.side_effect = Exception("Invalid signature")
-        
-        # Mock de Request
-        mock_request = MagicMock(spec=Request)
-        mock_request.body = AsyncMock(return_value=b"invalid-payload")
-        mock_headers = {"stripe-signature": "bad-sig"}
-        
-        # Appeler le webhook
-        result = await stripe_webhook(mock_request, "bad-sig")
-        
-        # Le webhook courant logge l'erreur et retourne True (pour éviter les retries infinis)
-        # Mais dans le code on voit qu'il retourne un booléen via verify_stripe_signature
-        # Regardons l'implémentation du routage principal
-        assert result is False or (isinstance(result, dict) and result.get("status") == "error")
+    def test_verify_stripe_signature_returns_false_on_sdk_error(self, mock_stripe):
+        """verify_stripe_signature doit retourner False si le SDK Stripe lève une exception."""
+        from api.stripe_webhook import verify_stripe_signature
+
+        # Fournir une vraie classe d'exception pour le catch stripe.error.SignatureVerificationError
+        class FakeSignatureError(Exception):
+            pass
+
+        mock_stripe.error.SignatureVerificationError = FakeSignatureError
+        mock_stripe.Webhook.construct_event.side_effect = FakeSignatureError("Signature mismatch")
+
+        result = verify_stripe_signature(b"payload", "bad-sig", "whsec_test")
+
+        assert result is False
+
+    def test_verify_stripe_signature_returns_true_without_secret(self, mock_stripe):
+        """Sans secret configuré, la vérification est ignorée (passe en dev)."""
+        from api.stripe_webhook import verify_stripe_signature
+
+        result = verify_stripe_signature(b"payload", "any-sig", "")
+
+        assert result is True
 
     async def test_webhook_skips_processed_event(self, mock_db_service):
         """Si l'événement a déjà été traité, on ne fait rien."""
@@ -143,7 +146,7 @@ class TestStripeEventsHandling:
     async def test_new_checkout_upgrades_user(self, mock_db_service):
         """checkout.session.completed doit passer le user en plan payant."""
         from api.stripe_webhook import stripe_webhook
-        
+
         event = {
             "id": "evt_ok_1",
             "type": "checkout.session.completed",
@@ -155,7 +158,7 @@ class TestStripeEventsHandling:
                 }
             }
         }
-        
+
         # Mock: Trouver le user par son email (via RPC get_user_id_by_email)
         mock_db_service.admin_client.rpc.return_value.execute.return_value.data = "user_vip_123"
         mock_db_service.admin_client.table.return_value.update.return_value.eq.return_value.execute.return_value.data = [{"id": "user_vip_123"}]
@@ -165,8 +168,174 @@ class TestStripeEventsHandling:
                 mock_request = MagicMock(spec=Request)
                 mock_request.json = AsyncMock(return_value=event)
                 mock_request.body = AsyncMock(return_value=json.dumps(event).encode())
-                
+
                 result = await stripe_webhook(mock_request, "sig")
-                
+
                 assert result["status"] == "success"
                 assert result["plan"] == "PRO"
+
+    async def test_checkout_with_price_id_maps_to_correct_plan(self, mock_db_service):
+        """checkout.session.completed avec price_id dans line_items doit mapper le bon plan."""
+        from api.stripe_webhook import stripe_webhook
+
+        event = {
+            "id": "evt_price_1",
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "customer_email": "starter@test.com",
+                    "customer": "cus_starter",
+                    "metadata": {},
+                    "line_items": {
+                        "data": [{"price": {"id": "price_1Sg51YLlPGgejV8rz28oXmd4"}}]
+                    }
+                }
+            }
+        }
+
+        mock_db_service.admin_client.rpc.return_value.execute.return_value.data = "user_starter_1"
+        mock_db_service.admin_client.table.return_value.update.return_value.eq.return_value.execute.return_value.data = [{"id": "user_starter_1"}]
+
+        with patch("api.stripe_webhook.is_event_processed", return_value=False):
+            with patch("api.stripe_webhook.verify_stripe_signature", return_value=True):
+                mock_request = MagicMock(spec=Request)
+                mock_request.json = AsyncMock(return_value=event)
+                mock_request.body = AsyncMock(return_value=json.dumps(event).encode())
+
+                result = await stripe_webhook(mock_request, "sig")
+
+                assert result["status"] == "success"
+                assert result["plan"] == "STARTER"
+
+    async def test_checkout_without_email_is_skipped(self, mock_db_service):
+        """checkout.session.completed sans email doit être ignoré (skipped)."""
+        from api.stripe_webhook import stripe_webhook
+
+        event = {
+            "id": "evt_noemail_1",
+            "type": "checkout.session.completed",
+            "data": {"object": {"customer": "cus_anon", "metadata": {}}}
+        }
+
+        with patch("api.stripe_webhook.is_event_processed", return_value=False):
+            with patch("api.stripe_webhook.verify_stripe_signature", return_value=True):
+                mock_request = MagicMock(spec=Request)
+                mock_request.json = AsyncMock(return_value=event)
+                mock_request.body = AsyncMock(return_value=json.dumps(event).encode())
+
+                result = await stripe_webhook(mock_request, "sig")
+
+                assert result["status"] == "skipped"
+                assert result["reason"] == "no email"
+
+    async def test_checkout_with_unknown_user_returns_pending(self, mock_db_service):
+        """checkout.session.completed pour un utilisateur inconnu doit retourner 'pending'."""
+        from api.stripe_webhook import stripe_webhook
+
+        event = {
+            "id": "evt_unknown_user",
+            "type": "checkout.session.completed",
+            "data": {"object": {"customer_email": "ghost@test.com", "customer": "cus_ghost", "metadata": {}}}
+        }
+
+        # RPC ne trouve pas l'utilisateur
+        mock_db_service.admin_client.rpc.return_value.execute.return_value.data = None
+        # Fallback table user_profiles aussi vide
+        mock_db_service.admin_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
+
+        with patch("api.stripe_webhook.is_event_processed", return_value=False):
+            with patch("api.stripe_webhook.verify_stripe_signature", return_value=True):
+                mock_request = MagicMock(spec=Request)
+                mock_request.json = AsyncMock(return_value=event)
+                mock_request.body = AsyncMock(return_value=json.dumps(event).encode())
+
+                result = await stripe_webhook(mock_request, "sig")
+
+                assert result["status"] == "pending"
+                assert result["reason"] == "user not found"
+
+    async def test_invoice_payment_succeeded_renews_credits(self, mock_db_service):
+        """invoice.payment_succeeded doit renouveler les crédits selon le plan."""
+        from api.stripe_webhook import stripe_webhook
+
+        event = {
+            "id": "evt_renew_1",
+            "type": "invoice.payment_succeeded",
+            "data": {"object": {"customer": "cus_pro_1"}}
+        }
+
+        # L'utilisateur est PRO
+        mock_db_service.admin_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
+            {"id": "user_pro_1", "plan": "PRO"}
+        ]
+        mock_db_service.admin_client.table.return_value.update.return_value.eq.return_value.execute.return_value.data = [{"id": "user_pro_1"}]
+
+        with patch("api.stripe_webhook.is_event_processed", return_value=False):
+            with patch("api.stripe_webhook.verify_stripe_signature", return_value=True):
+                mock_request = MagicMock(spec=Request)
+                mock_request.json = AsyncMock(return_value=event)
+                mock_request.body = AsyncMock(return_value=json.dumps(event).encode())
+
+                result = await stripe_webhook(mock_request, "sig")
+
+                assert result["status"] == "success"
+                assert result["action"] == "credits_renewed"
+
+    async def test_invoice_payment_failed_below_threshold_is_warning(self, mock_db_service):
+        """invoice.payment_failed avec attempt < 3 doit retourner un warning sans downgrade."""
+        from api.stripe_webhook import stripe_webhook
+
+        event = {
+            "id": "evt_fail_1",
+            "type": "invoice.payment_failed",
+            "data": {"object": {"customer": "cus_warn", "attempt_count": 1}}
+        }
+
+        with patch("api.stripe_webhook.is_event_processed", return_value=False):
+            with patch("api.stripe_webhook.verify_stripe_signature", return_value=True):
+                mock_request = MagicMock(spec=Request)
+                mock_request.json = AsyncMock(return_value=event)
+                mock_request.body = AsyncMock(return_value=json.dumps(event).encode())
+
+                result = await stripe_webhook(mock_request, "sig")
+
+                assert result["status"] == "warning"
+                assert result["attempt"] == 1
+
+    async def test_unhandled_event_type_is_ignored(self, mock_db_service):
+        """Un type d'événement non géré doit retourner 'ignored' sans erreur."""
+        from api.stripe_webhook import stripe_webhook
+
+        event = {
+            "id": "evt_unknown_type",
+            "type": "customer.created",
+            "data": {"object": {}}
+        }
+
+        with patch("api.stripe_webhook.is_event_processed", return_value=False):
+            with patch("api.stripe_webhook.verify_stripe_signature", return_value=True):
+                mock_request = MagicMock(spec=Request)
+                mock_request.json = AsyncMock(return_value=event)
+                mock_request.body = AsyncMock(return_value=json.dumps(event).encode())
+
+                result = await stripe_webhook(mock_request, "sig")
+
+                assert result["status"] == "ignored"
+
+    async def test_invalid_signature_raises_401(self):
+        """Une signature Stripe invalide doit lever HTTPException 401."""
+        from api.stripe_webhook import stripe_webhook
+        from fastapi import HTTPException
+
+        with patch("api.stripe_webhook.verify_stripe_signature", return_value=False):
+            with patch("api.stripe_webhook.settings") as mock_settings:
+                mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+
+                mock_request = MagicMock(spec=Request)
+                mock_request.json = AsyncMock(return_value={"id": "evt_x", "type": "test", "data": {"object": {}}})
+                mock_request.body = AsyncMock(return_value=b'{}')
+
+                with pytest.raises(HTTPException) as exc_info:
+                    await stripe_webhook(mock_request, "bad-signature")
+
+                assert exc_info.value.status_code == 401

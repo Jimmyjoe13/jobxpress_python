@@ -3,19 +3,20 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { 
-  Sparkles, 
-  LayoutDashboard, 
-  FileText, 
-  Settings, 
-  LogOut, 
-  Menu, 
+import {
+  Sparkles,
+  LayoutDashboard,
+  FileText,
+  Settings,
+  LogOut,
+  Menu,
   X,
   User,
   ChevronRight,
   CreditCard,
   Search,
-  Bookmark
+  Bookmark,
+  Home
 } from "lucide-react"
 import { CreditsBadge } from "@/components/ui/credits-badge"
 import { NotificationsPopover } from "@/components/ui/notifications-popover"
@@ -116,8 +117,8 @@ export default function DashboardLayout({
                   onClick={() => setIsSidebarOpen(false)}
                   className={`
                     flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
-                    ${isActive 
-                      ? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/10 text-white border-l-4 border-indigo-500 ml-0 pl-3' 
+                    ${isActive
+                      ? 'bg-indigo-500/10 text-white border-l-2 border-indigo-500 pl-3 shadow-[inset_0_0_12px_rgba(99,102,241,0.08)]'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                     }
                   `}
@@ -194,6 +195,14 @@ export default function DashboardLayout({
                 {userName.charAt(0).toUpperCase()}
               </div>
             </div>
+          </div>
+          {/* Breadcrumb bar */}
+          <div className="px-8 pb-3 flex items-center gap-1.5 text-xs text-slate-500">
+            <Home className="w-3 h-3" />
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-slate-400 font-medium">
+              {navigation.find(n => n.href === pathname)?.name || "Dashboard"}
+            </span>
           </div>
         </header>
 

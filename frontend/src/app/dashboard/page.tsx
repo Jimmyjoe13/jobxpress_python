@@ -198,11 +198,11 @@ export default function DashboardPage() {
 
       {/* Quota Widgets */}
       <motion.div variants={itemVariants} className="mb-8">
-        <QuotaWidget 
+        <QuotaWidget
           credits={subscription?.credits || 0}
           maxCredits={subscription?.max_credits || 5}
           planName={subscription?.plan_name || "FREE"}
-          jobyJobaMessages={subscription?.jobyjoba_messages_limit ? (subscription.jobyjoba_messages_limit - 1) : 0} // Fake current usage for UI demo
+          jobyJobaMessages={0}
           jobyJobaLimit={subscription?.jobyjoba_messages_limit || 10}
           isDailyLimit={subscription?.jobyjoba_is_daily_limit || false}
         />
@@ -301,7 +301,13 @@ export default function DashboardPage() {
             {checklistItems.map((item, idx) => (
               <div key={idx} className="flex items-center gap-3">
                 {item.done ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <motion.div
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 15, delay: idx * 0.08 }}
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  </motion.div>
                 ) : (
                   <Circle className="w-4 h-4 text-slate-600 flex-shrink-0" />
                 )}

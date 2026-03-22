@@ -139,6 +139,9 @@ export default function SettingsPage() {
   
   // Toast state
   const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+
+  // Animated save success state
+  const [savedAnim, setSavedAnim] = useState(false)
   
   // Account deletion state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
@@ -154,7 +157,9 @@ export default function SettingsPage() {
   const handleNotificationToggle = async (key: 'email_candidatures' | 'email_new_offers' | 'email_newsletter' | 'push_notifications', value: boolean) => {
     const success = await updateSingleSetting(key, value)
     if (success) {
-      showToast('success', 'Préférence sauvegardée')
+      showToast('success', 'Préférences sauvegardées ✓')
+      setSavedAnim(true)
+      setTimeout(() => setSavedAnim(false), 2500)
     } else {
       showToast('error', 'Erreur lors de la sauvegarde')
     }
@@ -163,15 +168,17 @@ export default function SettingsPage() {
   // Handle preferences save
   const handleSavePreferences = async () => {
     if (!settings) return
-    
+
     const success = await updateSettings({
       language: settings.language,
       timezone: settings.timezone,
       dark_mode: settings.dark_mode
     })
-    
+
     if (success) {
       showToast('success', 'Préférences sauvegardées')
+      setSavedAnim(true)
+      setTimeout(() => setSavedAnim(false), 2500)
     } else {
       showToast('error', 'Erreur lors de la sauvegarde')
     }
@@ -373,14 +380,30 @@ export default function SettingsPage() {
                     disabled={isSaving}
                   />
                 </div>
-                
-                {/* Saving indicator */}
-                {isSaving && (
-                  <div className="flex items-center gap-2 text-sm text-indigo-400">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Sauvegarde en cours...
-                  </div>
-                )}
+
+                {/* Saving / saved indicator */}
+                <div className="flex items-center gap-3">
+                  {isSaving && (
+                    <div className="flex items-center gap-2 text-sm text-indigo-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sauvegarde en cours...
+                    </div>
+                  )}
+                  <AnimatePresence>
+                    {savedAnim && !isSaving && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.7 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.7 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                        className="flex items-center gap-1.5 text-sm text-emerald-400"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Sauvegardé
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

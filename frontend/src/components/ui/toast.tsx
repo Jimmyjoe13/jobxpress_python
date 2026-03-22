@@ -68,18 +68,27 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const getProgressColor = (type: ToastType) => {
+    switch (type) {
+      case "success": return "bg-emerald-400"
+      case "error": return "bg-red-400"
+      case "warning": return "bg-yellow-400"
+      case "info": return "bg-blue-400"
+    }
+  }
+
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      
+
       {/* Toast Container */}
       <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
         {toasts.map((toast) => (
           <div
             key={toast.id}
             className={`
-              pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl border backdrop-blur-xl
-              shadow-xl animate-slide-in-right min-w-[300px] max-w-[400px]
+              pointer-events-auto relative flex items-center gap-3 px-4 py-3 rounded-xl border backdrop-blur-xl
+              shadow-xl min-w-[300px] max-w-[400px] overflow-hidden
               ${getStyles(toast.type)}
             `}
             style={{
@@ -90,10 +99,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <p className="flex-1 text-sm text-white">{toast.message}</p>
             <button
               onClick={() => removeToast(toast.id)}
-              className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+              className="p-1 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
             >
               <X className="w-4 h-4 text-slate-400" />
             </button>
+            {/* Auto-dismiss progress bar */}
+            <div
+              className={`absolute bottom-0 left-0 h-0.5 ${getProgressColor(toast.type)} opacity-60`}
+              style={{
+                animation: `toast-progress ${toast.duration ?? 4000}ms linear forwards`,
+              }}
+            />
           </div>
         ))}
       </div>
@@ -108,6 +124,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             opacity: 1;
             transform: translateX(0);
           }
+        }
+        @keyframes toast-progress {
+          from { width: 100%; }
+          to   { width: 0%; }
         }
       `}</style>
     </ToastContext.Provider>

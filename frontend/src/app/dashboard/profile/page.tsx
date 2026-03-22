@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { 
+import {
   User,
   Save,
   FileText,
@@ -13,7 +13,7 @@ import {
   Settings,
   Loader2
 } from "lucide-react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -91,7 +91,8 @@ function ProfileContent() {
   const { showToast } = useToast()
   const [isAvatarUploading, setIsAvatarUploading] = useState(false)
   const [isCVUploading, setIsCVUploading] = useState(false)
-  
+  const [isDirty, setIsDirty] = useState(false)
+
   // Form state
   const [formData, setFormData] = useState<ProfileUpdateData>({
     first_name: "",
@@ -129,14 +130,21 @@ function ProfileContent() {
     }
   }, [error, showToast])
 
+  // Helper to update form data and mark dirty
+  const updateFormData = (updates: Partial<ProfileUpdateData>) => {
+    setFormData(prev => ({ ...prev, ...updates }))
+    setIsDirty(true)
+  }
+
   // Handlers
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const success = await updateProfile(formData)
-    
+
     if (success) {
       showToast("Profil mis à jour avec succès !", "success")
+      setIsDirty(false)
     } else {
       showToast("Erreur lors de la mise à jour", "error")
     }
@@ -236,14 +244,14 @@ function ProfileContent() {
                     label="Prénom"
                     placeholder="Jean"
                     value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                    onChange={(e) => updateFormData({ first_name: e.target.value })}
                     icon={<User className="w-4 h-4" />}
                   />
                   <Input
                     label="Nom"
                     placeholder="Dupont"
                     value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                    onChange={(e) => updateFormData({ last_name: e.target.value })}
                     icon={<User className="w-4 h-4" />}
                   />
                   <div className="sm:col-span-2">
@@ -264,7 +272,7 @@ function ProfileContent() {
                     type="tel"
                     placeholder="06 12 34 56 78"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => updateFormData({ phone: e.target.value })}
                     icon={<Phone className="w-4 h-4" />}
                   />
                 </div>
@@ -295,21 +303,21 @@ function ProfileContent() {
                   label="Poste recherché"
                   placeholder="Développeur Full Stack"
                   value={formData.job_title}
-                  onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
+                  onChange={(e) => updateFormData({ job_title: e.target.value })}
                   icon={<Briefcase className="w-4 h-4" />}
                 />
                 <Input
                   label="Localisation souhaitée"
                   placeholder="Paris, France"
                   value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  onChange={(e) => updateFormData({ location: e.target.value })}
                   icon={<MapPin className="w-4 h-4" />}
                 />
                 <Select
                   label="Niveau d'expérience"
                   options={experienceLevels}
                   value={formData.experience_level}
-                  onChange={(e) => setFormData({ ...formData, experience_level: e.target.value })}
+                  onChange={(e) => updateFormData({ experience_level: e.target.value })}
                 />
               </div>
             </CardContent>
@@ -366,13 +374,13 @@ function ProfileContent() {
                   label="Type de contrat préféré"
                   options={contractTypes}
                   value={formData.preferred_contract_type}
-                  onChange={(e) => setFormData({ ...formData, preferred_contract_type: e.target.value })}
+                  onChange={(e) => updateFormData({ preferred_contract_type: e.target.value })}
                 />
                 <Select
                   label="Mode de travail préféré"
                   options={workTypes}
                   value={formData.preferred_work_type}
-                  onChange={(e) => setFormData({ ...formData, preferred_work_type: e.target.value })}
+                  onChange={(e) => updateFormData({ preferred_work_type: e.target.value })}
                 />
               </div>
 
@@ -383,7 +391,7 @@ function ProfileContent() {
                 </label>
                 <SkillTags
                   skills={formData.key_skills || []}
-                  onChange={(skills) => setFormData({ ...formData, key_skills: skills })}
+                  onChange={(skills) => updateFormData({ key_skills: skills })}
                   placeholder="Ex: React, Python, Management..."
                 />
               </div>
@@ -398,9 +406,9 @@ function ProfileContent() {
           transition={{ duration: 0.5, delay: 0.5 }}
           className="flex justify-end"
         >
-          <Button 
-            type="submit" 
-            variant="gradient" 
+          <Button
+            type="submit"
+            variant="gradient"
             size="lg"
             isLoading={isSaving}
           >
@@ -409,6 +417,44 @@ function ProfileContent() {
           </Button>
         </motion.div>
       </form>
+
+      {/* Sticky unsaved changes bar */}
+      <AnimatePresence>
+        {isDirty && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700/50 p-4"
+          >
+            <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+              <p className="text-sm text-amber-400 font-medium flex items-center gap-2">
+                <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                Modifications non sauvegardées
+              </p>
+              <Button
+                type="button"
+                variant="gradient"
+                size="lg"
+                isLoading={isSaving}
+                onClick={async () => {
+                  const success = await updateProfile(formData)
+                  if (success) {
+                    showToast("Profil mis à jour avec succès !", "success")
+                    setIsDirty(false)
+                  } else {
+                    showToast("Erreur lors de la mise à jour", "error")
+                  }
+                }}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Sauvegarder
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

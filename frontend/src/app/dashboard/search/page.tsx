@@ -12,7 +12,8 @@ import {
   AlertTriangle,
   Sparkles,
   Loader2,
-  Bookmark
+  Bookmark,
+  ChevronDown
 } from "lucide-react"
 import { QuickSearchJobCard } from "@/components/jobs/quick-search-job-card"
 import { 
@@ -63,6 +64,7 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null)
   const [quota, setQuota] = useState<SearchQuota | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
 
   // Load Quota & URL Params
   useEffect(() => {
@@ -255,49 +257,74 @@ export default function SearchPage() {
             </div>
           </div>
 
-          <details className="group cursor-pointer">
-            <summary className="flex items-center gap-2 text-sm font-medium text-indigo-400 outline-none select-none">
+          <div>
+            <button
+              type="button"
+              onClick={() => setIsFiltersOpen(prev => !prev)}
+              className="flex items-center gap-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
               <Filter className="w-4 h-4" />
               <span>Plus de filtres</span>
-            </summary>
-            <div className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-700 mt-4">
-              <label className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="excludeAgencies"
-                  checked={formData.excludeAgencies}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-500"
-                />
-                <span className="text-sm text-slate-300">Exclure cabinets</span>
-              </label>
-              <label className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="remoteOnly"
-                  checked={formData.remoteOnly}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-500"
-                />
-                <span className="text-sm text-slate-300">Full Remote uniquement</span>
-              </label>
-              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 flex flex-col justify-center">
-                <label className="flex justify-between text-xs text-slate-300 mb-2">
-                  <span>Ancienneté max:</span>
-                  <span className="text-indigo-400">{formData.maxDaysOld} jours</span>
-                </label>
-                <input
-                  type="range"
-                  name="maxDaysOld"
-                  min="1"
-                  max="30"
-                  value={formData.maxDaysOld}
-                  onChange={handleInputChange}
-                  className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                />
-              </div>
-            </div>
-          </details>
+              <motion.span
+                animate={{ rotate: isFiltersOpen ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+                className="inline-flex"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </motion.span>
+            </button>
+
+            <AnimatePresence initial={false}>
+              {isFiltersOpen && (
+                <motion.div
+                  key="advanced-filters"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-700 mt-4">
+                    <label className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="excludeAgencies"
+                        checked={formData.excludeAgencies}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-500"
+                      />
+                      <span className="text-sm text-slate-300">Exclure cabinets</span>
+                    </label>
+                    <label className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="remoteOnly"
+                        checked={formData.remoteOnly}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-500"
+                      />
+                      <span className="text-sm text-slate-300">Full Remote uniquement</span>
+                    </label>
+                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 flex flex-col justify-center">
+                      <label className="flex justify-between text-xs text-slate-300 mb-2">
+                        <span>Ancienneté max:</span>
+                        <span className="text-indigo-400">{formData.maxDaysOld} jours</span>
+                      </label>
+                      <input
+                        type="range"
+                        name="maxDaysOld"
+                        min="1"
+                        max="30"
+                        value={formData.maxDaysOld}
+                        onChange={handleInputChange}
+                        className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           <div className="pt-2">
             <button
