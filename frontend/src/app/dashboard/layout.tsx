@@ -21,6 +21,7 @@ import {
 import { CreditsBadge } from "@/components/ui/credits-badge"
 import { NotificationsPopover } from "@/components/ui/notifications-popover"
 import { ChatWidget } from "@/components/ui/chat-widget"
+import { UpgradeBannerCompact } from "@/components/ui/upgrade-banner"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -134,23 +135,29 @@ export default function DashboardLayout({
           </nav>
 
           {/* User Section */}
-          <div className="p-4 border-t border-slate-800">
-            <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-semibold shadow-lg">
+          <div className="p-4 border-t border-slate-800 space-y-3">
+            {/* Upgrade banner (FREE users only) */}
+            <UpgradeBannerCompact />
+
+            {/* Credits Badge */}
+            <div className="px-1">
+              <CreditsBadge showPlan className="w-full justify-center" />
+            </div>
+
+            {/* User identity */}
+            <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-800/40 rounded-xl border border-slate-700/40">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold shadow-md flex-shrink-0">
                 {userName.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{userName}</p>
-                <p className="text-xs text-slate-500 truncate">{userEmail || "Plan Gratuit"}</p>
+                <p className="text-sm font-medium text-white truncate leading-none">{userName}</p>
+                <p className="text-xs text-slate-500 truncate mt-0.5">{userEmail || "Plan Gratuit"}</p>
               </div>
             </div>
-            {/* Credits Badge */}
-            <div className="mb-4 px-2">
-              <CreditsBadge showPlan className="w-full justify-center" />
-            </div>
-            <button 
+
+            <button
               onClick={handleLogout}
-              className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all text-sm font-medium"
+              className="flex items-center gap-3 w-full px-4 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all text-sm font-medium"
             >
               <LogOut className="w-5 h-5" />
               Déconnexion
@@ -181,28 +188,26 @@ export default function DashboardLayout({
         </header>
 
         {/* Desktop Header */}
-        <header className="hidden lg:block sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800">
-          <div className="flex items-center justify-between px-8 py-4">
-            <div>
-              <h2 className="text-lg font-semibold text-white">
-                {navigation.find(n => n.href === pathname)?.name || "Dashboard"}
-              </h2>
-            </div>
-            <div className="flex items-center gap-4">
-              <CreditsBadge />
-              <NotificationsPopover />
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold cursor-pointer hover:scale-105 transition-transform">
-                {userName.charAt(0).toUpperCase()}
-              </div>
-            </div>
-          </div>
-          {/* Breadcrumb bar */}
-          <div className="px-8 pb-3 flex items-center gap-1.5 text-xs text-slate-500">
-            <Home className="w-3 h-3" />
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-slate-400 font-medium">
-              {navigation.find(n => n.href === pathname)?.name || "Dashboard"}
+        <header className="hidden lg:flex sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 items-center justify-between px-8 h-16">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-1.5 text-sm">
+            <Home className="w-3.5 h-3.5 text-slate-600" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-700" />
+            <span className="text-white font-semibold">
+              {navigation.find((n) => n.href === pathname)?.name || "Dashboard"}
             </span>
+          </div>
+
+          {/* Right actions */}
+          <div className="flex items-center gap-3">
+            <CreditsBadge />
+            <NotificationsPopover />
+            <div
+              className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition-transform shadow-md"
+              title={userName}
+            >
+              {userName.charAt(0).toUpperCase()}
+            </div>
           </div>
         </header>
 
