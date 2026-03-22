@@ -1,6 +1,9 @@
+import logging
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -64,12 +67,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_requirements(self) -> "Settings":
-        """Vérifie que les variables critiques sont présentes en production."""
+        """Avertit si des variables recommandées sont absentes en production."""
         if self.ENVIRONMENT == "production":
             if not self.REDIS_URL:
-                raise ValueError(
-                    "REDIS_URL est obligatoire en production. "
-                    "Utilisez Upstash, Redis Cloud ou Railway."
+                logger.warning(
+                    "REDIS_URL non configurée en production — fallback sur cache SQLite. "
+                    "Pour de meilleures performances, configurez Upstash, Redis Cloud ou Railway."
                 )
         return self
 
