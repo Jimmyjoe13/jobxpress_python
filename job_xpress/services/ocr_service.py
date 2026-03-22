@@ -1,4 +1,4 @@
-from mistralai import Mistral
+from mistralai.client import Mistral
 from core.config import settings
 from core.logging_config import get_logger
 
