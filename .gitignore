@@ -1,0 +1,24 @@
+# Mémoire Claude (contexte local, ne pas versionner)
+CLAUDE_MEMORY.md
+
+# Dépendances frontend
+frontend/node_modules/
+
+# Build frontend
+frontend/.next/
+frontend/out/
+
+# Variables d'environnement
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
