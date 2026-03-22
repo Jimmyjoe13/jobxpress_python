@@ -303,6 +303,31 @@ async def get_search_history(
         raise HTTPException(status_code=500, detail="Erreur récupération historique")
 
 
+@router.delete("/search/history")
+async def clear_search_history(
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Supprime tout l'historique de recherche de l'utilisateur."""
+    client = db_service.get_user_client(token)
+    if not client:
+        raise HTTPException(status_code=500, detail="Erreur connexion base de données")
+
+    try:
+        result = (
+            client.table("search_history")
+            .delete()
+            .eq("user_id", user_id)
+            .execute()
+        )
+        deleted_count = len(result.data) if result.data else 0
+        logger.info(f"🗑️ Historique effacé pour user {user_id[:8]} ({deleted_count} entrées)")
+        return {"status": "cleared", "deleted_count": deleted_count}
+    except Exception as e:
+        logger.error(f"❌ Erreur suppression historique: {e}")
+        raise HTTPException(status_code=500, detail="Erreur suppression de l'historique")
+
+
 @router.delete("/search/history/{history_id}")
 async def delete_search_history_item(
     history_id: str,

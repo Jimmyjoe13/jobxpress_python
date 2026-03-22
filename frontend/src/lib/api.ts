@@ -711,6 +711,15 @@ export async function deleteSearchHistoryItem(historyId: string): Promise<{ stat
 }
 
 /**
+ * Clear all search history for the current user
+ */
+export async function clearSearchHistory(): Promise<{ status: string; deleted_count: number }> {
+  return apiRequest<{ status: string; deleted_count: number }>('/api/v2/search/history', {
+    method: 'DELETE'
+  }, true)
+}
+
+/**
  * Get user's search quota
  */
 export interface SearchQuota {
