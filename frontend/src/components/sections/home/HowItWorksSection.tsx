@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { motion } from "framer-motion"
 import { FileText, Brain, Mail } from "lucide-react"
 
@@ -127,6 +128,39 @@ export function HowItWorksSection() {
               </motion.div>
             </motion.div>
           ))}
+        </motion.div>
+
+        {/* App Preview */}
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.5, duration: 0.7 }}
+          className="mt-20 max-w-4xl mx-auto relative"
+        >
+          {/* Glow behind the card */}
+          <div className="absolute inset-0 bg-indigo-600/10 blur-3xl rounded-3xl" />
+
+          <div className="relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
+            {/* Gradient overlay — top & bottom for blending */}
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/50 z-10" />
+
+            <Image
+              src="/images/step-success.png"
+              alt="Résultats JobXpress — candidature réussie"
+              width={1200}
+              height={675}
+              className="w-full h-auto"
+              priority={false}
+            />
+
+            {/* Caption overlay */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 px-8 pb-8 text-center">
+              <p className="text-white/70 text-sm font-medium">
+                Recevez vos candidatures complètes, prêtes à envoyer — en moins de 5 minutes
+              </p>
+            </div>
+          </div>
         </motion.div>
       </div>
     </section>

@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { motion } from "framer-motion"
 import { Star, Quote } from "lucide-react"
 
@@ -9,6 +10,7 @@ const testimonials = [
     role: "Développeuse Python",
     company: "Capgemini",
     result: "CDI obtenu en 8 jours",
+    avatarImg: "/images/avatar-marie.png",
     avatar: "ML",
     color: "from-indigo-500 to-blue-600",
     rating: 5,
@@ -20,6 +22,7 @@ const testimonials = [
     role: "Product Manager",
     company: "BlaBlaCar",
     result: "3 entretiens en 2 semaines",
+    avatarImg: "/images/avatar-thomas.png",
     avatar: "TR",
     color: "from-purple-500 to-pink-600",
     rating: 5,
@@ -31,6 +34,7 @@ const testimonials = [
     role: "Data Scientist",
     company: "Doctolib",
     result: "Offre +15% vs poste précédent",
+    avatarImg: "/images/avatar-sofia.png",
     avatar: "SM",
     color: "from-emerald-500 to-teal-600",
     rating: 5,
@@ -113,8 +117,14 @@ export function TestimonialsSection() {
 
               {/* Author */}
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${t.color} flex items-center justify-center text-white text-xs font-black flex-shrink-0`}>
-                  {t.avatar}
+                <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-indigo-500/30">
+                  <Image
+                    src={t.avatarImg}
+                    alt={t.name}
+                    fill
+                    className="object-cover object-top"
+                    sizes="40px"
+                  />
                 </div>
                 <div>
                   <div className="text-white text-sm font-semibold">{t.name}</div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { Zap, ArrowRight, CheckCircle, Shield, Clock, Play, Search, Sparkles } from "lucide-react"
 import { ParticlesBackground, FloatingOrbs } from "@/components/ui/particles"
@@ -202,16 +203,37 @@ export function HeroSection() {
                </div>
             </div>
 
+            {/* Dashboard preview floating card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: 1.6, duration: 0.8, ease: "easeOut" }}
+              className="absolute -bottom-10 -left-10 w-56 h-36 rounded-2xl overflow-hidden border border-indigo-500/20 shadow-2xl z-20 hidden lg:block"
+            >
+              <Image
+                src="/images/hero-dashboard.png"
+                alt="Aperçu du dashboard JobXpress"
+                fill
+                className="object-cover"
+                sizes="224px"
+              />
+              <div className="absolute inset-0 bg-slate-950/40" />
+              <div className="absolute bottom-2.5 left-3 right-3 z-10 flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs text-white/80 font-medium">Dashboard IA en direct</span>
+              </div>
+            </motion.div>
+
             {/* Decorative Floating Elements */}
-            <motion.div 
+            <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -top-6 -right-6 w-24 h-24 bg-purple-500/20 rounded-full blur-3xl" 
+              className="absolute -top-6 -right-6 w-24 h-24 bg-purple-500/20 rounded-full blur-3xl"
             />
-            <motion.div 
+            <motion.div
               animate={{ y: [0, 10, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-              className="absolute -bottom-10 -left-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl" 
+              className="absolute -bottom-10 -left-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"
             />
           </motion.div>
 
