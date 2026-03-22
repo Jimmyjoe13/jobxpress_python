@@ -7,16 +7,16 @@ import { Zap, ArrowRight, CheckCircle, Shield, Clock, Play, Search, Sparkles } f
 import { ParticlesBackground, FloatingOrbs } from "@/components/ui/particles"
 
 const trustIndicators = [
-  { icon: CheckCircle, text: "Sans engagement" },
-  { icon: Shield, text: "Données chiffrées" },
-  { icon: Clock, text: "Matching en 30s" },
+  { icon: CheckCircle, text: "Sans carte bancaire" },
+  { icon: Shield, text: "5 crédits offerts" },
+  { icon: Clock, text: "Zéro débit sans résultat" },
 ]
 
 const stats = [
-  { value: "15k+", label: "Candidatures IA" },
-  { value: "92%", label: "Satisfaction" },
-  { value: "4.9/5", label: "Note moyenne" },
-  { value: "24/7", label: "Assistant Joby" },
+  { value: "15k+", label: "Candidatures générées", sub: "depuis le lancement" },
+  { value: "92%", label: "Taux de satisfaction", sub: "utilisateurs actifs" },
+  { value: "4.9/5", label: "Note moyenne", sub: "Trustpilot" },
+  { value: "30s", label: "Pour scorer une offre", sub: "en moyenne" },
 ]
 
 const searchPlaceholders = [
@@ -62,18 +62,20 @@ export function HeroSection() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/30 mb-8 backdrop-blur-md"
             >
               <Zap className="w-4 h-4 text-yellow-400" />
-              <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest">Nouvelle Version V2 - IA Hybride</span>
+              <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest">🚀 15 000+ candidatures générées</span>
             </motion.div>
 
             <h1 className="text-5xl md:text-7xl font-bold mb-8 leading-[1.1] tracking-tight text-white">
-              Ne cherchez plus, <br />
-              <span className="text-gradient-animated">soyez trouvé.</span>
+              Trouvez votre emploi{" "}
+              <span className="text-gradient-animated">10x plus vite</span>{" "}
+              avec l&apos;IA
             </h1>
 
             <p className="text-xl text-slate-400 mb-10 max-w-xl leading-relaxed">
-              Le premier assistant de carrière piloté par IA qui <span className="text-white font-medium">automatise le sourcing</span>, 
-              l'analyse et la candidature de bout en bout. 
-              <span className="text-indigo-400"> 10x plus de résultats, 0 fatigue.</span>
+              JobXpress analyse des milliers d&apos;offres en temps réel,{" "}
+              <span className="text-white font-medium">score votre compatibilité</span>{" "}
+              et rédige des lettres personnalisées —{" "}
+              <span className="text-indigo-400">le tout en moins de 30 secondes.</span>
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-5 mb-12">
@@ -81,15 +83,16 @@ export function HeroSection() {
                 href="/register"
                 className="group relative w-full sm:w-auto bg-white text-slate-950 px-8 py-4 rounded-2xl text-lg font-bold hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
               >
-                Commencer gratuitement
+                Analyser mes opportunités gratuitement
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
-              
+
               <Link
-                href="#pricing"
-                className="w-full sm:w-auto px-8 py-4 rounded-2xl text-lg font-semibold text-white border border-slate-700 hover:border-indigo-400/50 hover:bg-indigo-500/5 transition-all text-center"
+                href="#how-it-works"
+                className="w-full sm:w-auto px-8 py-4 rounded-2xl text-lg font-semibold text-white border border-slate-700 hover:border-indigo-400/50 hover:bg-indigo-500/5 transition-all text-center flex items-center justify-center gap-2"
               >
-                Voir les tarifs
+                <Play className="w-4 h-4" />
+                Voir comment ça marche
               </Link>
             </div>
 
@@ -219,7 +222,8 @@ export function HeroSection() {
             {stats.map((stat, i) => (
               <div key={i} className="text-center md:text-left">
                 <div className="text-3xl font-bold text-white mb-1">{stat.value}</div>
-                <div className="text-sm text-slate-500 tracking-wide font-medium">{stat.label}</div>
+                <div className="text-sm text-slate-400 tracking-wide font-medium">{stat.label}</div>
+                <div className="text-xs text-slate-600 mt-0.5">{stat.sub}</div>
               </div>
             ))}
         </div>

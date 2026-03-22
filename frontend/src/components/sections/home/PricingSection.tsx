@@ -194,7 +194,7 @@ export function PricingSection() {
                   </AnimatePresence>
                 </div>
 
-                <ul className="space-y-4 mb-10 flex-grow">
+                <ul className="space-y-4 mb-6 flex-grow">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-3 text-sm text-slate-300">
                       <div className="mt-1 w-4 h-4 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
@@ -204,6 +204,12 @@ export function PricingSection() {
                     </li>
                   ))}
                 </ul>
+
+                {plan.id === "STARTER" && (
+                  <div className="mb-6 px-4 py-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-xs text-emerald-400 leading-relaxed">
+                    💡 Soit <span className="font-bold">0,10€ par lettre de motivation</span>. Une candidature réussie = plus de 12 mois remboursés.
+                  </div>
+                )}
 
                 <a
                   href={currentHref}

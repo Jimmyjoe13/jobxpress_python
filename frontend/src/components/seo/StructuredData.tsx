@@ -49,14 +49,43 @@ export default function StructuredData() {
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    "name": "jobXpress",
+    "name": "JobXpress",
     "url": "https://jobxpress.fr",
-    "description": "Automatisez votre recherche d'emploi avec l'IA",
+    "description": "Recherche d'emploi automatisée par l'IA — candidatures en 30 secondes",
     "potentialAction": {
       "@type": "SearchAction",
       "target": "https://jobxpress.fr/dashboard/apply?q={search_term_string}",
       "query-input": "required name=search_term_string"
     }
+  };
+
+  const howToSchema = {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "Comment trouver un emploi avec JobXpress",
+    "description": "Trouvez votre prochain emploi 10x plus vite grâce à l'IA de JobXpress en 3 étapes simples.",
+    "totalTime": "PT5M",
+    "step": [
+      {
+        "@type": "HowToStep",
+        "position": 1,
+        "name": "Créez votre profil en 30 secondes",
+        "text": "Renseignez votre poste cible et uploadez votre CV. L'IA s'occupe du reste.",
+        "url": "https://jobxpress.fr/register"
+      },
+      {
+        "@type": "HowToStep",
+        "position": 2,
+        "name": "L'IA analyse 50 000+ offres",
+        "text": "Notre moteur scrute les meilleures sources et score chaque offre selon votre profil en temps réel."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 3,
+        "name": "Recevez vos candidatures prêtes à envoyer",
+        "text": "Obtenez vos meilleures opportunités avec des lettres de motivation personnalisées, prêtes à l'envoi."
+      }
+    ]
   };
 
   return (
@@ -72,6 +101,10 @@ export default function StructuredData() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(howToSchema) }}
       />
     </>
   );

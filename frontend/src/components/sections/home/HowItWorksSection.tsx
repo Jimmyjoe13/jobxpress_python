@@ -6,24 +6,27 @@ import { FileText, Brain, Mail } from "lucide-react"
 const steps = [
   {
     step: "1",
-    title: "Complétez votre profil",
-    description: "Renseignez vos informations, le poste recherché et uploadez votre CV.",
+    title: "30 secondes pour démarrer",
+    description: "Renseignez votre poste cible et uploadez votre CV. C'est tout — l'IA s'occupe du reste.",
     icon: FileText,
     color: "from-indigo-500 to-blue-600",
+    badge: "30s",
   },
   {
     step: "2",
-    title: "L'IA analyse et recherche",
-    description: "Notre moteur parcourt des milliers d'offres et sélectionne les plus pertinentes.",
+    title: "50 000+ offres analysées",
+    description: "Notre moteur scrute les meilleures sources et score chaque offre selon votre profil en temps réel.",
     icon: Brain,
     color: "from-purple-500 to-pink-600",
+    badge: "IA",
   },
   {
     step: "3",
-    title: "Recevez vos candidatures",
-    description: "Obtenez vos lettres de motivation personnalisées et les meilleures opportunités.",
+    title: "Candidatures prêtes à envoyer",
+    description: "Recevez vos meilleures opportunités avec des lettres de motivation personnalisées, prêtes à l'envoi.",
     icon: Mail,
     color: "from-emerald-500 to-teal-600",
+    badge: "✓",
   },
 ]
 
@@ -68,7 +71,7 @@ export function HowItWorksSection() {
             3 étapes simples
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            De votre profil à vos candidatures en quelques minutes
+            De votre profil à vos premières candidatures en moins de 5 minutes
           </p>
         </motion.div>
 
@@ -107,15 +110,15 @@ export function HowItWorksSection() {
                   >
                     <item.icon className="w-12 h-12 text-white" />
                   </motion.div>
-                  {/* Step number badge */}
+                  {/* Step badge */}
                   <motion.div
                     initial={{ scale: 0 }}
                     whileInView={{ scale: 1 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.3 + i * 0.1, type: "spring", stiffness: 300 }}
-                    className="absolute -top-2 -right-2 w-10 h-10 rounded-full bg-slate-800 border-2 border-indigo-500 flex items-center justify-center text-lg font-bold text-white shadow-lg"
+                    className="absolute -top-2 -right-2 min-w-10 h-10 px-2 rounded-full bg-slate-800 border-2 border-indigo-500 flex items-center justify-center text-xs font-black text-indigo-300 shadow-lg"
                   >
-                    {item.step}
+                    {item.badge}
                   </motion.div>
                 </div>
 

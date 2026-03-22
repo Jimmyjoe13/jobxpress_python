@@ -1,35 +1,36 @@
 import { Metadata } from "next"
 import { Navbar, Footer } from "@/components/layout"
-import { HeroSection, FeaturesSection, HowItWorksSection, PricingSection, CtaSection } from "@/components/sections/home"
+import { HeroSection, FeaturesSection, HowItWorksSection, PricingSection, TestimonialsSection, FAQSection, CtaSection } from "@/components/sections/home"
 import StructuredData from "@/components/seo/StructuredData"
 
 // Métadonnées SEO complètes pour la landing page
 export const metadata: Metadata = {
-  title: "jobXpress | Boostez votre Recherche d'Emploi avec l'IA",
+  title: "JobXpress — Recherche d'emploi automatisée par IA | Candidatures en 30s",
   description:
-    "Automatisez vos candidatures, générez des lettres de motivation personnalisées et trouvez le job de vos rêves 10x plus vite avec notre assistant IA JobyJoba.",
+    "JobXpress analyse des milliers d'offres, score votre compatibilité et génère des lettres de motivation personnalisées en 30 secondes. Gratuit. Zéro débit sans résultat.",
   keywords: [
-    "IA emploi",
-    "recherche job",
+    "recherche emploi IA",
+    "candidature automatique",
     "lettre de motivation IA",
-    "assistant carrière",
+    "assistant carrière IA",
+    "trouver un emploi rapidement",
     "automatisation candidature",
-    "job search AI",
-    "trouver un travail",
-    "deepseek",
+    "offres d'emploi personnalisées",
+    "scoring CV",
+    "JobXpress",
   ],
   openGraph: {
-    title: "jobXpress - L'IA au service de votre carrière",
+    title: "JobXpress — Trouvez votre emploi 10x plus vite avec l'IA",
     description:
-      "Postulez intelligemment. Laissez notre IA gérer la partie fastidieuse de votre recherche d'emploi.",
+      "Analysez des milliers d'offres, scorez votre compatibilité et générez des lettres personnalisées en 30 secondes. Gratuit, sans carte bancaire.",
     url: "https://jobxpress.fr",
-    siteName: "jobXpress",
+    siteName: "JobXpress",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "jobXpress - Assistant IA pour la recherche d'emploi",
+        alt: "JobXpress - Recherche d'emploi automatisée par IA",
       },
     ],
     locale: "fr_FR",
@@ -37,8 +38,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "jobXpress | Assistant Emploi IA",
-    description: "10x plus de candidatures en 2x moins de temps.",
+    title: "JobXpress | Emploi IA — Candidatures en 30s",
+    description: "Analyse d'offres, scoring CV et lettres personnalisées en 30s. Gratuit.",
     images: ["/og-image.png"],
   },
   alternates: {
@@ -47,33 +48,17 @@ export const metadata: Metadata = {
 }
 
 export default function Home() {
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "jobXpress",
-    "operatingSystem": "Web",
-    "applicationCategory": "BusinessApplication",
-    "description": "Assistant de recherche d'emploi propulsé par l'IA pour automatiser les candidatures et optimiser les CV.",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "EUR"
-    }
-  }
-
   return (
     <div className="min-h-screen mesh-gradient relative overflow-hidden">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
       <StructuredData />
       <Navbar />
       <main>
         <HeroSection />
         <FeaturesSection />
         <HowItWorksSection />
+        <TestimonialsSection />
         <PricingSection />
+        <FAQSection />
         <CtaSection />
       </main>
       <Footer />
