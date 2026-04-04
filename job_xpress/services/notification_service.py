@@ -1,5 +1,5 @@
 from typing import List
-from job_xpress_v2.models.job_offer import JobOffer
+from models.job_offer_v2 import JobOffer
 
 class NotificationService:
     """

@@ -1,7 +1,7 @@
 from ddgs import DDGS
 import asyncio
 from typing import List
-from job_xpress_v2.services.stealth_scraper import StealthScraper
+from services.stealth_scraper import StealthScraper
 
 class DiscoveryEngine:
     """

@@ -1,7 +1,7 @@
 import asyncio
 from typing import List, Set, Dict, Any, Optional
-from job_xpress_v2.services.stealth_scraper import StealthScraper
-from job_xpress_v2.services.gemini_engine import GeminiEngine
+from services.stealth_scraper import StealthScraper
+from services.gemini_engine import GeminiEngine
 
 class CrawlerService:
     """

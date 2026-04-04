@@ -1,7 +1,7 @@
 import sqlite3
 import json
 from typing import List, Optional
-from job_xpress_v2.models.job_offer import JobOffer
+from models.job_offer_v2 import JobOffer
 
 class DatabaseV2:
     """
@@ -9,7 +9,7 @@ class DatabaseV2:
     Permet de stocker les offres scrappées et d'éviter les doublons.
     """
     
-    def __init__(self, db_path: str = "job_xpress_v2/jobs_v2.db"):
+    def __init__(self, db_path: str = "jobs_v2.db"):
         self.db_path = db_path
         self._init_db()
 
