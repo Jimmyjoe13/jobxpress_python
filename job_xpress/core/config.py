@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "JobXpress API"
-    VERSION: str = "1.1.0"
+    VERSION: str = "2.0.0"
 
     # Environnement
     ENVIRONMENT: str = "development"  # development, staging, production
@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     SERPAPI_KEY: str = ""
 
     # IA & LLM Provider Settings
-    LLM_PROVIDER: str = "openai"  # "openai" ou "deepseek"
+    LLM_PROVIDER: str = "gemini"  # "openai", "deepseek" ou "gemini"
+    GEMINI_API_KEY: str = ""
     DEEPSEEK_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
