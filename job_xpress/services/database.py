@@ -95,6 +95,57 @@ class DatabaseService:
             logger.error(f"⚠️ Erreur création user client: {e}")
             return None
 
+    def save_job_v2(self, offer: JobOffer, user_id: str = None) -> bool:
+        """
+        Sauvegarde une offre d'emploi V2 dans Supabase.
+        Supporte la déduplication par URL.
+        """
+        if not self.admin_client:
+            return False
+
+        try:
+            job_data = {
+                "url": offer.url,
+                "title": offer.title,
+                "company": offer.company,
+                "location": offer.location,
+                "salary": offer.salary,
+                "description": offer.description,
+                "skills": offer.skills,
+                "contract_type": offer.contract_type,
+                "is_remote": offer.is_remote,
+                "match_score": offer.match_score,
+                "user_id": user_id
+            }
+
+            self.admin_client.table("jobs_v2").upsert(job_data, on_conflict="url").execute()
+            logger.info(f"💾 Offre V2 enregistrée: {offer.title} @ {offer.company}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Erreur sauvegarde Job V2: {e}")
+            return False
+
+    def get_top_jobs_v2(self, user_id: str, limit: int = 20) -> list:
+        """
+        Récupère les meilleures offres V2 pour un utilisateur donné.
+        """
+        if not self.admin_client:
+            return []
+
+        try:
+            result = (
+                self.admin_client.table("jobs_v2")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("match_score", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return result.data if result.data else []
+        except Exception as e:
+            logger.error(f"❌ Erreur récupération Jobs V2: {e}")
+            return []
+
     def save_application(
         self,
         candidate: CandidateProfile,

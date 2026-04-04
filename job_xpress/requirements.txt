@@ -18,6 +18,7 @@ stripe>=5.0.0
 weasyprint>=60.0
 
 # --- V2 Dependencies ---
+playwright>=1.40.0
 pyjwt>=2.8.0
 thefuzz>=0.22.0
 python-slugify>=8.0.0

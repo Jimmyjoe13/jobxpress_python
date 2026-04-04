@@ -12,6 +12,7 @@ frontend/out/
 .env
 .env.local
 .env.*.local
+job_xpress_v2/
 
 # IDE
 .vscode/
