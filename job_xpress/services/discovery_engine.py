@@ -17,12 +17,20 @@ class DiscoveryEngine:
         """
         Trouve des URLs d'offres d'emploi pertinentes.
         """
+        # Exclusion de domaines non pertinents (dictionnaires, wikis, etc.)
+        excluded_domains = [
+            "britannica.com", "wikipedia.org", "wiktionary.org", 
+            "larousse.fr", "cnrtl.fr", "linguee.fr", "reverso.net"
+        ]
+        exclude_query = " ".join([f"-site:{d}" for d in excluded_domains])
+
         # Requêtes ciblées sur les gros agrégateurs
         queries = [
             f'site:indeed.fr "{job_title}" "{location}"',
             f'site:hellowork.com "{job_title}" "{location}"',
             f'site:linkedin.com/jobs "{job_title}" "{location}"',
-            f'"{job_title}" "{location}" recrutement offres',
+            f'site:welcometothejungle.com "{job_title}" "{location}"',
+            f'"{job_title}" "{location}" (recrutement OR "offre d\'emploi") {exclude_query}',
         ]
         
         all_urls = set()

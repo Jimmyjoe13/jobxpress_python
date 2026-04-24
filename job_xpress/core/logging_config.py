@@ -189,8 +189,12 @@ class AxiomHandler(logging.Handler):
                     self.batch = []  # Succès, vider le batch
                 else:
                     # Log local en cas d'échec (ne pas reboucler)
+                    try:
+                        error_detail = response.text
+                    except:
+                        error_detail = "no detail"
                     print(
-                        f"[Axiom] Erreur envoi: {response.status_code}", file=sys.stderr
+                        f"[Axiom] Erreur envoi: {response.status_code} - {error_detail}", file=sys.stderr
                     )
                     self.batch = []  # Éviter l'accumulation
 

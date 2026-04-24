@@ -9,7 +9,8 @@ FROM python:3.11-slim as base
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers
 
 WORKDIR /app
 
@@ -62,6 +63,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copier les packages Python installés depuis le builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Installer Playwright et ses navigateurs (uniquement Chromium pour le poids)
+RUN pip install playwright \
+    && playwright install --with-deps chromium
 
 # Copier le code de l'application
 COPY . .
