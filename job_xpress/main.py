@@ -9,6 +9,13 @@ Features:
 - Déduplication intelligente
 """
 
+import os
+import sys
+
+# --- FORÇAGE ENVIRONNEMENT PRODUCTION ---
+if os.environ.get("ENVIRONMENT") == "production":
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/app/pw-browsers"
+
 import httpx
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, BackgroundTasks, Request, Depends

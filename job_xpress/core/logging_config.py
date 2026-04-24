@@ -186,9 +186,13 @@ class AxiomHandler(logging.Handler):
                 response = client.post(url, json=self.batch, headers=headers)
 
                 if response.status_code == 200:
-                    self.batch = []  # Succès, vider le batch
+                    self.batch = []  # Succès
+                elif response.status_code == 403:
+                    print("[Axiom] Erreur 403: Token invalide ou Dataset manquant. Désactivation du handler Axiom.", file=sys.stderr)
+                    self.batch = []
+                    self._stop_event.set() # Arrête le thread worker
                 else:
-                    # Log local en cas d'échec (ne pas reboucler)
+                    # Log local en cas d'échec
                     try:
                         error_detail = response.text
                     except:
@@ -196,7 +200,7 @@ class AxiomHandler(logging.Handler):
                     print(
                         f"[Axiom] Erreur envoi: {response.status_code} - {error_detail}", file=sys.stderr
                     )
-                    self.batch = []  # Éviter l'accumulation
+                    self.batch = []
 
         except Exception as e:
             # Fail silently, ne pas bloquer l'app

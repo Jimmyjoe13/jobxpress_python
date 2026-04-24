@@ -50,7 +50,15 @@ class DiscoveryEngine:
         return list(all_urls)
 
     def _search_sync(self, query: str):
-        return list(self.ddgs.text(query, region="fr-fr", max_results=10))
+        # Utilisation de retries pour DuckDuckGo qui est capricieux sur Render
+        for attempt in range(3):
+            try:
+                return list(self.ddgs.text(query, region="fr-fr", max_results=15))
+            except Exception as e:
+                if attempt == 2: raise e
+                import time
+                time.sleep(attempt * 3 + 2) # Delay croissant
+        return []
 
 # Instance globale
 discovery_engine = DiscoveryEngine()
