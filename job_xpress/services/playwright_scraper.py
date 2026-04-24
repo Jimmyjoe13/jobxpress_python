@@ -1,12 +1,23 @@
 import asyncio
 import random
 import os
+import subprocess
 from typing import Optional
 from playwright.async_api import async_playwright
 
-# Forcer le chemin des navigateurs pour Docker/Render
-if os.environ.get("ENVIRONMENT") == "production":
-    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/app/pw-browsers"
+def get_chromium_path():
+    """Tente de trouver le chemin du binaire Chromium dans l'image Docker."""
+    # Chemins probables dans l'image Docker
+    paths = [
+        "/app/pw-browsers/chromium-1208/chrome-linux/chrome",
+        "/app/pw-browsers/chromium-1208/chrome-headless-shell-linux64/chrome-headless-shell",
+        "/root/.cache/ms-playwright/chromium-1208/chrome-linux/chrome",
+        "/home/appuser/.cache/ms-playwright/chromium-1208/chrome-linux/chrome"
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            return p
+    return None
 
 class PlaywrightScraper:
     """
@@ -21,10 +32,24 @@ class PlaywrightScraper:
         Charge une page web en simulant un navigateur rÃ©el.
         """
         async with async_playwright() as p:
-            # On utilise Chrome plutÃ´t que Chromium pour plus de furtivitÃ© native
-            browser = await p.chromium.launch(headless=self.headless)
+            # Recherche du binaire Chromium installé
+            exe_path = get_chromium_path()
             
-            # Context avec User-Agent rÃ©el et rÃ©solution d'Ã©cran standard
+            launch_args = {
+                "headless": self.headless,
+                "args": ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+            }
+            if exe_path:
+                launch_args["executable_path"] = exe_path
+                print(f"🚀 Playwright: Utilisation du binaire à {exe_path}")
+
+            try:
+                browser = await p.chromium.launch(**launch_args)
+            except Exception as e:
+                print(f"❌ Échec lancement direct, tentative standard: {e}")
+                browser = await p.chromium.launch(headless=self.headless)
+            
+            # Context avec User-Agent rÃ©el
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={'width': 1920, 'height': 1080}

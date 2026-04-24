@@ -50,7 +50,7 @@ class SearchEngineV2:
             # Rechercher dans Supabase (pgvector)
             matches = db_service.search_jobs_vector(
                 query_embedding=embedding,
-                match_threshold=0.7,
+                match_threshold=0.5, # Plus souple pour le début
                 match_count=limit,
                 user_id=candidate.user_id
             )
