@@ -1,14 +1,49 @@
 /**
  * JobXpress API Client
  * 
- * Ce module gère toutes les communications avec l'API backend,
+ * Ce module gÃ¨re toutes les communications avec l'API backend,
  * y compris l'authentification JWT via Supabase.
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 // ============================================
-// TYPES
+// TYPES V2 - DEEP EXTRACTION & AI INTELLIGENCE
+// ============================================
+
+export interface JobOfferV2 {
+  title: string
+  company: string
+  location?: string
+  salary?: string
+  description: string
+  url: string
+  match_score: number
+  skills: string[]
+  contract_type?: string
+  is_remote: boolean
+  ai_summary?: string
+  cover_letter?: string
+}
+
+export interface CandidateProfileV2 {
+  job_title: string
+  experience_level: string
+  top_skills: string[]
+  education: string
+  preferred_contract: string
+  summary: string
+}
+
+export interface DeepSearchResponse {
+  search_id: string
+  status: 'PENDING' | 'COMPLETED' | 'FAILED'
+  offers: JobOfferV2[]
+  message?: string
+}
+
+// ============================================
+// TYPES V1 & COMMONS
 // ============================================
 
 export interface CandidateData {
@@ -22,7 +57,7 @@ export interface CandidateData {
   experience_level: string
   location: string
   cv_url?: string
-  user_id?: string  // ID utilisateur Supabase (si connecté)
+  user_id?: string
 }
 
 export interface JobOffer {
@@ -81,17 +116,12 @@ export interface ApiError {
   status?: number
 }
 
-// ============================================
-// TYPES V2 - HUMAN-IN-THE-LOOP
-// ============================================
-
 export interface UserCredits {
   credits: number
   plan: 'FREE' | 'STARTER' | 'PRO'
   plan_name: string
   next_reset_at: string | null
   last_reset?: string | null
-  // Nouvelles propriétés V2
   max_credits?: number
   reset_period_days?: number
   jobyjoba_messages_limit?: number
@@ -115,7 +145,6 @@ export interface SearchStartRequest {
   experience_level: string
   filters?: JobFilters
   cv_url?: string
-  // Infos candidat pour l'email
   candidate_email?: string
   first_name?: string
   last_name?: string
@@ -180,10 +209,13 @@ export interface ApplicationV2 {
 // ============================================
 
 /**
- * Récupère le token JWT de l'utilisateur connecté via Supabase
+ * RÃ©cupÃ¨re le token JWT de l'utilisateur connectÃ© via Supabase
  */
 export async function getAuthToken(): Promise<string | null> {
-  // Vérifier si Supabase est configuré
+  if (process.env.NEXT_PUBLIC_MODE === 'DEVELOPMENT' || process.env.NODE_ENV === 'development') {
+    return 'local-dev-token'
+  }
+
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     return null
   }
@@ -194,13 +226,13 @@ export async function getAuthToken(): Promise<string | null> {
     const { data: { session } } = await supabase.auth.getSession()
     return session?.access_token || null
   } catch (error) {
-    console.error('Erreur récupération token:', error)
+    console.error('Erreur rÃ©cupÃ©ration token:', error)
     return null
   }
 }
 
 /**
- * Effectue une requête API avec authentification optionnelle
+ * Effectue une requÃªte API avec authentification optionnelle
  */
 async function apiRequest<T>(
   endpoint: string,
@@ -212,7 +244,6 @@ async function apiRequest<T>(
     ...options.headers as Record<string, string>
   }
 
-  // Ajouter le token si disponible
   const token = await getAuthToken()
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
@@ -227,21 +258,10 @@ async function apiRequest<T>(
 
   if (!response.ok) {
     if (response.status === 401) {
-      // Redirection automatique vers la page de connexion
       if (typeof window !== 'undefined') {
         window.location.href = '/auth/login?reason=session_expired'
       }
-      throw new Error('Session expirée, veuillez vous reconnecter')
-    }
-    if (response.status === 403) {
-      throw new Error('Accès refusé. Vous n\'avez pas les droits nécessaires.')
-    }
-    if (response.status === 429) {
-      const data = await response.json().catch(() => ({}))
-      throw new Error(`Trop de requêtes. Réessayez dans ${data.retry_after || 60} secondes`)
-    }
-    if (response.status === 503 || response.status === 502) {
-      throw new Error('Service temporairement indisponible. Réessayez dans quelques instants.')
+      throw new Error('Session expirÃ©e, veuillez vous reconnecter')
     }
     const error = await response.json().catch(() => ({ detail: 'Erreur serveur' }))
     throw new Error(error.detail || `Erreur ${response.status}`)
@@ -251,163 +271,113 @@ async function apiRequest<T>(
 }
 
 // ============================================
-// API PUBLIQUE (pas d'auth requise)
+// V2 API CALLS
 // ============================================
 
-/**
- * Submit a job application
- * Note: Passe le user_id si l'utilisateur est connecté
- */
+export async function getCandidateProfile(): Promise<CandidateProfileV2> {
+  return apiRequest<CandidateProfileV2>('/api/v2/profile/structured', {}, true)
+}
+
+export async function startDeepSearch(jobTitle: string, location: string): Promise<{ search_id: string }> {
+  return apiRequest<{ search_id: string }>('/api/v2/search/deep', {
+    method: 'POST',
+    body: JSON.stringify({ job_title: jobTitle, location })
+  }, true)
+}
+
+export async function getDeepSearchResults(searchId: string): Promise<DeepSearchResponse> {
+  return apiRequest<DeepSearchResponse>(`/api/v2/search/deep/${searchId}`, {}, true)
+}
+
+export async function generateCoverLetterV2(jobUrl: string): Promise<{ letter: string }> {
+  return apiRequest<{ letter: string }>('/api/v2/generate-letter', {
+    method: 'POST',
+    body: JSON.stringify({ url: jobUrl })
+  }, true)
+}
+
+// ============================================
+// V1 & COMMON API CALLS
+// ============================================
+
 export async function submitApplication(data: CandidateData): Promise<ApplicationResult> {
-  // Récupérer l'ID utilisateur si connecté
   let userId: string | undefined = data.user_id
-  
   if (!userId) {
     try {
       const { createClient } = await import("@/lib/supabase/client")
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       userId = user?.id
-    } catch {
-      // Pas de problème, l'utilisateur n'est peut-être pas connecté
-    }
+    } catch {}
   }
 
   return apiRequest<ApplicationResult>('/api/v2/apply', {
     method: 'POST',
-    body: JSON.stringify({
-      ...data,
-      user_id: userId
-    }),
+    body: JSON.stringify({ ...data, user_id: userId }),
   })
 }
 
-/**
- * Check API health status
- */
 export async function checkHealth(): Promise<HealthCheck> {
   return apiRequest<HealthCheck>('/health')
 }
 
-/**
- * Check task queue status
- */
-export async function checkTasksHealth(): Promise<{
-  tasks: { pending: number; processing: number; done: number; failed: number }
-  cache: { total: number; active: number; expired: number }
-}> {
+export async function checkTasksHealth(): Promise<any> {
   return apiRequest('/health/tasks')
 }
 
-// ============================================
-// API AUTHENTIFIÉE (JWT requis)
-// ============================================
-
-/**
- * Get current user info (test d'authentification)
- */
-export async function getCurrentUser(): Promise<{ user_id: string; authenticated: boolean }> {
+export async function getCurrentUser(): Promise<any> {
   return apiRequest('/api/v2/me', {}, true)
 }
 
-/**
- * Supprime définitivement le compte utilisateur.
- */
-export async function deleteAccount(): Promise<{ success: boolean; message: string }> {
-  return apiRequest<{ success: boolean; message: string }>('/api/v2/profile', {
-    method: 'DELETE'
-  }, true)
+export async function deleteAccount(): Promise<any> {
+  return apiRequest('/api/v2/profile', { method: 'DELETE' }, true)
 }
 
-/**
- * Récupère les statistiques d'utilisation globales (Admin uniquement)
- */
 export async function getAdminUsageStats(days: number = 30): Promise<any> {
   return apiRequest(`/api/v2/admin/usage-stats?days=${days}`, {}, true)
 }
 
-/**
- * Get user's applications history via API authentifiée
- */
 export async function getMyApplications(): Promise<UserApplicationsResponse> {
   return apiRequest<UserApplicationsResponse>('/api/v2/applications', {}, true)
 }
 
-/**
- * Récupère les candidatures avec extraction des données plates
- * (Wrapper pratique pour l'UI)
- */
 export async function getMyApplicationsFlat(): Promise<Application[]> {
   try {
     const response = await getMyApplications()
-    
-    // Extraire toutes les applications de tous les candidats
     const allApplications: Application[] = []
     for (const candidate of response.applications) {
       if (candidate.applications) {
         allApplications.push(...candidate.applications)
       }
     }
-    
-    // Trier par date décroissante
     return allApplications.sort((a, b) => 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     )
-  } catch (error) {
-    console.error('Erreur récupération applications:', error)
+  } catch {
     return []
   }
 }
 
-// ============================================
-// UPLOAD (à implémenter côté backend)
-// ============================================
-
-/**
- * Upload CV file and get URL
- * Note: Cet endpoint n'existe pas encore côté backend
- */
 export async function uploadCV(file: File): Promise<string> {
   const formData = new FormData()
   formData.append('file', file)
-
   const token = await getAuthToken()
   const headers: Record<string, string> = {}
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
+  if (token) headers['Authorization'] = `Bearer ${token}`
   const response = await fetch(`${API_BASE_URL}/api/v2/upload-cv`, {
     method: 'POST',
     headers,
     body: formData,
   })
-
-  if (!response.ok) {
-    throw new Error('Erreur lors du téléchargement du CV')
-  }
-
+  if (!response.ok) throw new Error('Erreur upload CV')
   const result = await response.json()
   return result.url
 }
 
-
-
-// ============================================
-// API V2 - HUMAN-IN-THE-LOOP WORKFLOW
-// ============================================
-
-/**
- * Get user's credits status
- */
 export async function getCredits(): Promise<UserCredits> {
   return apiRequest<UserCredits>('/api/v2/credits', {}, true)
 }
 
-/**
- * Start a new job search (async)
- * Returns an application ID for polling
- */
 export async function startSearch(data: SearchStartRequest): Promise<SearchStartResponse> {
   return apiRequest<SearchStartResponse>('/api/v2/search/start', {
     method: 'POST',
@@ -415,18 +385,10 @@ export async function startSearch(data: SearchStartRequest): Promise<SearchStart
   }, true)
 }
 
-/**
- * Poll for search results
- * Keep calling until status !== 'SEARCHING'
- */
 export async function getSearchResults(appId: string): Promise<ApplicationResults> {
   return apiRequest<ApplicationResults>(`/api/v2/applications/${appId}/results`, {}, true)
 }
 
-/**
- * Select jobs from search results (1-5 jobs)
- * Triggers AI analysis
- */
 export async function selectJobs(appId: string, jobIds: string[]): Promise<SelectJobsResponse> {
   return apiRequest<SelectJobsResponse>(`/api/v2/applications/${appId}/select`, {
     method: 'POST',
@@ -434,13 +396,7 @@ export async function selectJobs(appId: string, jobIds: string[]): Promise<Selec
   }, true)
 }
 
-/**
- * Get user's V2 applications list
- */
-export async function getApplicationsV2(limit: number = 20): Promise<{
-  count: number
-  applications: ApplicationV2[]
-}> {
+export async function getApplicationsV2(limit: number = 20): Promise<{ count: number; applications: ApplicationV2[] }> {
   return apiRequest(`/api/v2/applications?limit=${limit}`, {}, true)
 }
 
@@ -449,425 +405,176 @@ export async function getApplicationsV2(limit: number = 20): Promise<{
 // ============================================
 
 export interface PlanDetails {
-  key: string
-  credits: number
-  reset_days: number
-  name: string
-  price: number
-  jobyjoba_messages: number
-  jobyjoba_daily_limit: boolean
-  custom_context: boolean
+  key: string; credits: number; reset_days: number; name: string; price: number; jobyjoba_messages: number; jobyjoba_daily_limit: boolean; custom_context: boolean;
 }
-
 export interface AvailablePlan extends PlanDetails {
-  is_current: boolean
-  is_upgrade: boolean
-  is_downgrade: boolean
+  is_current: boolean; is_upgrade: boolean; is_downgrade: boolean;
 }
-
 export interface SubscriptionDetails extends UserCredits {
-  credits_progress: number
-  can_upgrade: boolean
-  has_stripe_subscription: boolean
-  upgrade_url: string | null
-  available_plans: {
-    FREE: AvailablePlan
-    STARTER: AvailablePlan
-    PRO: AvailablePlan
-  }
+  credits_progress: number; can_upgrade: boolean; has_stripe_subscription: boolean; upgrade_url: string | null; available_plans: { FREE: AvailablePlan; STARTER: AvailablePlan; PRO: AvailablePlan; }
 }
-
 export interface PlansResponse {
-  plans: {
-    FREE: PlanDetails
-    STARTER: PlanDetails
-    PRO: PlanDetails
-  }
+  plans: { FREE: PlanDetails; STARTER: PlanDetails; PRO: PlanDetails; }
 }
 
-/**
- * Get all available subscription plans (public)
- */
 export async function getAvailablePlans(): Promise<PlansResponse> {
   return apiRequest<PlansResponse>('/api/v2/plans')
 }
 
-/**
- * Get current user's subscription details
- */
 export async function getSubscriptionDetails(): Promise<SubscriptionDetails> {
   return apiRequest<SubscriptionDetails>('/api/v2/subscription', {}, true)
 }
 
 // ============================================
-// API V2 - QUICK SEARCH & FAVORITES
+// FAVORITES & HISTORY
 // ============================================
 
-export interface QuickSearchRequest {
-  job_title: string
-  location?: string
-  contract_type?: string
-  experience_level?: string
-  work_type?: string
-  filters?: JobFilters
+export async function quickSearch(data: any): Promise<any> {
+  return apiRequest('/api/v2/search/quick', { method: 'POST', body: JSON.stringify(data) }, true)
 }
 
-export interface QuickSearchResponse {
-  jobs: JobResultItem[]
-  total_found: number
-  free_searches_remaining: number
-  used_credit: boolean
-  message: string
+export async function saveJob(data: any): Promise<any> {
+  return apiRequest('/api/v2/jobs/save', { method: 'POST', body: JSON.stringify(data) }, true)
 }
 
-export interface SaveJobRequest {
-  job_data: JobResultItem
-  notes?: string
-  source?: string
-}
-
-export interface SavedJobResponse {
-  id: string
-  job_data: JobResultItem
-  notes?: string
-  source: string
-  created_at: string
-}
-
-export interface SearchHistoryItem {
-  id: string
-  query_params: Record<string, any>
-  results_count: number
-  created_at: string
-}
-
-export interface SearchQuota {
-  plan: string
-  searches_unlimited: boolean
-  free_searches_remaining: number
-  free_searches_total?: number
-  free_searches_used?: number
-  credits: number
-  reset_at: string | null
-}
-
-/**
- * Execute a quick search
- */
-export async function quickSearch(data: QuickSearchRequest): Promise<QuickSearchResponse> {
-  return apiRequest<QuickSearchResponse>('/api/v2/search/quick', {
-    method: 'POST',
-    body: JSON.stringify({
-      ...data,
-      location: data.location || "France",
-      contract_type: data.contract_type || "CDI",
-      work_type: data.work_type || "Tous",
-      experience_level: data.experience_level || "Non spécifié"
-    })
-  }, true)
-}
-
-/**
- * Save a job to favorites
- */
-export async function saveJob(data: SaveJobRequest): Promise<SavedJobResponse> {
-  return apiRequest<SavedJobResponse>('/api/v2/jobs/save', {
-    method: 'POST',
-    body: JSON.stringify({
-      source: "search",
-      ...data
-    })
-  }, true)
-}
-
-/**
- * Get all saved jobs
- */
-export async function getSavedJobs(limit: number = 50): Promise<{ count: number; saved_jobs: SavedJobResponse[] }> {
+export async function getSavedJobs(limit: number = 50): Promise<any> {
   return apiRequest(`/api/v2/jobs/saved?limit=${limit}`, {}, true)
 }
 
-/**
- * Update notes on a saved job
- */
-export async function updateSavedJobNotes(jobId: string, notes: string): Promise<{ status: string; id: string }> {
-  return apiRequest(`/api/v2/jobs/saved/${jobId}?notes=${encodeURIComponent(notes)}`, {
-    method: 'PUT'
-  }, true)
+export async function updateSavedJobNotes(jobId: string, notes: string): Promise<any> {
+  return apiRequest(`/api/v2/jobs/saved/${jobId}?notes=${encodeURIComponent(notes)}`, { method: 'PUT' }, true)
 }
 
-/**
- * Delete a saved job
- */
-export async function deleteSavedJob(id: string): Promise<{ status: string; id: string }> {
-  return apiRequest<{ status: string; id: string }>(`/api/v2/jobs/saved/${id}`, {
-    method: 'DELETE'
-  }, true)
+export async function deleteSavedJob(id: string): Promise<any> {
+  return apiRequest(`/api/v2/jobs/saved/${id}`, { method: 'DELETE' }, true)
 }
 
-// --------------------------------------------------------------------------
-// DASHBOARD & TRACKING API (PHASE 3)
-// --------------------------------------------------------------------------
+// ============================================
+// DASHBOARD & TRACKING
+// ============================================
 
 export interface DashboardStats {
-  total_applications: number
-  total_saved_jobs: number
-  checklist: {
-    has_profile: boolean
-    has_cv: boolean
-    has_searched: boolean
-  }
+  total_applications: number; total_saved_jobs: number; checklist: { has_profile: boolean; has_cv: boolean; has_searched: boolean; }
 }
-
-export interface NotificationItem {
-  id: string
-  user_id: string
-  title: string
-  message: string
-  type: string
-  action_url?: string
-  is_read: boolean
-  created_at: string
-}
-
-export interface TrackingNote {
-  date: string
-  note: string
-  status: string
-}
-
 export type TrackingStatus = 'SAVED' | 'APPLIED' | 'INTERVIEW_SCHEDULED' | 'INTERVIEWED' | 'OFFER_RECEIVED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'
+export interface TrackingNote { date: string; note: string; status: string; }
 
-/**
- * Get user dashboard stats
- */
 export async function getDashboardStats(): Promise<DashboardStats> {
-  return apiRequest<DashboardStats>('/api/v2/dashboard/stats', {
-    method: 'GET'
-  }, true)
+  return apiRequest<DashboardStats>('/api/v2/dashboard/stats', { method: 'GET' }, true)
 }
 
-/**
- * Get user notifications
- */
-export async function getNotifications(limit: number = 20): Promise<{ notifications: NotificationItem[] }> {
-  return apiRequest<{ notifications: NotificationItem[] }>(`/api/v2/notifications?limit=${limit}`, {
-    method: 'GET'
-  }, true)
+export async function getNotifications(limit: number = 20): Promise<any> {
+  return apiRequest(`/api/v2/notifications?limit=${limit}`, {}, true)
 }
 
-/**
- * Mark notification as read
- */
-export async function markNotificationRead(notifId: string): Promise<{ status: string }> {
-  return apiRequest<{ status: string }>(`/api/v2/notifications/${notifId}/read`, {
-    method: 'PATCH'
-  }, true)
+export async function markNotificationRead(notifId: string): Promise<any> {
+  return apiRequest(`/api/v2/notifications/${notifId}/read`, { method: 'PATCH' }, true)
 }
 
-/**
- * Update tracking status for an application
- */
-export async function updateTrackingStatus(appId: string, status: TrackingStatus): Promise<{ status: string; tracking_status: string }> {
-  return apiRequest<{ status: string; tracking_status: string }>(`/api/v2/applications/${appId}/tracking`, {
-    method: 'PATCH',
-    body: JSON.stringify({ tracking_status: status })
-  }, true)
+export async function updateTrackingStatus(appId: string, status: TrackingStatus): Promise<any> {
+  return apiRequest(`/api/v2/applications/${appId}/tracking`, { method: 'PATCH', body: JSON.stringify({ tracking_status: status }) }, true)
 }
 
-/**
- * Add tracking note for an application
- */
-export async function addTrackingNote(appId: string, note: string): Promise<{ status: string; note: TrackingNote }> {
-  return apiRequest<{ status: string; note: TrackingNote }>(`/api/v2/applications/${appId}/notes`, {
-    method: 'POST',
-    body: JSON.stringify({ note })
-  }, true)
+export async function addTrackingNote(appId: string, note: string): Promise<any> {
+  return apiRequest(`/api/v2/applications/${appId}/notes`, { method: 'POST', body: JSON.stringify({ note }) }, true)
 }
 
-/**
- * Delete an application from the tracking board
- */
-export async function deleteApplicationTracker(appId: string): Promise<{ status: string; id: string }> {
-  return apiRequest<{ status: string; id: string }>(`/api/v2/applications/${appId}`, {
-    method: 'DELETE'
-  }, true)
+export async function deleteApplicationTracker(appId: string): Promise<any> {
+  return apiRequest(`/api/v2/applications/${appId}`, { method: 'DELETE' }, true)
 }
 
-/**
- * Get user's search history
- */
-export async function getSearchHistory(limit: number = 20): Promise<{ count: number; history: SearchHistoryItem[] }> {
+export async function getSearchHistory(limit: number = 20): Promise<any> {
   return apiRequest(`/api/v2/search/history?limit=${limit}`, {}, true)
 }
 
-/**
- * Delete a search history item
- */
-export async function deleteSearchHistoryItem(historyId: string): Promise<{ status: string; id: string }> {
-  return apiRequest(`/api/v2/search/history/${historyId}`, {
-    method: 'DELETE'
-  }, true)
+export async function deleteSearchHistoryItem(historyId: string): Promise<any> {
+  return apiRequest(`/api/v2/search/history/${historyId}`, { method: 'DELETE' }, true)
 }
 
-/**
- * Clear all search history for the current user
- */
-export async function clearSearchHistory(): Promise<{ status: string; deleted_count: number }> {
-  return apiRequest<{ status: string; deleted_count: number }>('/api/v2/search/history', {
-    method: 'DELETE'
-  }, true)
+export async function clearSearchHistory(): Promise<any> {
+  return apiRequest('/api/v2/search/history', { method: 'DELETE' }, true)
 }
 
-/**
- * Get user's search quota
- */
-export interface SearchQuota {
-  remaining: number
-  max_daily: number
-  reset_in_hours: number
+export async function getSearchQuota(): Promise<any> {
+  return apiRequest('/api/v2/search/quota', {}, true)
 }
 
-export async function getSearchQuota(): Promise<SearchQuota> {
-  return apiRequest<SearchQuota>('/api/v2/search/quota', {}, true)
-}
-
-// --------------------------------------------------------------------------
-// GLOBAL CHAT API
-// --------------------------------------------------------------------------
+// ============================================
+// CHAT API
+// ============================================
 
 export interface GlobalChatMessage {
-  role: 'user' | 'assistant' | 'tool'
-  content: string
-  timestamp?: string
-  tool_calls_executed?: any[]
-  quick_replies?: { label: string; action: string }[]
+  role: 'user' | 'assistant' | 'tool'; content: string; timestamp?: string; tool_calls_executed?: any[]; quick_replies?: { label: string; action: string }[]
 }
-
 export interface GlobalChatResponse {
-  response: string
-  quick_replies?: { label: string; action: string }[]
-  tool_calls_executed?: any[]
-  session_id: string
+  response: string; session_id: string; quick_replies?: any[]; tool_calls_executed?: any[]
 }
-
 export interface GlobalChatSession {
-  messages: GlobalChatMessage[]
-  tool_calls_executed?: any[]
-  session_id?: string
+  messages: GlobalChatMessage[]; session_id?: string;
 }
 
 export async function getProactiveMessage(): Promise<{ message: GlobalChatMessage }> {
-  return apiRequest<{ message: GlobalChatMessage }>('/api/v2/chat/proactive', {}, true)
+  return apiRequest('/api/v2/chat/proactive', {}, true)
 }
 
 export async function getGlobalSession(): Promise<GlobalChatSession> {
-  return apiRequest<GlobalChatSession>('/api/v2/chat/global/session', {}, true)
+  return apiRequest('/api/v2/chat/global/session', {}, true)
 }
 
-export async function clearGlobalSession(): Promise<{ status: string; message: string }> {
-  return apiRequest<{ status: string; message: string }>('/api/v2/chat/global/session', {
-    method: 'DELETE'
-  }, true)
+export async function clearGlobalSession(): Promise<any> {
+  return apiRequest('/api/v2/chat/global/session', { method: 'DELETE' }, true)
 }
-
 
 export async function sendGlobalChatMessage(message: string): Promise<GlobalChatResponse> {
-  return apiRequest<GlobalChatResponse>('/api/v2/chat/global', {
-    method: 'POST',
-    body: JSON.stringify({ message })
-  }, true)
+  return apiRequest('/api/v2/chat/global', { method: 'POST', body: JSON.stringify({ message }) }, true)
 }
 
-export interface StreamChunk {
-  c?: string  // content
-  m?: any     // metadata
-}
-
-/**
- * Version streamée du chatbot global (NDJSON)
- */
-export async function* sendGlobalChatMessageStream(message: string): AsyncGenerator<StreamChunk> {
+export async function* sendGlobalChatMessageStream(message: string): AsyncGenerator<any> {
   const token = await getAuthToken()
   const response = await fetch(`${API_BASE_URL}/api/v2/chat/global/stream`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    },
+    headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
     body: JSON.stringify({ message })
   })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Erreur stream' }))
-    throw new Error(error.detail || 'Erreur lors du streaming')
-  }
-
+  if (!response.ok) throw new Error('Erreur stream')
   const reader = response.body?.getReader()
   if (!reader) return
-
   const decoder = new TextDecoder()
   let buffer = ""
-
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
-    
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split("\n")
     buffer = lines.pop() || ""
-
     for (const line of lines) {
       if (!line.trim()) continue
-      try {
-        yield JSON.parse(line) as StreamChunk
-      } catch (e) {
-        console.error("Erreur parse ligne stream:", e)
-      }
+      try { yield JSON.parse(line) } catch {}
     }
   }
 }
 
-/**
- * Version streamée de JobyJoba (NDJSON)
- */
-export async function* sendJobyJobaMessageStream(applicationId: string, message: string): AsyncGenerator<StreamChunk> {
+export async function* sendJobyJobaMessageStream(applicationId: string, message: string): AsyncGenerator<any> {
   const token = await getAuthToken()
   const response = await fetch(`${API_BASE_URL}/api/v2/chat/send/stream`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    },
+    headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
     body: JSON.stringify({ application_id: applicationId, message })
   })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Erreur stream' }))
-    throw new Error(error.detail || 'Erreur lors du streaming')
-  }
-
+  if (!response.ok) throw new Error('Erreur stream')
   const reader = response.body?.getReader()
   if (!reader) return
-
   const decoder = new TextDecoder()
   let buffer = ""
-
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
-    
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split("\n")
     buffer = lines.pop() || ""
-
     for (const line of lines) {
       if (!line.trim()) continue
-      try {
-        yield JSON.parse(line) as StreamChunk
-      } catch (e) {
-        console.error("Erreur parse ligne stream:", e)
-      }
+      try { yield JSON.parse(line) } catch {}
     }
   }
 }

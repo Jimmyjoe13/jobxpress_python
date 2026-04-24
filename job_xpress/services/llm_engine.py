@@ -1,86 +1,116 @@
 import json
 import asyncio
+import hashlib
 from typing import List, Dict, Any, Optional
 from core.config import settings
 from core.logging_config import get_logger
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
-from services.gemini_engine import GeminiEngine
+from services.llm_providers.openai_provider import OpenAIProvider
+from services.cache_service import cache_service
 
 logger = get_logger()
 
 class LLMEngine:
     """
-    Moteur IA de JobXpress V2, alimenté par Gemini 1.5 Flash.
-    Remplace l'ancienne implémentation OpenAI/DeepSeek pour plus de rapidité et de précision.
+    Moteur IA de JobXpress V2, alimenté par OpenAI GPT-5.
+    Optimisé pour les coûts via le routage dynamique et le cache par hash.
     """
     def __init__(self):
-        self.gemini = GeminiEngine(api_key=settings.GEMINI_API_KEY)
+        self.openai = OpenAIProvider()
+        self.model_mini = settings.OPENAI_MODEL_FAST # gpt-5-nano
+        self.model_pro = settings.OPENAI_MODEL_PREMIUM # gpt-5
+
+    def _generate_job_hash(self, offer: JobOffer) -> str:
+        """Génère un hash unique pour une offre d'emploi."""
+        content = f"{offer.title}|{offer.company}|{offer.description}"
+        return hashlib.md5(content.encode()).hexdigest()
 
     async def analyze_offers_parallel(
         self, candidate: CandidateProfile, offers: List[JobOffer]
     ) -> List[JobOffer]:
         """
-        Analyse toutes les offres en parallèle avec Gemini.
+        Analyse toutes les offres en parallèle avec OpenAI (Modèle Mini + Cache).
         """
-        logger.info(f"🧠 Analyse Gemini V2 pour {len(offers)} offres")
+        logger.info(f"🧠 Analyse OpenAI GPT-5 Mini pour {len(offers)} offres")
         
-        # 1. Structurer le profil candidat si ce n'est pas déjà fait
         candidate_json = {
             "job_title": candidate.job_title,
             "experience_level": candidate.experience_level,
-            "top_skills": candidate.skills if hasattr(candidate, 'skills') else [],
-            "preferred_contract": candidate.contract_type
+            "skills": candidate.skills if hasattr(candidate, 'skills') else [],
         }
 
-        # 2. Lancer les analyses en parallèle
         tasks = [self._analyze_single_offer(candidate_json, offer) for offer in offers]
         return await asyncio.gather(*tasks)
 
     async def _analyze_single_offer(
         self, candidate_json: Dict[str, Any], offer: JobOffer
     ) -> JobOffer:
-        """Analyse une offre individuelle."""
+        """Analyse une offre individuelle avec gestion du cache."""
+        job_hash = self._generate_job_hash(offer)
+        cache_key = f"job_analysis:{job_hash}"
+        
+        # 1. Vérifier le cache
+        cached_result = cache_service.get(cache_key)
+        if cached_result:
+            logger.info(f"💾 Cache Hit pour l'offre: {offer.title}")
+            analysis = json.loads(cached_result)
+            offer.match_score = analysis.get("score", 0)
+            offer.ai_analysis = analysis.get("reasoning", "")
+            return offer
+
+        # 2. Appel API (Modèle Mini pour le coût)
         try:
-            # On utilise le titre et la description pour le scoring
-            job_json = {
-                "title": offer.title,
-                "company": offer.company,
-                "description": offer.description[:3000]
-            }
+            prompt = [
+                {"role": "system", "content": "Tu es un expert en recrutement. Note la compatibilité entre un candidat et une offre d'emploi de 0 à 100. Réponds en JSON: {\"score\": int, \"reasoning\": str}"},
+                {"role": "user", "content": f"Candidat: {json.dumps(candidate_json)}\nOffre: {offer.title} chez {offer.company}\nDescription: {offer.description[:2000]}"}
+            ]
             
-            score = await self.gemini.score_offer_for_candidate(candidate_json, job_json)
-            offer.match_score = score
-            offer.ai_analysis = {"reasoning": f"Score calculé par Gemini 1.5 Flash: {score}%"}
+            result = await self.openai.generate_json(prompt, model=self.model_mini)
+            
+            offer.match_score = result.get("score", 0)
+            offer.ai_analysis = result.get("reasoning", "")
+            
+            # 3. Sauvegarder dans le cache (TTL 24h)
+            cache_service.set(cache_key, json.dumps(result), ttl_seconds=86400)
+            
         except Exception as e:
-            logger.error(f"⚠️ Erreur Gemini sur '{offer.title}': {e}")
-            offer.match_score = 50 # Fallback
+            logger.error(f"⚠️ Erreur OpenAI sur '{offer.title}': {e}")
+            offer.match_score = 0
         
         return offer
 
     async def generate_cover_letter(
         self, candidate: CandidateProfile, offer: JobOffer
     ) -> Dict[str, Any]:
-        """Génère la lettre de motivation V2."""
-        candidate_json = {
-            "name": f"{candidate.first_name} {candidate.last_name}",
-            "job_title": candidate.job_title,
-            "top_skills": candidate.skills if hasattr(candidate, 'skills') else [],
-            "experience_level": candidate.experience_level
-        }
+        """Génère la lettre de motivation avec le modèle Pro/Reasoning (Version Unaire)."""
+        logger.info(f"✍️ Génération lettre Pro pour {offer.title}")
         
-        job_json = {
-            "title": offer.title,
-            "company": offer.company,
-            "description": offer.description[:2000]
-        }
+        prompt = [
+            {"role": "system", "content": "Tu es un rédacteur expert. Écris une lettre de motivation percutante en HTML (balises p, br uniquement)."},
+            {"role": "user", "content": f"Candidat: {candidate.first_name} {candidate.last_name}, {candidate.job_title}. Offre: {offer.title} chez {offer.company}. Description: {offer.description[:2000]}"}
+        ]
         
-        letter_html = await self.gemini.generate_cover_letter_v2(candidate_json, job_json)
+        letter_html = await self.openai.chat(prompt, model=self.model_pro)
         
         return {
             "html_content": letter_html,
-            "strategic_advice": "Lettre optimisée par Gemini 1.5 Flash."
+            "strategic_advice": "Lettre rédigée par GPT-5 Pro (Reasoning)."
         }
+
+    async def stream_cover_letter(
+        self, candidate: CandidateProfile, offer: JobOffer
+    ):
+        """Générateur asynchrone pour streamer la lettre de motivation."""
+        logger.info(f"✍️ Streaming lettre Pro pour {offer.title}")
+        
+        prompt = [
+            {"role": "system", "content": "Tu es un rédacteur expert. Écris une lettre de motivation percutante en HTML (balises p, br uniquement)."},
+            {"role": "user", "content": f"Candidat: {candidate.first_name} {candidate.last_name}, {candidate.job_title}. Offre: {offer.title} chez {offer.company}. Description: {offer.description[:2000]}"}
+        ]
+        
+        async for chunk in self.openai.stream_chat(prompt, model=self.model_pro):
+            yield chunk
 
 # Instance globale
 llm_engine = LLMEngine()

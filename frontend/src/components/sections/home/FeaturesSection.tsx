@@ -62,13 +62,13 @@ export function FeaturesSection() {
           className="text-center mb-16"
         >
           <span className="inline-block px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-semibold text-sm uppercase tracking-wider mb-4">
-            Fonctionnalités
+            Intelligence Artificielle
           </span>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mt-3 mb-4">
-            Tout ce dont vous avez besoin
+            Boostez votre carrière avec l&apos;IA
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            Une solution complète pour automatiser et optimiser votre recherche d&apos;emploi
+            Une suite d&apos;outils intelligents pour automatiser chaque étape de votre recherche d&apos;emploi.
           </p>
         </motion.div>
 

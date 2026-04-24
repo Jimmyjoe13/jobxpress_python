@@ -3,11 +3,11 @@ import { Navbar, Footer } from "@/components/layout"
 import { HeroSection, FeaturesSection, HowItWorksSection, PricingSection, TestimonialsSection, FAQSection, CtaSection } from "@/components/sections/home"
 import StructuredData from "@/components/seo/StructuredData"
 
-// Métadonnées SEO complètes pour la landing page
+// Métadonnées SEO optimisées pour la landing page
 export const metadata: Metadata = {
-  title: "JobXpress — Recherche d'emploi automatisée par IA | Candidatures en 30s",
+  title: "JobXpress — Recherche d'emploi IA & Candidature Automatisée",
   description:
-    "JobXpress analyse des milliers d'offres, score votre compatibilité et génère des lettres de motivation personnalisées en 30 secondes. Gratuit. Zéro débit sans résultat.",
+    "Trouvez votre job 10x plus vite avec JobXpress. Analyse d'offres IA, scoring de compatibilité CV et génération de lettres de motivation personnalisées en 30s.",
   keywords: [
     "recherche emploi IA",
     "candidature automatique",

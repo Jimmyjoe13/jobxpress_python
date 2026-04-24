@@ -79,6 +79,25 @@ class OpenAIProvider(BaseLLMProvider):
         except Exception as e:
             logger.warning(f"⚠️ Impossible d'enregistrer l'usage LLM: {e}")
 
+    async def generate_embeddings(self, text: str) -> List[float]:
+        """Génère un vecteur d'embedding pour un texte donné."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/embeddings",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "text-embedding-3-small",
+                    "input": text[:8191], # Limite OpenAI
+                },
+                timeout=20.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["data"][0]["embedding"]
+
     async def generate_json(
         self,
         messages: List[Dict[str, str]],

@@ -212,7 +212,7 @@ export function HeroSection() {
             >
               <Image
                 src="/images/hero-dashboard.png"
-                alt="Aperçu du dashboard JobXpress"
+                alt="Interface du tableau de bord intelligent JobXpress affichant le scoring de compatibilité"
                 fill
                 className="object-cover"
                 sizes="224px"

@@ -95,9 +95,9 @@ class DatabaseService:
             logger.error(f"⚠️ Erreur création user client: {e}")
             return None
 
-    def save_job_v2(self, offer: JobOffer, user_id: str = None) -> bool:
+    def save_job_v2(self, offer: JobOffer, user_id: str = None, embedding: list = None) -> bool:
         """
-        Sauvegarde une offre d'emploi V2 dans Supabase.
+        Sauvegarde une offre d'emploi V2 dans Supabase avec son embedding.
         Supporte la déduplication par URL.
         """
         if not self.admin_client:
@@ -115,15 +115,38 @@ class DatabaseService:
                 "contract_type": offer.contract_type,
                 "is_remote": offer.is_remote,
                 "match_score": offer.match_score,
-                "user_id": user_id
+                "user_id": user_id,
+                "embedding": embedding
             }
 
-            self.admin_client.table("jobs_v2").upsert(job_data, on_conflict="url").execute()
-            logger.info(f"💾 Offre V2 enregistrée: {offer.title} @ {offer.company}")
+            self.admin_client.table("job_offers_v2").upsert(job_data, on_conflict="url").execute()
+            logger.info(f"💾 Offre V2 enregistrée (Vector): {offer.title} @ {offer.company}")
             return True
         except Exception as e:
-            logger.error(f"❌ Erreur sauvegarde Job V2: {e}")
+            logger.error(f"❌ Erreur sauvegarde Job V2 Vector: {e}")
             return False
+
+    def search_jobs_vector(
+        self, query_embedding: list, match_threshold: float = 0.5, match_count: int = 5, user_id: str = None
+    ) -> list:
+        """
+        Recherche des offres d'emploi par similarité vectorielle (pgvector).
+        """
+        if not self.admin_client:
+            return []
+
+        try:
+            params = {
+                "query_embedding": query_embedding,
+                "match_threshold": match_threshold,
+                "match_count": match_count,
+                "filter_user_id": user_id
+            }
+            result = self.admin_client.rpc("match_jobs", params).execute()
+            return result.data if result.data else []
+        except Exception as e:
+            logger.error(f"❌ Erreur RPC match_jobs: {e}")
+            return []
 
     def get_top_jobs_v2(self, user_id: str, limit: int = 20) -> list:
         """

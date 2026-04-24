@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from typing import Optional, List
 import uuid
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
+from fastapi.responses import StreamingResponse
+import json
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -803,3 +805,57 @@ async def get_subscription_details(
             for plan_key, config in PLANS.items()
         },
     }
+
+
+@router.get("/applications/{app_id}/letter/stream")
+async def stream_application_letter(
+    app_id: str,
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Streame la génération de la lettre de motivation pour une application.
+    """
+    from services.llm_engine import llm_engine
+    from models.job_offer import JobOffer
+    from models.candidate import CandidateProfile
+
+    client = db_service.get_user_client(token)
+    if not client:
+        raise HTTPException(status_code=500, detail="Erreur DB")
+
+    # Récupérer l'application et l'offre finale
+    res = client.table("applications_v2").select("*").eq("id", app_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Application non trouvée")
+    
+    app_data = res.data
+    best_offer_data = app_data.get("final_choice")
+    if not best_offer_data:
+        raise HTTPException(status_code=400, detail="Aucune offre finale sélectionnée")
+
+    best_offer = JobOffer(**best_offer_data)
+    candidate = CandidateProfile(
+        first_name=app_data.get("candidate_first_name") or "Candidat",
+        last_name=app_data.get("candidate_last_name") or "",
+        email=app_data.get("candidate_email") or "",
+        job_title=app_data.get("job_title", ""),
+        cv_text=app_data.get("cv_text", "")
+    )
+
+    async def generate():
+        full_letter = ""
+        async for chunk in llm_engine.stream_cover_letter(candidate, best_offer):
+            full_letter += chunk
+            yield json.dumps({"c": chunk}) + "\n"
+        
+        # Une fois fini, on peut mettre à jour la base de données
+        try:
+            db_service.admin_client.table("applications_v2").update({
+                "cover_letter_html": full_letter,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }).eq("id", app_id).execute()
+        except Exception as e:
+            logger.error(f"⚠️ Erreur sauvegarde lettre streamée: {e}")
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
