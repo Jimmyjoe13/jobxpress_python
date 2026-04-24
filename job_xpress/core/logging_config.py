@@ -85,8 +85,8 @@ class AxiomHandler(logging.Handler):
     - Fail-safe: Les erreurs d'envoi n'affectent pas l'application
     """
 
-    # Endpoint Axiom Ingest API
-    AXIOM_INGEST_URL = "https://api.axiom.co/v1/datasets/{dataset}/ingest"
+    # Endpoint Axiom Ingest API (Région Europe pour correspondre au dataset eu-central-1)
+    AXIOM_INGEST_URL = "https://api.eu.axiom.co/v1/datasets/{dataset}/ingest"
 
     def __init__(
         self,

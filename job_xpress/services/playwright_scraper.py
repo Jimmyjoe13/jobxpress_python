@@ -1,9 +1,12 @@
 import asyncio
 import random
+import os
 from typing import Optional
 from playwright.async_api import async_playwright
-# On supposera que playwright-stealth sera installÃ© ultÃ©rieurement
-# from playwright_stealth import stealth_async 
+
+# Forcer le chemin des navigateurs pour Docker/Render
+if os.environ.get("ENVIRONMENT") == "production":
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/app/pw-browsers"
 
 class PlaywrightScraper:
     """
