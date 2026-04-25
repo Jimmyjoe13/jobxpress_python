@@ -553,10 +553,15 @@ async def get_search_results(
             message="Recherche en cours... Réessayez dans quelques secondes.",
         )
 
-    # Échec
+    # Échec (ne plus lever 500 pour éviter le crash frontend)
     if status == ApplicationStatus.FAILED:
-        error_msg = app_data.get("error_message", "Erreur lors de la recherche")
-        raise HTTPException(status_code=500, detail=error_msg)
+        return ApplicationResults(
+            application_id=app_id,
+            status=status,
+            total_found=0,
+            jobs=[],
+            message=app_data.get("error_message", "Aucune offre trouvée pour cette recherche."),
+        )
 
     # Convertir raw_jobs en JobResultItem
     raw_jobs = app_data.get("raw_jobs", []) or []
