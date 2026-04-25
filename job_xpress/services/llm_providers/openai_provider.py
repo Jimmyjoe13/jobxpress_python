@@ -128,8 +128,8 @@ class OpenAIProvider(BaseLLMProvider):
         messages: List[Dict[str, str]],
         model: str,
         temperature: float = 0.7,
-        max_tokens: int = 1000,
-        timeout: float = 30.0,
+        max_tokens: int = 2000,
+        timeout: float = 120.0,
         user_id: Optional[str] = None,
     ) -> str:
         payload = {
