@@ -10,7 +10,7 @@ from core.config import settings
 from core.logging_config import get_logger
 from models.candidate import CandidateProfile
 from models.job_offer_v2 import JobOffer
-from services.orchestrator import JobXpressOrchestrator
+from services.discovery_engine import discovery_engine
 from services.llm_providers.openai_provider import OpenAIProvider
 from services.database import db_service
 
@@ -19,11 +19,11 @@ logger = get_logger()
 class SearchEngineV2:
     """
     Interface de recherche V2 compatible avec les endpoints FastAPI existants.
-    Encapsule le JobXpressOrchestrator et pgvector.
+    Optimisée pour JSearch API et pgvector.
     """
 
     def __init__(self):
-        self.orchestrator = JobXpressOrchestrator(gemini_key=settings.GEMINI_API_KEY)
+        self.discovery = discovery_engine
         self.openai = OpenAIProvider()
 
     async def find_jobs_v2(
@@ -33,24 +33,22 @@ class SearchEngineV2:
         limit: int = 10,
     ) -> List[JobOffer]:
         """
-        Exécute le workflow optimisé : Vector Search (DB) + Discovery (Web).
+        Exécute le workflow optimisé : Vector Search (DB) + JSearch API (Web).
         """
-        logger.info(f"🔎 SearchEngineV2 (Hybrid): {candidate.job_title} à {candidate.location}")
+        logger.info(f"🔎 SearchEngineV2 (API Hybrid): {candidate.job_title} à {candidate.location}")
 
         # 1. Recherche Vectorielle dans la base existante
         db_results = []
         try:
-            # Générer embedding pour le profil candidat
             search_query = f"{candidate.job_title} {candidate.experience_level} {candidate.location}"
             if candidate.cv_text:
                 search_query += f" {candidate.cv_text[:1000]}"
 
             embedding = await self.openai.generate_embeddings(search_query)
 
-            # Rechercher dans Supabase (pgvector)
             matches = db_service.search_jobs_vector(
                 query_embedding=embedding,
-                match_threshold=0.5, # Plus souple pour le début
+                match_threshold=0.5,
                 match_count=limit,
                 user_id=candidate.user_id
             )
@@ -61,35 +59,25 @@ class SearchEngineV2:
         except Exception as e:
             logger.warning(f"⚠️ Échec Vector Search: {e}")
 
-        # 2. Découverte d'offres (si pas assez de résultats en DB)
+        # 2. Découverte d'offres via API (si pas assez de résultats en DB)
         if len(db_results) < limit:
-            logger.info("🌐 Lancement de la découverte d'offres sur le Web...")
-            candidate_dict = {
-                "job_title": candidate.job_title,
-                "experience_level": candidate.experience_level,
-                "contract_type": candidate.contract_type,
-                "location": candidate.location,
-                "top_skills": candidate.skills if hasattr(candidate, 'skills') else []
-            }
-
+            logger.info("🌐 Lancement de la découverte d'offres via JSearch API...")
+            
             try:
-                web_results = await self.orchestrator.run_discovery(
+                web_results = await self.discovery.find_jobs(
                     job_title=candidate.job_title,
                     location=candidate.location,
-                    candidate_profile=candidate_dict
+                    limit=limit - len(db_results)
                 )
-
-                # Sauvegarder les nouveaux résultats en DB avec embedding (pour les prochaines fois)
+                
+                # Sauvegarder les nouveaux résultats en DB avec embedding
                 for job in web_results:
-                    # Tâche asynchrone pour ne pas ralentir la réponse
                     asyncio.create_task(self._index_job_vector(job, candidate.user_id))
-
-                # Combiner et dédoubler (simplifié ici)
-                all_results = db_results + web_results
-                return all_results[:limit]
+                
+                return db_results + web_results
 
             except Exception as e:
-                logger.error(f"❌ Erreur discovery SearchEngineV2: {e}")
+                logger.error(f"❌ Erreur Discovery Engine: {e}")
                 return db_results
 
         return db_results[:limit]

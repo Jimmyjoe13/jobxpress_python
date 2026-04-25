@@ -35,18 +35,18 @@ async def test_hybrid_search_vector_hit():
     with patch("services.search_engine_v2.db_service") as mock_db:
         mock_db.search_jobs_vector.return_value = [mock_job]
         
-        # Mock de l'orchestrateur pour vérifier qu'il n'est PAS appelé si on a assez de résultats
-        engine.orchestrator.run_discovery = AsyncMock()
+        # Mock de DiscoveryEngine pour vérifier qu'il n'est PAS appelé si on a assez de résultats
+        engine.discovery.find_jobs = AsyncMock()
 
         results = await engine.find_jobs_v2(candidate, limit=1)
         
         assert len(results) == 1
         assert results[0].company == "StartupAI"
-        assert not engine.orchestrator.run_discovery.called
+        assert not engine.discovery.find_jobs.called
 
 @pytest.mark.asyncio
 async def test_hybrid_search_vector_miss_discovery():
-    """Teste que le moteur lance le web si la base vectorielle est vide."""
+    """Teste que le moteur lance JSearch si la base vectorielle est vide."""
     engine = SearchEngineV2()
     candidate = CandidateProfile(
         job_title="Astronaute",
@@ -62,14 +62,14 @@ async def test_hybrid_search_vector_miss_discovery():
     with patch("services.search_engine_v2.db_service") as mock_db:
         mock_db.search_jobs_vector.return_value = [] # MISS
         
-        # Mock de l'orchestrateur (Discovery)
+        # Mock de DiscoveryEngine (JSearch)
         mock_web_job = JobOffer(
             title="Astronaute de bord",
             company="SpaceX",
             description="Mission vers Mars...",
             url="https://spacex.com/mars"
         )
-        engine.orchestrator.run_discovery = AsyncMock(return_value=[mock_web_job])
+        engine.discovery.find_jobs = AsyncMock(return_value=[mock_web_job])
         
         # Mock de l'indexation asynchrone
         engine._index_job_vector = AsyncMock()
@@ -78,4 +78,4 @@ async def test_hybrid_search_vector_miss_discovery():
         
         assert len(results) == 1
         assert results[0].company == "SpaceX"
-        assert engine.orchestrator.run_discovery.called
+        assert engine.discovery.find_jobs.called

@@ -64,10 +64,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Installer Playwright et ses navigateurs (uniquement Chromium pour le poids)
-RUN pip install playwright \
-    && playwright install --with-deps chromium
-
 # Copier le code de l'application
 COPY . .
 
