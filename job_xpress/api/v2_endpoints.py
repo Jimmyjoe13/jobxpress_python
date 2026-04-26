@@ -373,13 +373,6 @@ async def run_analysis_task(
         except Exception as notif_error:
             logger.warning(f"⚠️ Erreur création notifications: {notif_error}")
 
-        # Nettoyer le fichier temporaire
-        if pdf_path and os.path.exists(pdf_path):
-            try:
-                os.remove(pdf_path)
-            except Exception:
-                pass
-
     except Exception as e:
         logger.exception(f"❌ Erreur analyse IA: {e}")
         try:

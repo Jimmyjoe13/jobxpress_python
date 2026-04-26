@@ -6,7 +6,7 @@ et les schémas de requête/réponse pour les endpoints Human-in-the-Loop.
 """
 
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -106,6 +106,7 @@ class JobResultItem(BaseModel):
     source: Optional[str] = Field(
         None, description="Source de l'offre (jsearch, serpapi, etc.)"
     )
+    ai_analysis: Optional[Any] = None # Supporte Dict ou String
 
 
 class ApplicationResults(BaseModel):

@@ -26,11 +26,11 @@ class DiscoveryEngine:
             logger.error("❌ RAPIDAPI_KEY non configurée")
             return []
 
-        # Liste de variantes de recherche par ordre de spécificité
+        # Liste de variantes de recherche par ordre de spécificité (toujours avec 'France')
         search_variants = [
-            f"{job_title} in {location}",
-            f"{job_title} {location}",
-            job_title # Dernier recours : juste le titre
+            f"{job_title} in {location} France",
+            f"{job_title} {location} France",
+            f"{job_title} France"
         ]
         
         headers = {
@@ -44,7 +44,8 @@ class DiscoveryEngine:
                 "query": query,
                 "page": "1",
                 "num_pages": "1",
-                "date_posted": "all"
+                "date_posted": "all",
+                "country": "fr" # Forcer le pays France au niveau de l'API
             }
 
             try:
