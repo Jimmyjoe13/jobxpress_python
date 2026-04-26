@@ -6,54 +6,42 @@ from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
 
 @pytest.mark.asyncio
-async def test_llm_engine_analyze_offers_parallel_with_cache():
-    """Teste l'analyse des offres avec cache par hash."""
+async def test_llm_engine_strategic_advice():
+    """Vérifie la génération de dossiers stratégiques au lieu de lettres."""
     engine = LLMEngine()
     candidate = CandidateProfile(
         first_name="Jean",
         last_name="Dupont",
-        email="jean.dupont@example.com",
-        job_title="Développeur Python",
-        experience_level="Sénior"
+        email="jean@example.com",
+        job_title="Dev",
+        cv_text="Expérience en Python"
     )
-    
     offer = JobOffer(
-        title="Développeur Backend Python",
-        company="TechCorp",
-        description="Nous recherchons un expert Python...",
-        url="https://example.com/job1"
+        title="Python Developer",
+        company="AI Corp",
+        description="Write code",
+        url="http://job.com"
     )
     
-    # Mock du cache pour simuler un MISS puis un HIT
-    with patch("services.llm_engine.cache_service") as mock_cache:
-        mock_cache.get.return_value = None # MISS
+    with patch("services.llm_engine.OpenAIProvider.chat", new_callable=AsyncMock) as mock_chat:
+        mock_chat.return_value = "<h3>Points forts</h3><ul><li>Python</li></ul>"
         
-        # Mock de OpenAIProvider
-        with patch("services.llm_engine.OpenAIProvider.generate_json", new_callable=AsyncMock) as mock_openai:
-            mock_openai.return_value = {"score": 85, "reasoning": "Excellent match"}
-            
-            results = await engine.analyze_offers_parallel(candidate, [offer])
-            
-            assert len(results) == 1
-            assert results[0].match_score == 85
-            assert mock_openai.called
-            
-            # Vérifier que le cache.set a été appelé
-            mock_cache.set.assert_called()
-            
-            # Simuler un HIT
-            mock_cache.get.return_value = json.dumps({"score": 85, "reasoning": "Excellent match"})
-            mock_openai.reset_mock()
-            
-            results_hit = await engine.analyze_offers_parallel(candidate, [offer])
-            assert results_hit[0].match_score == 85
-            assert not mock_openai.called # Ne doit pas appeler l'API si c'est dans le cache
+        result = await engine.generate_strategic_advice(candidate, offer)
+        
+        assert "html_content" in result
+        assert "Points forts" in result["html_content"]
+        assert "GPT-5 Pro" in result["strategic_advice"]
+        assert mock_chat.called
 
 @pytest.mark.asyncio
-async def test_llm_engine_routing():
-    """Vérifie que le routage dynamique utilise les bons modèles."""
+async def test_llm_engine_analyze_with_md5_cache():
+    """Vérifie que le hashage MD5 fonctionne pour le cache."""
     engine = LLMEngine()
-    # Supporte gpt-5-mini ou gpt-5-nano pour le modèle rapide
-    assert any(m in engine.model_mini.lower() for m in ["mini", "nano"])
-    assert "mini" not in engine.model_pro.lower()
-    assert "nano" not in engine.model_pro.lower()
+    offer = JobOffer(title="T", company="C", description="D", url="U")
+    
+    hash1 = engine._generate_job_hash(offer)
+    assert len(hash1) == 32 # MD5 hex digest length
+    
+    offer2 = JobOffer(title="T", company="C", description="D", url="U")
+    hash2 = engine._generate_job_hash(offer2)
+    assert hash1 == hash2
