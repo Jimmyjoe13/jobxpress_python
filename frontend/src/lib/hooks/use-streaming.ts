@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 
 export interface StreamingMessage {
   content: string
@@ -20,6 +20,7 @@ export function useStreaming() {
     setError(null)
 
     try {
+      const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
 

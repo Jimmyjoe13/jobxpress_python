@@ -1,7 +1,7 @@
 /**
  * JobXpress API Client
  * 
- * Ce module gÃ¨re toutes les communications avec l'API backend,
+ * Ce module gère toutes les communications avec l'API backend,
  * y compris l'authentification JWT via Supabase.
  */
 
@@ -170,6 +170,7 @@ export interface JobResultItem {
   salary_warning: boolean
   is_agency: boolean
   source?: string
+  ai_analysis?: any
 }
 
 export interface ApplicationResults {
@@ -202,6 +203,7 @@ export interface ApplicationV2 {
     url?: string
     score?: number
   }
+  cover_letter_html?: string
 }
 
 // ============================================
@@ -209,7 +211,7 @@ export interface ApplicationV2 {
 // ============================================
 
 /**
- * RÃ©cupÃ¨re le token JWT de l'utilisateur connectÃ© via Supabase
+ * Récupère le token JWT de l'utilisateur connecté via Supabase
  */
 export async function getAuthToken(): Promise<string | null> {
   if (process.env.NEXT_PUBLIC_MODE === 'DEVELOPMENT' || process.env.NODE_ENV === 'development') {
@@ -226,13 +228,13 @@ export async function getAuthToken(): Promise<string | null> {
     const { data: { session } } = await supabase.auth.getSession()
     return session?.access_token || null
   } catch (error) {
-    console.error('Erreur rÃ©cupÃ©ration token:', error)
+    console.error('Erreur récupération token:', error)
     return null
   }
 }
 
 /**
- * Effectue une requÃªte API avec authentification optionnelle
+ * Effectue une requête API avec authentification optionnelle
  */
 async function apiRequest<T>(
   endpoint: string,
@@ -261,7 +263,7 @@ async function apiRequest<T>(
       if (typeof window !== 'undefined') {
         window.location.href = '/auth/login?reason=session_expired'
       }
-      throw new Error('Session expirÃ©e, veuillez vous reconnecter')
+      throw new Error('Session expirée, veuillez vous reconnecter')
     }
     const error = await response.json().catch(() => ({ detail: 'Erreur serveur' }))
     throw new Error(error.detail || `Erreur ${response.status}`)
@@ -429,7 +431,36 @@ export async function getSubscriptionDetails(): Promise<SubscriptionDetails> {
 // FAVORITES & HISTORY
 // ============================================
 
-export async function quickSearch(data: any): Promise<any> {
+export interface QuickSearchRequest {
+  job_title: string
+  location: string
+  contract_type: string
+  work_type: string
+  experience_level: string
+}
+
+export interface SearchQuota {
+  available: number
+  total: number
+  reset_at: string
+  plan?: string
+  searches_unlimited?: boolean
+  free_searches_remaining?: number
+}
+
+export interface SavedJobItem {
+  id: string
+  job_data: JobResultItem
+  notes?: string
+  created_at: string
+}
+
+export interface SavedJobResponse {
+  count: number
+  saved_jobs: SavedJobItem[]
+}
+
+export async function quickSearch(data: QuickSearchRequest): Promise<any> {
   return apiRequest('/api/v2/search/quick', { method: 'POST', body: JSON.stringify(data) }, true)
 }
 
@@ -437,8 +468,8 @@ export async function saveJob(data: any): Promise<any> {
   return apiRequest('/api/v2/jobs/save', { method: 'POST', body: JSON.stringify(data) }, true)
 }
 
-export async function getSavedJobs(limit: number = 50): Promise<any> {
-  return apiRequest(`/api/v2/jobs/saved?limit=${limit}`, {}, true)
+export async function getSavedJobs(limit: number = 50): Promise<SavedJobResponse> {
+  return apiRequest<SavedJobResponse>(`/api/v2/jobs/saved?limit=${limit}`, {}, true)
 }
 
 export async function updateSavedJobNotes(jobId: string, notes: string): Promise<any> {
@@ -510,7 +541,9 @@ export interface GlobalChatResponse {
   response: string; session_id: string; quick_replies?: any[]; tool_calls_executed?: any[]
 }
 export interface GlobalChatSession {
-  messages: GlobalChatMessage[]; session_id?: string;
+  messages: GlobalChatMessage[]
+  session_id?: string
+  tool_calls_executed?: any[]
 }
 
 export async function getProactiveMessage(): Promise<{ message: GlobalChatMessage }> {

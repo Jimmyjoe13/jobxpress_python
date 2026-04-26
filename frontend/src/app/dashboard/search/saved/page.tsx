@@ -17,7 +17,7 @@ import Link from "next/link"
 
 export default function SavedJobsPage() {
   const { showToast } = useToast()
-  const [savedJobs, setSavedJobs] = useState<SavedJobResponse[]>([])
+  const [savedJobs, setSavedJobs] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 

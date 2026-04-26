@@ -11,9 +11,7 @@ import {
   Building2, 
   Sparkles,
   ExternalLink,
-  ClipboardCheck,
   Target,
-  AlertCircle,
   RotateCcw,
   FileText
 } from "lucide-react"
@@ -32,7 +30,8 @@ export default function InboxPage() {
   const loadData = async () => {
     setIsLoading(true)
     try {
-      const apps = await getApplicationsV2(50)
+      const response = await getApplicationsV2(50)
+      const apps = response.applications || []
       const completedApps = apps.filter(app => app.status === "COMPLETED")
       setApplications(completedApps)
       if (completedApps.length > 0 && !selectedApp) {
@@ -152,13 +151,13 @@ export default function InboxPage() {
                       {app.final_choice?.company || "Entreprise"}
                     </span>
                     <span className="text-[10px] text-slate-500 whitespace-nowrap mt-1">
-                      {format(new Date(app.created_at), "dd MMM", { locale: fr })}
+                      {app.created_at ? format(new Date(app.created_at), "dd MMM", { locale: fr }) : ""}
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 truncate mb-2">{app.job_title}</p>
                   <div className="flex items-center gap-2">
                     <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      Score: {app.final_choice?.match_score}%
+                      Score: {app.final_choice?.score}%
                     </span>
                   </div>
                 </button>
@@ -196,7 +195,7 @@ export default function InboxPage() {
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5" />
-                          Généré le {format(new Date(selectedApp.created_at), "PPP", { locale: fr })}
+                          Généré le {selectedApp.created_at ? format(new Date(selectedApp.created_at), "PPP", { locale: fr }) : ""}
                         </span>
                       </div>
                     </div>
@@ -245,14 +244,8 @@ export default function InboxPage() {
                       </div>
                     </div>
 
-                    {/* Contenu HTML injecté (Dossier IA) */}
                     <div 
-                      className="prose prose-invert prose-indigo max-w-none 
-                        prose-h3:text-indigo-400 prose-h3:text-lg prose-h3:font-bold prose-h3:mb-3 prose-h3:mt-8
-                        prose-p:text-slate-300 prose-p:leading-relaxed prose-p:mb-4
-                        prose-ul:list-disc prose-ul:pl-5 prose-ul:space-y-2
-                        prose-li:text-slate-300
-                      "
+                      className="prose prose-invert prose-indigo max-w-none prose-h3:text-indigo-400 prose-h3:text-lg prose-h3:font-bold prose-h3:mb-3 prose-h3:mt-8 prose-p:text-slate-300 prose-p:leading-relaxed prose-p:mb-4 prose-ul:list-disc prose-ul:pl-5 prose-ul:space-y-2 prose-li:text-slate-300"
                       dangerouslySetInnerHTML={{ __html: selectedApp.cover_letter_html || "<p>Aucun contenu généré.</p>" }}
                     />
                   </div>

@@ -16,11 +16,11 @@ import {
   Loader2,
   Calendar
 } from "lucide-react"
-import { SavedJobResponse, updateSavedJobNotes, JobResultItem } from "@/lib/api"
+import { SavedJobItem, updateSavedJobNotes, JobResultItem } from "@/lib/api"
 import { useToast } from "@/components/ui/toast"
 
 interface SavedJobCardProps {
-  savedJob: SavedJobResponse
+  savedJob: SavedJobItem
   onDelete: (id: string) => void
 }
 

@@ -62,7 +62,7 @@ export default function SearchPage() {
   const [isSearching, setIsSearching] = useState(false)
   const [results, setResults] = useState<JobResultItem[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [quota, setQuota] = useState<SearchQuota | null>(null)
+  const [quota, setQuota] = useState<SearchQuota | any>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
 
@@ -125,31 +125,25 @@ export default function SearchPage() {
       const request: QuickSearchRequest = {
         job_title: title,
         location: loc,
-        contract_type: formData.contractType || undefined,
-        experience_level: formData.experienceLevel || undefined,
-        work_type: formData.workType !== "Tous" ? formData.workType : undefined,
-        filters: {
-          exclude_agencies: formData.excludeAgencies,
-          remote_only: formData.remoteOnly,
-          max_days_old: formData.maxDaysOld,
-        }
+        contract_type: formData.contractType || "",
+        experience_level: formData.experienceLevel || "",
+        work_type: formData.workType !== "Tous" ? (formData.workType || "") : "",
       }
 
       const response = await quickSearch(request)
-      setResults(response.jobs)
+      setResults(response.jobs || [])
       
       // Update quota locally based on response
       if (quota) {
         if (!response.used_credit) {
           setQuota({ ...quota, free_searches_remaining: response.free_searches_remaining })
         } else {
-          // Si on a utilisé un crédit, on recharge depuis l'API pour être sûr
           loadQuota()
         }
       }
-      showToast(`${response.total_found} offres trouvées !`, "success")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la recherche. Veuillez réessayer.")
+      showToast(`${response.total_found || 0} offres trouvées !`, "success")
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la recherche. Veuillez réessayer.")
     } finally {
       setIsSearching(false)
     }
