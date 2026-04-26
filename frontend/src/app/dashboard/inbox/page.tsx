@@ -14,12 +14,13 @@ import {
   ClipboardCheck,
   Target,
   AlertCircle,
-  RotateCcw
+  RotateCcw,
+  FileText
 } from "lucide-react"
 import { getApplicationsV2, type ApplicationV2 } from "@/lib/api"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 
 export default function InboxPage() {
   const [applications, setApplications] = useState<ApplicationV2[]>([])
@@ -28,10 +29,27 @@ export default function InboxPage() {
   const [isDownloading, setIsDownloading] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
 
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const apps = await getApplicationsV2(50)
+      const completedApps = apps.filter(app => app.status === "COMPLETED")
+      setApplications(completedApps)
+      if (completedApps.length > 0 && !selectedApp) {
+        setSelectedApp(completedApps[0])
+      }
+    } catch (err) {
+      console.error("Erreur chargement Inbox:", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleDownloadPDF = async () => {
     if (!selectedApp) return
     setIsDownloading(true)
     try {
+      const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
 
@@ -57,35 +75,18 @@ export default function InboxPage() {
     } finally {
       setIsDownloading(false)
     }
-  const [searchTerm, setSearchTerm] = useState("")
-
-  const loadData = async () => {
-    setIsLoading(true)
-    try {
-      const apps = await getApplicationsV2(50)
-      const completedApps = apps.filter(app => app.status === "COMPLETED")
-      setApplications(completedApps)
-      if (completedApps.length > 0) {
-        setSelectedApp(completedApps[0])
-      }
-    } catch (err) {
-      console.error("Erreur chargement Inbox:", err)
-    } finally {
-      setIsLoading(false)
-    }
   }
 
   useEffect(() => {
     loadData()
   }, [])
 
-
   const filteredApps = applications.filter(app => 
     app.final_choice?.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     app.job_title?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  if (isLoading) {
+  if (isLoading && applications.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
