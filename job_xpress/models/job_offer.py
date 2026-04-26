@@ -26,7 +26,7 @@ class JobOffer(BaseModel):
 
     # --- Champs pour l'IA ---
     match_score: int = 0  # 0 à 100
-    ai_analysis: Optional[Dict[str, Any]] = None  # JSON complet de l'analyse IA
+    ai_analysis: Optional[Any] = None  # JSON ou Texte de l'analyse IA
 
     class Config:
         from_attributes = True

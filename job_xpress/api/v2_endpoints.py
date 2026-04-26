@@ -14,8 +14,8 @@ Workflow:
 from datetime import datetime, timezone
 from typing import Optional, List
 import uuid
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request, Response
+from fastapi.responses import StreamingResponse, FileResponse
 import json
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -794,3 +794,57 @@ async def stream_application_letter(
             logger.error(f"⚠️ Erreur sauvegarde lettre streamée: {e}")
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+
+@router.get("/applications/{app_id}/pdf")
+async def get_application_pdf(
+    app_id: str,
+    token: str = Depends(get_required_token),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Génère et retourne le dossier stratégique au format PDF.
+    """
+    from services.pdf_generator import pdf_generator
+    from models.job_offer import JobOffer
+    from models.candidate import CandidateProfile
+    import os
+
+    client = db_service.get_user_client(token)
+    if not client:
+        raise HTTPException(status_code=500, detail="Erreur DB")
+
+    res = client.table("applications_v2").select("*").eq("id", app_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Application non trouvée")
+    
+    app_data = res.data
+    content_html = app_data.get("cover_letter_html")
+    if not content_html:
+        raise HTTPException(status_code=400, detail="Dossier non encore généré")
+
+    best_offer_data = app_data.get("final_choice")
+    if not best_offer_data:
+        raise HTTPException(status_code=400, detail="Offre non sélectionnée")
+
+    best_offer = JobOffer(**best_offer_data)
+    candidate = CandidateProfile(
+        first_name=app_data.get("candidate_first_name") or "Candidat",
+        last_name=app_data.get("candidate_last_name") or "",
+        email=app_data.get("candidate_email") or "",
+        job_title=app_data.get("job_title", ""),
+        location=app_data.get("location", "France")
+    )
+
+    pdf_path = pdf_generator.create_application_pdf(candidate, best_offer, content_html)
+    
+    if not pdf_path or not os.path.exists(pdf_path):
+        raise HTTPException(status_code=500, detail="Erreur lors de la génération du PDF")
+
+    filename = f"Dossier_JobXpress_{best_offer.company.replace(' ', '_')}.pdf"
+    
+    return FileResponse(
+        path=pdf_path,
+        filename=filename,
+        media_type="application/pdf"
+    )

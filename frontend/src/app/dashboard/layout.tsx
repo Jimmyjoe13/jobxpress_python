@@ -24,8 +24,8 @@ import { ChatWidget } from "@/components/ui/chat-widget"
 import { UpgradeBannerCompact } from "@/components/ui/upgrade-banner"
 
 const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Inbox IA", href: "/dashboard/inbox", icon: Sparkles },
+  { name: "Inbox IA", href: "/dashboard/inbox", icon: Sparkles, isNew: true },
+  { name: "Suivi (Kanban)", href: "/dashboard", icon: LayoutDashboard },
   { name: "Recherche d'offres", href: "/dashboard/search", icon: Search },
   { name: "Offres sauvegardées", href: "/dashboard/search/saved", icon: Bookmark },
   { name: "Nouvelle candidature", href: "/dashboard/apply", icon: FileText },
@@ -126,7 +126,14 @@ export default function DashboardLayout({
                   `}
                 >
                   <item.icon className={`w-5 h-5 ${isActive ? 'text-indigo-400' : ''}`} />
-                  <span className="flex-1">{item.name}</span>
+                  <span className="flex-1 flex items-center justify-between">
+                    {item.name}
+                    {item.isNew && (
+                      <span className="px-1.5 py-0.5 text-[8px] font-black bg-indigo-500 text-white rounded uppercase tracking-tighter animate-pulse">
+                        New
+                      </span>
+                    )}
+                  </span>
                   {isActive && (
                     <ChevronRight className="w-4 h-4 text-indigo-400" />
                   )}

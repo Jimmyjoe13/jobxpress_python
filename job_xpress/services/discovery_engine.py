@@ -58,7 +58,12 @@ class DiscoveryEngine:
                         
                         if results:
                             job_offers = []
-                            for item in results[:limit]:
+                            for item in results:
+                                # Filtrage strict par pays (France uniquement)
+                                country = item.get("job_country", "").upper()
+                                if country and country != "FR":
+                                    continue
+
                                 offer = JobOffer(
                                     title=item.get("job_title", "Sans titre"),
                                     company=item.get("employer_name", "Entreprise inconnue"),
@@ -72,9 +77,12 @@ class DiscoveryEngine:
                                     match_score=0
                                 )
                                 job_offers.append(offer)
-                            
-                            logger.info(f"✅ JSearch: {len(job_offers)} offres trouvées pour '{query}'")
+                                if len(job_offers) >= limit:
+                                    break
+
+                            logger.info(f"✅ JSearch: {len(job_offers)} offres filtrées (France) pour '{query}'")
                             return job_offers
+
                         else:
                             logger.warning(f"⚠️ JSearch: Aucun résultat pour '{query}', essai de la variante suivante...")
                     else:

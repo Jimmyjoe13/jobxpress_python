@@ -13,36 +13,72 @@ import {
   ExternalLink,
   ClipboardCheck,
   Target,
-  AlertCircle
+  AlertCircle,
+  RotateCcw
 } from "lucide-react"
 import { getApplicationsV2, type ApplicationV2 } from "@/lib/api"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
+import { supabase } from "@/lib/supabase/client"
 
 export default function InboxPage() {
   const [applications, setApplications] = useState<ApplicationV2[]>([])
   const [selectedApp, setSelectedApp] = useState<ApplicationV2 | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const apps = await getApplicationsV2(50)
-        // On ne garde que les candidatures terminées (qui ont un dossier IA)
-        const completedApps = apps.filter(app => app.status === "COMPLETED")
-        setApplications(completedApps)
-        if (completedApps.length > 0) {
-          setSelectedApp(completedApps[0])
+  const handleDownloadPDF = async () => {
+    if (!selectedApp) return
+    setIsDownloading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v2/applications/${selectedApp.id}/pdf`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
         }
-      } catch (err) {
-        console.error("Erreur chargement Inbox:", err)
-      } finally {
-        setIsLoading(false)
-      }
+      })
+
+      if (!response.ok) throw new Error("Erreur lors du téléchargement")
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `Dossier_JobXpress_${selectedApp.final_choice?.company || "Entreprise"}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("Erreur PDF:", err)
+      alert("Impossible de générer le PDF pour le moment.")
+    } finally {
+      setIsDownloading(false)
     }
+  const [searchTerm, setSearchTerm] = useState("")
+
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const apps = await getApplicationsV2(50)
+      const completedApps = apps.filter(app => app.status === "COMPLETED")
+      setApplications(completedApps)
+      if (completedApps.length > 0) {
+        setSelectedApp(completedApps[0])
+      }
+    } catch (err) {
+      console.error("Erreur chargement Inbox:", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
     loadData()
   }, [])
+
 
   const filteredApps = applications.filter(app => 
     app.final_choice?.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -67,6 +103,14 @@ export default function InboxPage() {
           </h1>
           <p className="text-slate-400 mt-1">Vos dossiers de préparation personnalisés par notre intelligence artificielle.</p>
         </div>
+        <button 
+          onClick={loadData}
+          disabled={isLoading}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-all border border-slate-700 disabled:opacity-50"
+        >
+          <RotateCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          Actualiser
+        </button>
       </div>
 
       <div className="flex-1 flex overflow-hidden border border-slate-800 rounded-2xl bg-slate-900/50 backdrop-blur-sm">
@@ -169,9 +213,17 @@ export default function InboxPage() {
                         Lien Offre
                       </a>
                     )}
-                    <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-indigo-600/20">
-                      <Sparkles className="w-4 h-4" />
-                      Actions
+                    <button 
+                      onClick={handleDownloadPDF}
+                      disabled={isDownloading}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                    >
+                      {isDownloading ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <FileText className="w-4 h-4" />
+                      )}
+                      Télécharger PDF
                     </button>
                   </div>
                 </div>

@@ -55,7 +55,11 @@ class SearchEngineV2:
 
             if matches:
                 logger.info(f"🎯 {len(matches)} offres trouvées via Vector Search")
-                db_results = [JobOffer(**m) for m in matches]
+                db_results = []
+                for m in matches:
+                    # Conversion score float (0-1) vers int (0-100)
+                    m["match_score"] = int(float(m.get("match_score", 0)) * 100)
+                    db_results.append(JobOffer(**m))
         except Exception as e:
             logger.warning(f"⚠️ Échec Vector Search: {e}")
 

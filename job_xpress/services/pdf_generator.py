@@ -141,30 +141,11 @@ class PDFGenerator:
             return None
 
     def _build_html_template(
-        self, candidate: CandidateProfile, offer: JobOffer, letter_html: str
+        self, candidate: CandidateProfile, offer: JobOffer, content_html: str
     ) -> str:
         """
-        Construit le template HTML complet pour le PDF.
-
-        Design moderne avec header, contenu et footer.
+        Construit le template HTML complet pour le dossier de préparation.
         """
-        # Formater le score si disponible
-        score_badge = ""
-        if offer.match_score > 0:
-            score_color = "#22c55e" if offer.match_score >= 70 else "#f59e0b"
-            score_badge = f"""
-                <span style="
-                    background-color: {score_color}; 
-                    color: white; 
-                    padding: 4px 12px; 
-                    border-radius: 20px; 
-                    font-size: 10pt;
-                    font-weight: bold;
-                ">
-                    Match: {offer.match_score}%
-                </span>
-            """
-
         return f"""
         <!DOCTYPE html>
         <html lang="fr">
@@ -173,114 +154,51 @@ class PDFGenerator:
             <style>
                 @page {{
                     size: A4;
-                    margin: 2cm;
+                    margin: 1.5cm;
                 }}
-                
-                * {{
-                    box-sizing: border-box;
-                }}
-                
                 body {{ 
                     font-family: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif; 
                     font-size: 11pt; 
                     color: #1f2937;
-                    line-height: 1.6;
-                    margin: 0;
-                    padding: 0;
+                    line-height: 1.5;
                 }}
-                
                 .header {{ 
-                    text-align: center; 
-                    border-bottom: 2px solid #6366f1; 
-                    padding-bottom: 15px; 
-                    margin-bottom: 25px; 
-                }}
-                
-                h1 {{ 
-                    color: #4f46e5; 
-                    font-size: 20pt; 
-                    margin: 0 0 5px 0;
-                    font-weight: 600;
-                }}
-                
-                .contact-info {{
-                    font-size: 10pt;
-                    color: #6b7280;
-                    margin-top: 8px;
-                }}
-                
-                .recipient {{ 
-                    margin: 25px 0;
-                    padding: 15px;
-                    background-color: #f9fafb;
+                    background-color: #6366f1;
+                    color: white;
+                    padding: 20px;
                     border-radius: 8px;
-                    border-left: 4px solid #6366f1;
+                    margin-bottom: 30px;
                 }}
-                
-                .recipient strong {{
-                    color: #1f2937;
-                }}
-                
-                .recipient .company {{
-                    font-size: 14pt;
-                    font-weight: 600;
-                    color: #4f46e5;
-                    margin-bottom: 5px;
-                }}
-                
-                .content {{ 
-                    text-align: justify;
-                    margin-top: 20px;
-                }}
-                
-                .content p {{
-                    margin-bottom: 12px;
-                }}
-                
+                .header h1 {{ margin: 0; font-size: 18pt; }}
+                .info {{ font-size: 10pt; opacity: 0.9; margin-top: 5px; }}
+                .section {{ margin-top: 25px; }}
+                h3 {{ color: #4f46e5; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }}
                 .footer {{ 
-                    margin-top: 40px;
-                    padding-top: 15px;
-                    border-top: 1px solid #e5e7eb;
-                    text-align: center;
-                    font-size: 9pt;
+                    margin-top: 50px; 
+                    text-align: center; 
+                    font-size: 9pt; 
                     color: #9ca3af;
+                    border-top: 1px solid #f3f4f6;
+                    padding-top: 10px;
                 }}
-                
-                .score-badge {{
-                    text-align: right;
-                    margin-bottom: 10px;
-                }}
+                ul {{ padding-left: 20px; }}
+                li {{ margin-bottom: 5px; }}
             </style>
         </head>
         <body>
-            <div class="score-badge">
-                {score_badge}
-            </div>
-            
             <div class="header">
-                <h1>{candidate.first_name} {candidate.last_name}</h1>
-                <div class="contact-info">
-                    📧 {candidate.email}
-                    {f" • 📱 {candidate.phone}" if candidate.phone else ""}
-                    <br/>
-                    📍 {candidate.location}
+                <h1>Dossier de Préparation : {offer.company}</h1>
+                <div class="info">
+                    Poste : {offer.title} | Candidat : {candidate.first_name} {candidate.last_name}
                 </div>
             </div>
 
-            <div class="recipient">
-                <div class="company">{offer.company}</div>
-                <strong>Objet :</strong> Candidature au poste de <strong>{offer.title}</strong>
-                {f"<br/><small>📍 {offer.location}</small>" if offer.location else ""}
-            </div>
-
             <div class="content">
-                {letter_html}
+                {content_html}
             </div>
 
             <div class="footer">
-                Document généré par <strong>JobXpress</strong> - Assistant de Candidature IA
-                <br/>
-                <small>www.jobxpress.fr</small>
+                Document généré par JobXpress - Votre Assistant de Carrière IA
             </div>
         </body>
         </html>

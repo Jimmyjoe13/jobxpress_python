@@ -210,6 +210,22 @@ function DraggableCard({
               <span className="truncate">{app.location}</span>
             </div>
           )}
+          
+          {/* Action Link (Lien vers l'offre) */}
+          {(app.final_choice?.url || (app as any).url) && (
+            <div className="mt-3 pt-3 border-t border-white/5">
+              <a 
+                href={app.final_choice?.url || (app as any).url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onPointerDown={(e) => e.stopPropagation()}
+                className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider group"
+              >
+                Voir l&apos;offre originale
+                <Sparkles className="w-3 h-3 group-hover:animate-pulse" />
+              </a>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
