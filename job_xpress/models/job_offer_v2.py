@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Any
 
 class JobOffer(BaseModel):
     title: str
@@ -12,3 +12,4 @@ class JobOffer(BaseModel):
     is_remote: bool = False
     url: str
     match_score: int = 0
+    ai_analysis: Optional[Any] = None # Supporte Dict ou String

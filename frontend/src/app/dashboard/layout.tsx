@@ -25,6 +25,7 @@ import { UpgradeBannerCompact } from "@/components/ui/upgrade-banner"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Inbox IA", href: "/dashboard/inbox", icon: Sparkles },
   { name: "Recherche d'offres", href: "/dashboard/search", icon: Search },
   { name: "Offres sauvegardées", href: "/dashboard/search/saved", icon: Bookmark },
   { name: "Nouvelle candidature", href: "/dashboard/apply", icon: FileText },

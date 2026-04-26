@@ -324,98 +324,35 @@ async def run_analysis_task(
             f"✅ Analyse terminée: {best_offer.title} ({best_offer.match_score}%)"
         )
 
-        # 3. Générer la lettre de motivation
-        letter_data = await llm_engine.generate_cover_letter(candidate, best_offer)
-        letter_html = letter_data.get("html_content", "")
+        # 3. Générer le dossier de préparation entretien
+        letter_data = await llm_engine.generate_strategic_advice(candidate, best_offer)
+        advice_html = letter_data.get("html_content", "")
 
-        # Mettre à jour: statut GENERATING_DOCS + lettre
-        client.table("applications_v2").update(
-            {
-                "status": ApplicationStatus.GENERATING_DOCS.value,
-                "selected_jobs": [o.model_dump() for o in analyzed_offers],
-                "final_choice": best_offer.model_dump(),
-                "cover_letter_html": letter_html,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            }
-        ).eq("id", app_id).execute()
-
-        logger.info("📝 Lettre de motivation générée")
-
-        # 4. Générer le PDF
-        pdf_path = pdf_generator.create_application_pdf(
-            candidate, best_offer, letter_html
-        )
-
-        pdf_url = None
-        if pdf_path and os.path.exists(pdf_path):
-            logger.info(f"📄 PDF généré: {pdf_path}")
-
-            # 5. Uploader vers Supabase Storage
-            try:
-                pdf_filename = (
-                    f"{app_id[:8]}_{candidate.first_name}_{best_offer.company}.pdf"
-                )
-                pdf_filename = pdf_filename.replace(" ", "_")
-
-                with open(pdf_path, "rb") as f:
-                    pdf_content = f.read()
-
-                # Upload dans le bucket cvs (ou pdfs si disponible)
-                upload_result = client.storage.from_("cvs").upload(
-                    path=f"applications/{pdf_filename}",
-                    file=pdf_content,
-                    file_options={"content-type": "application/pdf"},
-                )
-
-                # Obtenir l'URL publique
-                pdf_url = client.storage.from_("cvs").get_public_url(
-                    f"applications/{pdf_filename}"
-                )
-                logger.info(f"☁️ PDF uploadé: {pdf_url[:50]}...")
-
-            except Exception as upload_error:
-                logger.warning(f"⚠️ Erreur upload PDF: {upload_error}")
-                # On continue quand même avec le fichier local
-
-        # 6. Envoyer l'email
-        if candidate_email:
-            try:
-                other_offers = analyzed_offers[1:] if len(analyzed_offers) > 1 else []
-                email_service.send_application_email(
-                    candidate=candidate,
-                    best_offer=best_offer,
-                    other_offers=other_offers,
-                    pdf_path=pdf_path,
-                )
-                logger.info(f"📧 Email envoyé à {candidate_email}")
-            except Exception as email_error:
-                logger.error(f"❌ Erreur envoi email: {email_error}")
-        else:
-            logger.warning("⚠️ Pas d'email candidat - email non envoyé")
-
-        # 7. Marquer comme COMPLETED
+        # Mettre à jour: statut COMPLETED + dossier IA
         client.table("applications_v2").update(
             {
                 "status": ApplicationStatus.COMPLETED.value,
-                "pdf_url": pdf_url or pdf_path,
+                "selected_jobs": [o.model_dump() for o in analyzed_offers],
+                "final_choice": best_offer.model_dump(),
+                "cover_letter_html": advice_html, # On réutilise ce champ pour l'UI actuelle
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", app_id).execute()
 
-        logger.info(f"🎉 Workflow terminé avec succès pour {app_id[:8]}")
+        logger.info("📝 Dossier stratégique généré et sauvegardé")
 
         # 8. Créer les notifications
         try:
-            # Notification de succès
+            # Notification de succès pointant vers la nouvelle Inbox IA
             client.table("notifications").insert(
                 {
                     "user_id": user_id,
                     "type": "workflow_complete",
-                    "title": "🎉 Candidature envoyée !",
-                    "message": f"Votre candidature pour {best_offer.title} chez {best_offer.company} a été envoyée avec succès.",
+                    "title": "🎯 Dossier de préparation prêt !",
+                    "message": f"L'IA a analysé votre fit pour {best_offer.company}. Consultez vos conseils stratégiques.",
                     "application_id": app_id,
-                    "action_url": "/dashboard",
-                    "action_label": "Voir le tableau de bord",
+                    "action_url": "/dashboard/inbox",
+                    "action_label": "Ouvrir l'Inbox",
                 }
             ).execute()
 

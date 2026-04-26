@@ -80,32 +80,38 @@ class LLMEngine:
         
         return offer
 
-    async def generate_cover_letter(
+    async def generate_strategic_advice(
         self, candidate: CandidateProfile, offer: JobOffer
     ) -> Dict[str, Any]:
-        """Génère la lettre de motivation avec le modèle Pro/Reasoning (Version Unaire)."""
-        logger.info(f"✍️ Génération lettre Pro pour {offer.title}")
+        """Génère un dossier de préparation entretien au lieu d'une simple lettre."""
+        logger.info(f"🧠 Génération dossier stratégique Pro pour {offer.title}")
         
         prompt = [
-            {"role": "system", "content": "Tu es un rédacteur expert. Écris une lettre de motivation percutante en HTML (balises p, br uniquement)."},
-            {"role": "user", "content": f"Candidat: {candidate.first_name} {candidate.last_name}, {candidate.job_title}. Offre: {offer.title} chez {offer.company}. Description: {offer.description[:2000]}"}
+            {"role": "system", "content": """Tu es un coach en carrière expert. 
+            Génère un dossier de préparation d'entretien structuré en HTML (balises h3, p, ul, li uniquement).
+            Le dossier doit contenir:
+            1. 🎯 Points forts du candidat pour ce poste.
+            2. 🛠️ Faiblesses ou lacunes à combler/justifier.
+            3. ❓ 3 Questions probables que le recruteur posera et comment y répondre.
+            4. ✨ Mots-clés et compétences à mettre en avant sur le CV pour ce poste spécifique."""},
+            {"role": "user", "content": f"Candidat: {candidate.first_name} {candidate.last_name}, {candidate.job_title}. CV: {candidate.cv_text[:2000]}. Offre: {offer.title} chez {offer.company}. Description: {offer.description[:2000]}"}
         ]
         
-        letter_html = await self.openai.chat(prompt, model=self.model_pro)
+        advice_html = await self.openai.chat(prompt, model=self.model_pro)
         
         return {
-            "html_content": letter_html,
-            "strategic_advice": "Lettre rédigée par GPT-5 Pro (Reasoning)."
+            "html_content": advice_html,
+            "strategic_advice": "Dossier de préparation généré par GPT-5 Pro."
         }
 
-    async def stream_cover_letter(
+    async def stream_strategic_advice(
         self, candidate: CandidateProfile, offer: JobOffer
     ):
-        """Générateur asynchrone pour streamer la lettre de motivation."""
-        logger.info(f"✍️ Streaming lettre Pro pour {offer.title}")
+        """Streame le dossier stratégique."""
+        logger.info(f"✍️ Streaming dossier Pro pour {offer.title}")
         
         prompt = [
-            {"role": "system", "content": "Tu es un rédacteur expert. Écris une lettre de motivation percutante en HTML (balises p, br uniquement)."},
+            {"role": "system", "content": "Tu es un coach en carrière expert. Génère un dossier de préparation d'entretien structuré en HTML (h3, p, ul, li)."},
             {"role": "user", "content": f"Candidat: {candidate.first_name} {candidate.last_name}, {candidate.job_title}. Offre: {offer.title} chez {offer.company}. Description: {offer.description[:2000]}"}
         ]
         
