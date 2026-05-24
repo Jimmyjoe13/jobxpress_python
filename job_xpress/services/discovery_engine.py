@@ -45,7 +45,8 @@ class DiscoveryEngine:
                 "page": "1",
                 "num_pages": "1",
                 "date_posted": "all",
-                "country": "fr" # Forcer le pays France au niveau de l'API
+                "country": "fr",
+                "language": "fr" # Forcer la langue française pour les résultats FR
             }
 
             try:

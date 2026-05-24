@@ -1,7 +1,8 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 from services.chat_agent import ChatAgent
+from models.job_offer_v2 import JobOffer
 
 
 @pytest.fixture
@@ -47,23 +48,35 @@ async def test_execute_tool_search_jobs(mock_agent):
         "function": {"name": "search_jobs", "arguments": '{"job_title": "Python"}'}
     }
 
-    # Mock search_engine_v2
-    with patch(
-        "services.chat_agent.search_engine_v2.find_jobs_v2", new_callable=AsyncMock
-    ) as mock_find:
-        mock_find.return_value = [
-            {
-                "title": "Dev Python",
-                "company": "Tech Corp",
-                "location": "Paris",
-                "url": "http://test",
-            }
-        ]
+    # Mock db_service quota
+    with patch("services.chat_agent.db_service.check_and_consume_search_quota", new_callable=AsyncMock) as mock_quota:
+        mock_quota.return_value = {"allowed": True, "free_remaining": 5, "used_credit": False}
+        
+        # Mock search_engine
+        with patch(
+            "services.chat_agent.get_search_engine"
+        ) as mock_get_engine:
+            mock_engine = MagicMock()
+            mock_find = AsyncMock()
+            mock_engine.find_jobs_v2 = mock_find
+            mock_get_engine.return_value = mock_engine
+            
+            mock_find.return_value = [
+                JobOffer(
+                    title="Dev Python",
+                    company="Tech Corp",
+                    location="Paris",
+                    url="http://test",
+                    description="Desc",
+                    match_score=90,
+                    skills=[]
+                )
+            ]
 
-        # Act
-        res = await mock_agent.execute_tool(tool_call, "user", "token")
+            # Act
+            res = await mock_agent.execute_tool(tool_call, "user", "token")
 
-        # Assert
-        assert "Voici les offres trouvées" in res
-        assert "Dev Python" in res
-        assert "Tech Corp" in res
+            # Assert
+            assert "1. Dev Python chez Tech Corp" in res
+            assert "Paris" in res
+            assert "[ACTION:NAVIGATE_SEARCH]" in res

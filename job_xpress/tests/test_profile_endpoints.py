@@ -19,6 +19,20 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from main import app
 
+# Mock des settings pour l'auth
+@pytest.fixture(autouse=True)
+def mock_settings():
+    with patch("core.auth.settings") as mock:
+        mock.SUPABASE_JWT_SECRET = "test-secret"
+        yield mock
+
+@pytest.fixture(autouse=True)
+def clear_overrides():
+    """Réinitialise les overrides de dépendances avant chaque test."""
+    app.dependency_overrides = {}
+    yield
+    app.dependency_overrides = {}
+
 @pytest.fixture
 def client():
     """FastAPI test client."""
@@ -26,10 +40,12 @@ def client():
 
 @pytest.fixture
 def mock_auth_token():
-    """Mock le token d'authentification."""
-    with patch("api.profile_endpoints.get_required_token", return_value="fake_token"):
-        with patch("api.profile_endpoints.get_current_user_id", return_value="user_123"):
-            yield "fake_token"
+    """Mock le token d'authentification via dependency_overrides."""
+    from core.auth import get_required_token, get_current_user_id
+    app.dependency_overrides[get_required_token] = lambda: "fake_token"
+    app.dependency_overrides[get_current_user_id] = lambda: "user_123"
+    yield "fake_token"
+    app.dependency_overrides = {}
 
 @pytest.mark.asyncio
 class TestProfileEndpoints:
@@ -37,7 +53,8 @@ class TestProfileEndpoints:
 
     def test_delete_profile_unauthorized(self, client):
         """Doit retourner 401 si pas de token."""
-        # On ne mocke pas l'auth ici pour tester le rejet
+        # On s'assure que les overrides sont vides pour ce test
+        app.dependency_overrides = {}
         response = client.delete("/api/v2/profile")
         assert response.status_code == 401
 

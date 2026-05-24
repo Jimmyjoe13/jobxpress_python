@@ -16,6 +16,7 @@ async def test_pdf_endpoint_mock():
     mock_db_res.data = {
         "id": app_id,
         "cover_letter_html": "<h3>Test</h3>",
+        "candidate_email": "test@jobxpress.fr",
         "final_choice": {
             "title": "Dev",
             "company": "TestCorp",
