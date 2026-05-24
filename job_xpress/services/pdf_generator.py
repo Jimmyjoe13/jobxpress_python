@@ -20,19 +20,18 @@ from models.job_offer import JobOffer
 
 logger = get_logger()
 
-# Import conditionnel de WeasyPrint (peut échouer sur Windows sans deps)
-try:
-    from weasyprint import HTML, CSS
+# Import conditionnel de WeasyPrint (lazy)
+def _get_weasyprint():
+    try:
+        from weasyprint import HTML, CSS
+        return HTML, CSS
+    except ImportError:
+        logger.warning("⚠️ WeasyPrint non disponible - Fallback vers xhtml2pdf")
+        return None, None
 
-    WEASYPRINT_AVAILABLE = True
-except ImportError:
-    WEASYPRINT_AVAILABLE = False
-    logger.warning("⚠️ WeasyPrint non disponible - Fallback vers mode simulation")
-
-# Fallback xhtml2pdf si WeasyPrint non disponible
+# Fallback xhtml2pdf
 try:
     from xhtml2pdf import pisa
-
     XHTML2PDF_AVAILABLE = True
 except ImportError:
     XHTML2PDF_AVAILABLE = False
@@ -41,34 +40,18 @@ except ImportError:
 class PDFGenerator:
     """
     Générateur de PDF pour les lettres de motivation.
-
-    Utilise WeasyPrint en priorité, avec fallback vers xhtml2pdf si non disponible.
     """
 
     def __init__(self):
         self.output_dir = Path("output")
         self.output_dir.mkdir(exist_ok=True)
-
-        if WEASYPRINT_AVAILABLE:
-            logger.info("✅ PDFGenerator initialisé avec WeasyPrint")
-        elif XHTML2PDF_AVAILABLE:
-            logger.info("⚠️ PDFGenerator initialisé avec xhtml2pdf (fallback)")
-        else:
-            logger.warning("❌ Aucun générateur PDF disponible")
+        logger.info("✅ PDFGenerator initialisé")
 
     def create_application_pdf(
         self, candidate: CandidateProfile, offer: JobOffer, letter_html: str
     ) -> Optional[str]:
         """
         Crée un PDF avec la lettre de motivation.
-
-        Args:
-            candidate: Profil du candidat
-            offer: Offre d'emploi ciblée
-            letter_html: Contenu HTML de la lettre
-
-        Returns:
-            Chemin du fichier PDF créé, ou None si erreur
         """
         # Nettoyage du nom de fichier
         safe_company = "".join([c if c.isalnum() else "_" for c in offer.company])
@@ -82,8 +65,9 @@ class PDFGenerator:
         logger.info(f"🖨️ Génération PDF: {filepath}")
 
         # Essayer WeasyPrint d'abord
-        if WEASYPRINT_AVAILABLE:
-            return self._generate_with_weasyprint(full_html, str(filepath))
+        HTML, CSS = _get_weasyprint()
+        if HTML:
+            return self._generate_with_weasyprint(full_html, str(filepath), HTML, CSS)
 
         # Fallback vers xhtml2pdf
         if XHTML2PDF_AVAILABLE:
@@ -93,7 +77,7 @@ class PDFGenerator:
         logger.error("❌ Aucun générateur PDF disponible")
         return None
 
-    def _generate_with_weasyprint(self, html: str, filepath: str) -> Optional[str]:
+    def _generate_with_weasyprint(self, html: str, filepath: str, HTML, CSS) -> Optional[str]:
         """Génère le PDF avec WeasyPrint."""
         try:
             # CSS supplémentaire pour WeasyPrint

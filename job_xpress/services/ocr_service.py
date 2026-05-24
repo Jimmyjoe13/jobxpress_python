@@ -1,54 +1,26 @@
-from mistralai import Mistral
 from core.config import settings
 from core.logging_config import get_logger
 
 logger = get_logger()
 
 # Mots-clés pour détecter un CV valide
-CV_KEYWORDS = [
-    "expérience",
-    "experience",
-    "formation",
-    "compétences",
-    "competences",
-    "diplôme",
-    "diplome",
-    "poste",
-    "emploi",
-    "mission",
-    "stage",
-    "stages",
-    "projets",
-    "professionnel",
-    "professionnelle",
-    "curriculum",
-    "cv",
-]
-
-# Mots-clés indiquant un document NON-CV
-NON_CV_KEYWORDS = [
-    "facture",
-    "invoice",
-    "reçu",
-    "receipt",
-    "paiement",
-    "payment",
-    "commande",
-    "order",
-    "total",
-    "€",
-    "montant",
-    "ttc",
-    "tva",
-]
-
+# ... (rest of constants) ...
 
 class OCRService:
     def __init__(self):
         self.api_key = settings.MISTRAL_API_KEY
-        self.client = None
-        if self.api_key:
-            self.client = Mistral(api_key=self.api_key)
+        self._client = None
+
+    @property
+    def client(self):
+        """Lazy loading du client Mistral."""
+        if self._client is None and self.api_key:
+            try:
+                from mistralai import Mistral
+                self._client = Mistral(api_key=self.api_key)
+            except (ImportError, Exception) as e:
+                logger.error(f"❌ Impossible d'initialiser le client Mistral AI: {e}")
+        return self._client
 
     def _is_valid_cv(self, text: str) -> bool:
         """
@@ -79,8 +51,9 @@ class OCRService:
         Télécharge le CV et utilise Mistral OCR pour extraire le texte.
         Ignore les documents qui ne sont pas des CV (reçus, factures, etc.)
         """
-        if not self.client:
-            logger.warning("⚠️ Clé API Mistral manquante. OCR ignoré.")
+        client = self.client
+        if not client:
+            logger.warning("⚠️ Clé API Mistral manquante ou erreur d'import. OCR ignoré.")
             return ""
 
         if not cv_url:
@@ -90,7 +63,7 @@ class OCRService:
 
         try:
             # 1. Envoi de l'URL directement à Mistral OCR
-            ocr_response = self.client.ocr.process(
+            ocr_response = client.ocr.process(
                 model="mistral-ocr-latest",
                 document={"type": "document_url", "document_url": cv_url},
             )

@@ -147,6 +147,7 @@ class SearchEngine:
             "page": "1",
             "num_pages": "2",
             "country": "fr",
+            "language": "fr",
         }
 
         # Filtrage par type de travail (amélioré)
