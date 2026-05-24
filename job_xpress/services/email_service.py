@@ -48,10 +48,10 @@ class EmailService:
             if other_offers:
                 job_cards = ""
                 for job in other_offers[:6]:
-                    # Récupération sécurisée des sous-scores
-                    analysis = job.ai_analysis or {}
-                    s_tech = analysis.get("score_technical", "0")
-                    s_struct = analysis.get("score_structural", "0")
+                    # Récupération sécurisée des sous-scores ou fallback sur score global
+                    analysis = job.ai_analysis if isinstance(job.ai_analysis, dict) else {}
+                    s_tech = analysis.get("score_technical", job.match_score)
+                    s_struct = analysis.get("score_structural", job.match_score)
 
                     job_cards += f'''
                     <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 15px;">

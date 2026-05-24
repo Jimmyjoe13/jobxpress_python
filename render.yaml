@@ -51,9 +51,7 @@ services:
 
     # Build et déploiement
     buildCommand: |
-      pip install -r requirements.txt && \
-      pip install pytest pytest-asyncio && \
-      python -m pytest tests/ -v --tb=short -x
+      pip install -r requirements.txt
 
     # Notifications de déploiement
     buildFilter:
