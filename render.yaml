@@ -51,7 +51,6 @@ services:
 
     # Build et déploiement
     buildCommand: |
-      cd job_xpress && \
       pip install -r requirements.txt && \
       pip install pytest pytest-asyncio && \
       python -m pytest tests/ -v --tb=short -x
