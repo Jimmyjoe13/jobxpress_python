@@ -45,6 +45,38 @@ const COLUMNS: { id: TrackingStatus, label: string, color: string, icon: any }[]
   { id: 'REJECTED', label: 'Refusée', color: 'red', icon: XCircle },
 ]
 
+/* Mapping statique des couleurs de colonne → classes Tailwind complètes */
+const COLUMN_STYLES: Record<string, { border: string; text: string; iconText: string }> = {
+  slate: {
+    border: 'hover:border-slate-500/30',
+    text: 'text-slate-300',
+    iconText: 'group-hover:text-slate-400',
+  },
+  indigo: {
+    border: 'hover:border-indigo-500/30',
+    text: 'text-slate-300',
+    iconText: 'group-hover:text-indigo-400',
+  },
+  emerald: {
+    border: 'hover:border-emerald-500/30',
+    text: 'text-slate-300',
+    iconText: 'group-hover:text-emerald-400',
+  },
+  red: {
+    border: 'hover:border-red-500/30',
+    text: 'text-slate-300',
+    iconText: 'group-hover:text-red-400',
+  },
+}
+
+/* Mapping des couleurs pour les items du dropdown */
+const DROPDOWN_ICON_COLORS: Record<string, string> = {
+  slate: 'text-slate-400',
+  indigo: 'text-indigo-400',
+  emerald: 'text-emerald-400',
+  red: 'text-red-400',
+}
+
 const getStatusColor = (status: TrackingStatus | undefined) => {
   switch (status) {
     case 'SAVED': return 'bg-slate-500/10 text-slate-400 border-slate-500/20'
@@ -76,12 +108,12 @@ function DroppableColumn({
   return (
     <div className="flex flex-col min-w-[300px]">
       {/* Column Header */}
-      <div className={`group flex items-center justify-between p-3 mb-4 rounded-xl border bg-slate-900/50 border-slate-800 transition-colors hover:border-${column.color}-500/30`}>
+      <div className={`group flex items-center justify-between p-3 mb-4 rounded-xl border bg-card/50 border-border transition-colors ${COLUMN_STYLES[column.color]?.border || ''}`}>
         <div className="flex items-center gap-2">
-          <column.icon className={`w-4 h-4 text-slate-400 group-hover:text-${column.color}-400 transition-colors`} />
-          <h3 className={`font-semibold text-slate-300 group-hover:text-white transition-colors`}>{column.label}</h3>
+          <column.icon className={`w-4 h-4 text-muted-foreground transition-colors ${COLUMN_STYLES[column.color]?.iconText || ''}`} />
+          <h3 className={`font-semibold ${COLUMN_STYLES[column.color]?.text || ''} group-hover:text-foreground transition-colors`}>{column.label}</h3>
         </div>
-        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-500`}>
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-muted text-muted-foreground">
           {count}
         </span>
       </div>
@@ -177,12 +209,12 @@ function DraggableCard({
               <DropdownMenuContent align="end" className="w-56 bg-slate-900 border-white/10 p-2 rounded-xl">
                 <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Changer le statut</div>
                 {COLUMNS.map(c => (
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     key={c.id}
                     onClick={() => handleStatusChange(app.id, c.id)}
-                    className="text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer flex items-center gap-3 rounded-lg mb-1 last:mb-0"
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer flex items-center gap-3 rounded-lg mb-1 last:mb-0"
                   >
-                    <c.icon className={`w-3.5 h-3.5 text-${c.color}-400`} />
+                    <c.icon className={`w-3.5 h-3.5 ${DROPDOWN_ICON_COLORS[c.color] || 'text-muted-foreground'}`} />
                     {c.label}
                   </DropdownMenuItem>
                 ))}

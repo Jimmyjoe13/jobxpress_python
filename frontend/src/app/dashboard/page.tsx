@@ -20,7 +20,7 @@ import {
   Activity,
   X,
 } from "lucide-react"
-import { DashboardSkeleton } from "@/components/ui/skeleton"
+import { DashboardSkeleton } from "@/components/ui/dashboard-skeleton"
 import {
   getApplicationsV2,
   type ApplicationV2,

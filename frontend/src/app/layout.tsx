@@ -1,9 +1,10 @@
 import type { Metadata } from "next"
 import { Inter, Sora } from "next/font/google"
+import { ThemeProvider } from "@/components/theme-provider"
 import { ToastProvider } from "@/components/ui/toast"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import "./globals.css"
 
-// Polices optimisées via next/font (élimine le Layout Shift)
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
@@ -50,11 +51,20 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="fr" className={`${inter.variable} ${sora.variable}`}>
+    <html lang="fr" className={`${inter.variable} ${sora.variable}`} suppressHydrationWarning>
       <body>
-        <ToastProvider>
-          {children}
-        </ToastProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <TooltipProvider>
+            <ToastProvider>
+              {children}
+            </ToastProvider>
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

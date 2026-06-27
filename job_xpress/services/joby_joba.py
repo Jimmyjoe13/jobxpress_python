@@ -59,8 +59,8 @@ class JobyJobaService:
     """
 
     def __init__(self):
-        from services.llm_providers.openai_provider import OpenAIProvider
-        self.provider = OpenAIProvider()
+        from services.llm_providers.open_router_provider import OpenRouterProvider
+        self.provider = OpenRouterProvider()
 
     def build_system_prompt(
         self,
@@ -132,7 +132,7 @@ class JobyJobaService:
 
             assistant_response = await self.provider.chat(
                 messages=messages,
-                model=settings.OPENAI_MODEL_MAIN,
+                model=settings.OPENROUTER_MODEL_MAIN,
                 temperature=0.7,
                 max_tokens=1000,
                 timeout=30.0
@@ -179,7 +179,7 @@ class JobyJobaService:
 
             async for chunk in self.provider.stream_chat(
                 messages=messages,
-                model=settings.OPENAI_MODEL_MAIN,
+                model=settings.OPENROUTER_MODEL_MAIN,
                 temperature=0.7,
                 max_tokens=1000,
                 timeout=30.0

@@ -6,7 +6,7 @@ from core.config import settings
 from core.logging_config import get_logger
 from models.candidate import CandidateProfile
 from models.job_offer import JobOffer
-from services.llm_providers.openai_provider import OpenAIProvider
+from services.llm_providers.open_router_provider import OpenRouterProvider
 from services.cache_service import cache_service
 
 logger = get_logger()
@@ -17,9 +17,9 @@ class LLMEngine:
     Optimisé pour les coûts via le routage dynamique et le cache par hash.
     """
     def __init__(self):
-        self.openai = OpenAIProvider()
-        self.model_mini = settings.OPENAI_MODEL_FAST # gpt-5-nano
-        self.model_pro = settings.OPENAI_MODEL_PREMIUM # gpt-5
+        self.openai = OpenRouterProvider()
+        self.model_mini = settings.OPENROUTER_MODEL_FAST
+        self.model_pro = settings.OPENROUTER_MODEL_PREMIUM
 
     def _generate_job_hash(self, offer: JobOffer) -> str:
         """Génère un hash unique pour une offre d'emploi."""

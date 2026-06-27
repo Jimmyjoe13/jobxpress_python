@@ -1,105 +1,87 @@
-"use client"
-
-import { forwardRef } from "react"
-import { motion, HTMLMotionProps } from "framer-motion"
+import * as React from "react"
+import { cn } from "@/lib/utils"
 
 type CardVariant = "default" | "gradient" | "glass" | "glow"
 
-interface CardProps extends Omit<HTMLMotionProps<"div">, "children"> {
+const cardVariants: Record<CardVariant, string> = {
+  default: "flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm",
+  gradient: "flex flex-col gap-6 rounded-xl border bg-gradient-to-b from-card/80 to-background py-6 text-card-foreground shadow-sm",
+  glass: "flex flex-col gap-6 rounded-xl border bg-card/60 backdrop-blur-xl py-6 text-card-foreground shadow-sm",
+  glow: "flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-lg shadow-primary/5",
+}
+
+interface CardProps extends React.ComponentProps<"div"> {
   variant?: CardVariant
-  hoverGlow?: boolean
-  glowColor?: "indigo" | "purple" | "emerald" | "cyan"
-  children?: React.ReactNode
 }
 
-const glowColors = {
-  indigo: "group-hover:shadow-indigo-500/20 group-hover:border-indigo-500/30",
-  purple: "group-hover:shadow-purple-500/20 group-hover:border-purple-500/30",
-  emerald: "group-hover:shadow-emerald-500/20 group-hover:border-emerald-500/30",
-  cyan: "group-hover:shadow-cyan-500/20 group-hover:border-cyan-500/30",
+function Card({ className, variant = "default", ...props }: CardProps) {
+  return (
+    <div
+      data-slot="card"
+      className={cn(cardVariants[variant], className)}
+      {...props}
+    />
+  )
 }
 
-const Card = forwardRef<HTMLDivElement, CardProps>(
-  (
-    {
-      className = "",
-      variant = "default",
-      hoverGlow = false,
-      glowColor = "indigo",
-      children,
-      ...props
-    },
-    ref
-  ) => {
-    const variants = {
-      default: "bg-slate-800/50 border border-slate-700/50",
-      gradient:
-        "bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50",
-      glass:
-        "bg-white/5 backdrop-blur-xl border border-white/10 shadow-xl shadow-black/10",
-      glow: "bg-slate-800/50 border border-slate-700/50 relative overflow-hidden",
-    }
-
-    const hoverGlowClass = hoverGlow
-      ? `group transition-all duration-300 hover:shadow-xl ${glowColors[glowColor]}`
-      : ""
-
-    return (
-      <motion.div
-        ref={ref}
-        className={`rounded-2xl shadow-xl ${variants[variant]} ${hoverGlowClass} ${className}`}
-        whileHover={hoverGlow ? { y: -4, scale: 1.01 } : undefined}
-        transition={{ type: "tween", duration: 0.2 }}
-        {...props}
-      >
-        {/* Gradient border effect for glow variant */}
-        {variant === "glow" && (
-          <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-            <div className="absolute inset-[-1px] rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500 opacity-30" />
-          </div>
-        )}
-        {children}
-      </motion.div>
-    )
-  }
-)
-Card.displayName = "Card"
-
-const CardHeader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className = "", ...props }, ref) => (
-    <div ref={ref} className={`p-6 pb-4 ${className}`} {...props} />
+function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-header"
+      className={cn(
+        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        className
+      )}
+      {...props}
+    />
   )
-)
-CardHeader.displayName = "CardHeader"
+}
 
-const CardTitle = forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className = "", ...props }, ref) => (
-    <h3 ref={ref} className={`text-xl font-semibold text-white ${className}`} {...props} />
+function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-title"
+      className={cn("leading-none font-semibold", className)}
+      {...props}
+    />
   )
-)
-CardTitle.displayName = "CardTitle"
+}
 
-const CardDescription = forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className = "", ...props }, ref) => (
-  <p ref={ref} className={`text-sm text-slate-400 mt-1 ${className}`} {...props} />
-))
-CardDescription.displayName = "CardDescription"
-
-const CardContent = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className = "", ...props }, ref) => (
-    <div ref={ref} className={`p-6 pt-0 ${className}`} {...props} />
+function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-description"
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    />
   )
-)
-CardContent.displayName = "CardContent"
+}
 
-const CardFooter = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className = "", ...props }, ref) => (
-    <div ref={ref} className={`p-6 pt-0 ${className}`} {...props} />
+function CardAction({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-action"
+      className={cn(
+        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
+        className
+      )}
+      {...props}
+    />
   )
-)
-CardFooter.displayName = "CardFooter"
+}
 
-export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
-export type { CardProps }
+function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="card-content" className={cn("px-6", className)} {...props} />
+}
+
+function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn("flex items-center px-6 [.border-t]:pt-6", className)}
+      {...props}
+    />
+  )
+}
+
+export { Card, CardHeader, CardFooter, CardTitle, CardAction, CardDescription, CardContent }

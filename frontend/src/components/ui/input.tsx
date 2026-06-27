@@ -1,60 +1,73 @@
-"use client"
+import * as React from "react"
+import { cn } from "@/lib/utils"
 
-import { forwardRef } from "react"
+const inputBase = "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30"
+const inputFocus = "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends React.ComponentProps<"input"> {
   label?: string
   error?: string
+  helperText?: string
   icon?: React.ReactNode
 }
 
-const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className = "", label, error, icon, type = "text", required, ...props }, ref) => {
-    return (
-      <div className="w-full">
-        {label && (
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            {label}
-            {required && <span className="text-red-400 ml-0.5">*</span>}
-          </label>
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, label, error, helperText, icon, id, ...props }, ref) => {
+    const inputId = id || label?.toLowerCase().replace(/\s+/g, "-")
+
+    const inputElement = (
+      <input
+        type={type}
+        id={inputId}
+        data-slot="input"
+        className={cn(
+          inputBase,
+          inputFocus,
+          icon && "pl-9",
+          error && "border-destructive focus-visible:ring-destructive/20",
+          !error && "aria-invalid:border-destructive aria-invalid:ring-destructive/20",
+          className
         )}
-        <div className="relative">
-          {icon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-              {icon}
-            </div>
-          )}
-          <input
-            ref={ref}
-            type={type}
-            required={required}
-            className={`
-              w-full px-4 py-3
-              ${icon ? 'pl-10' : ''}
-              bg-slate-800/50
-              border border-slate-700
-              rounded-xl
-              text-white
-              placeholder:text-slate-500
-              focus:outline-none
-              focus:ring-2
-              focus:ring-indigo-500/50
-              focus:border-indigo-500
-              transition-all duration-200
-              ${error ? 'border-red-500/70 focus:ring-red-500/30 focus:border-red-500' : ''}
-              ${className}
-            `}
-            {...props}
-          />
-        </div>
-        {error && (
-          <p className="text-red-400 text-xs mt-1">{error}</p>
-        )}
-      </div>
+        ref={ref}
+        aria-invalid={!!error}
+        {...props}
+      />
     )
+
+    const wrappedInput = icon ? (
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground [&>svg]:size-4">
+          {icon}
+        </span>
+        {inputElement}
+      </div>
+    ) : inputElement
+
+    if (label || error || helperText) {
+      return (
+        <div className="space-y-2">
+          {label && (
+            <label
+              htmlFor={inputId}
+              className="text-sm font-medium text-foreground"
+            >
+              {label}
+            </label>
+          )}
+          {wrappedInput}
+          {error && (
+            <p className="text-xs text-destructive">{error}</p>
+          )}
+          {helperText && !error && (
+            <p className="text-xs text-muted-foreground">{helperText}</p>
+          )}
+        </div>
+      )
+    }
+
+    return wrappedInput
   }
 )
-
 Input.displayName = "Input"
 
 export { Input }

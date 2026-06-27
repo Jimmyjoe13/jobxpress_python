@@ -27,14 +27,25 @@ class Settings(BaseSettings):
     SERPAPI_KEY: str = ""
 
     # IA & LLM Provider Settings
-    LLM_PROVIDER: str = "gemini"  # "openai", "deepseek" ou "gemini"
+    LLM_PROVIDER: str = "openrouter"  # "openrouter" (défaut), "gemini", "deepseek"
     GEMINI_API_KEY: str = ""
     DEEPSEEK_API_KEY: str = ""
+
+    # OpenRouter (provider principal)
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL_MAIN: str = "openrouter/owl-alpha"  # chat, scoring, lettres
+    OPENROUTER_MODEL_PREMIUM: str = "openrouter/owl-alpha"  # dossier stratégique
+    OPENROUTER_MODEL_FAST: str = "openrouter/owl-alpha"     # pré-filtre, normalisation
+    OPENROUTER_SITE_URL: str = ""  # URL pour ranking openrouter.ai (optionnel)
+    OPENROUTER_SITE_NAME: str = "JobXpress"  # Nom affiché sur openrouter.ai
+
+    # Legacy OpenAI (conservé pour fallback si besoin)
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
-    OPENAI_MODEL_MAIN: str = "gpt-5-mini"  # scoring, standard letter, chat
-    OPENAI_MODEL_PREMIUM: str = "gpt-5"    # premium, retry qualité
-    OPENAI_MODEL_FAST: str = "gpt-5-nano"  # pre-filtre, normalisation
+    OPENAI_MODEL_MAIN: str = "gpt-5-mini"
+    OPENAI_MODEL_PREMIUM: str = "gpt-5"
+    OPENAI_MODEL_FAST: str = "gpt-5-nano"
 
     # Search & Extraction
     MISTRAL_API_KEY: str = ""

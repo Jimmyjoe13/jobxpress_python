@@ -44,8 +44,8 @@ class ChatAgent:
     """Agent IA global avec capacités de router des actions / function calling."""
 
     def __init__(self):
-        from services.llm_providers.openai_provider import OpenAIProvider
-        self.provider = OpenAIProvider()
+        from services.llm_providers.open_router_provider import OpenRouterProvider
+        self.provider = OpenRouterProvider()
 
         self.tools = [
             {
@@ -196,7 +196,7 @@ class ChatAgent:
             response_message = await self.provider.chat_with_tools(
                 messages=messages,
                 tools=self.tools,
-                model=settings.OPENAI_MODEL_MAIN,
+                model=settings.OPENROUTER_MODEL_MAIN,
                 temperature=0.7,
                 max_tokens=1000,
                 timeout=30.0,
@@ -233,7 +233,7 @@ class ChatAgent:
                 # 4. Deuxième appel au LLM avec le résultat de l'outil
                 final_content = await self.provider.chat(
                     messages=messages,
-                    model=settings.OPENAI_MODEL_MAIN,
+                    model=settings.OPENROUTER_MODEL_MAIN,
                     temperature=0.7,
                     max_tokens=1000,
                     timeout=30.0,
@@ -303,7 +303,7 @@ class ChatAgent:
             response_message = await self.provider.chat_with_tools(
                 messages=messages,
                 tools=self.tools,
-                model=settings.OPENAI_MODEL_MAIN,
+                model=settings.OPENROUTER_MODEL_MAIN,
                 temperature=0.7,
                 max_tokens=1000,
                 timeout=30.0,
@@ -329,7 +329,7 @@ class ChatAgent:
                 # Deuxième appel AVEC streaming
                 async for chunk in self.provider.stream_chat(
                     messages=messages,
-                    model=settings.OPENAI_MODEL_MAIN,
+                    model=settings.OPENROUTER_MODEL_MAIN,
                     temperature=0.7,
                     max_tokens=1000,
                     timeout=30.0,

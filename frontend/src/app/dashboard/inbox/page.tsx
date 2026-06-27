@@ -19,6 +19,7 @@ import { getApplicationsV2, type ApplicationV2 } from "@/lib/api"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { createClient } from "@/lib/supabase/client"
+import { SanitizedHTML } from "@/components/sanitized-html"
 
 export default function InboxPage() {
   const [applications, setApplications] = useState<ApplicationV2[]>([])
@@ -244,9 +245,9 @@ export default function InboxPage() {
                       </div>
                     </div>
 
-                    <div 
+                    <SanitizedHTML
                       className="prose prose-invert prose-indigo max-w-none prose-h3:text-indigo-400 prose-h3:text-lg prose-h3:font-bold prose-h3:mb-3 prose-h3:mt-8 prose-p:text-slate-300 prose-p:leading-relaxed prose-p:mb-4 prose-ul:list-disc prose-ul:pl-5 prose-ul:space-y-2 prose-li:text-slate-300"
-                      dangerouslySetInnerHTML={{ __html: selectedApp.cover_letter_html || "<p>Aucun contenu généré.</p>" }}
+                      html={selectedApp.cover_letter_html || "<p>Aucun contenu généré.</p>"}
                     />
                   </div>
                 </div>
@@ -276,9 +277,9 @@ export default function InboxPage() {
                   ← Retour à la liste
                 </button>
                 <h2 className="text-2xl font-bold text-white">{selectedApp.final_choice?.company}</h2>
-                <div 
+                <SanitizedHTML
                   className="prose prose-invert text-sm"
-                  dangerouslySetInnerHTML={{ __html: selectedApp.cover_letter_html || "" }}
+                  html={selectedApp.cover_letter_html || ""}
                 />
              </div>
            ) : (

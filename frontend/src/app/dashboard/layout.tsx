@@ -22,6 +22,7 @@ import { CreditsBadge } from "@/components/ui/credits-badge"
 import { NotificationsPopover } from "@/components/ui/notifications-popover"
 import { ChatWidget } from "@/components/ui/chat-widget"
 import { UpgradeBannerCompact } from "@/components/ui/upgrade-banner"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const navigation = [
   { name: "Inbox IA", href: "/dashboard/inbox", icon: Sparkles, isNew: true },
@@ -191,7 +192,10 @@ export default function DashboardLayout({
               </div>
               <span className="font-bold text-white">JobXpress</span>
             </Link>
-            <NotificationsPopover />
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <NotificationsPopover />
+            </div>
           </div>
         </header>
 
@@ -208,6 +212,7 @@ export default function DashboardLayout({
 
           {/* Right actions */}
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <CreditsBadge />
             <NotificationsPopover />
             <div
