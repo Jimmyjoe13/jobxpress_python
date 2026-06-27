@@ -68,17 +68,17 @@ async def lifespan(app: FastAPI):
     logger.info(f"🚀 Démarrage JobXpress v{settings.VERSION} ({settings.ENVIRONMENT})")
 
     # Nettoyage initial du cache
-    cache_service.cleanup_expired()
-    cache_service.purge_old_tasks(days=7)
+    await cache_service.cleanup_expired()
+    await cache_service.purge_old_tasks(days=7)
 
     # Récupération des tâches orphelines (crash recovery)
-    orphans = cache_service.get_orphan_tasks(timeout_seconds=600)  # 10 min
+    orphans = await cache_service.get_orphan_tasks(timeout_seconds=600)  # 10 min
     for orphan in orphans:
         logger.warning(
             f"🔄 Reprise tâche orpheline ID={orphan['id']} (retries={orphan['retries']})"
         )
         if orphan["retries"] < 3:  # Max 3 tentatives
-            cache_service.reset_task(orphan["id"])
+            await cache_service.reset_task(orphan["id"])
         else:
             cache_service.mark_task_failed(
                 orphan["id"], "Max retries exceeded after crash recovery"
@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Nettoyage final
-    cache_service.cleanup_expired()
+    await cache_service.cleanup_expired()
     logger.info("👋 Arrêt de JobXpress")
 
 
@@ -192,7 +192,7 @@ async def health_check_deep():
 
     # Test Cache SQLite (très rapide)
     try:
-        cache_stats = cache_service.get_stats()
+        cache_stats = await cache_service.get_stats()
         checks["cache"] = f"healthy ({cache_stats.get('active', 0)} active)"
     except Exception as e:
         checks["cache"] = "unhealthy"
@@ -268,8 +268,8 @@ async def health_check_tasks():
     Endpoint de monitoring des tâches en file d'attente.
     Affiche les statistiques des tâches (pending, processing, done, failed).
     """
-    task_stats = cache_service.get_task_stats()
-    cache_stats = cache_service.get_stats()
+    task_stats = await cache_service.get_task_stats()
+    cache_stats = await cache_service.get_stats()
 
     return {
         "tasks": task_stats,
@@ -318,7 +318,7 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
 
     # Marquer la tâche comme en cours de traitement
     if task_id:
-        cache_service.claim_task(task_id)
+        await cache_service.claim_task(task_id)
 
     try:
         # 1. PROFIL
@@ -341,7 +341,7 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
         if not raw_jobs:
             logger.warning("❌ Aucune offre trouvée. Fin du traitement.")
             if task_id:
-                cache_service.mark_task_done(
+                await cache_service.mark_task_done(
                     task_id
                 )  # Pas d'erreur, juste pas d'offres
             return
@@ -375,7 +375,7 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
         if not valid_jobs:
             logger.warning("⚠️ Aucune offre retenue du tout")
             if task_id:
-                cache_service.mark_task_done(task_id)
+                await cache_service.mark_task_done(task_id)
             return
 
         # Tri final par score
@@ -411,7 +411,7 @@ async def process_application_task(payload: TallyWebhookPayload, task_id: int = 
         logger.exception(f"❌ CRASH Background Task: {str(e)}")
         # Marquer la tâche comme échouée
         if task_id:
-            cache_service.mark_task_failed(task_id, str(e))
+            await cache_service.mark_task_failed(task_id, str(e))
         # En production, Sentry capture automatiquement l'exception
 
 
@@ -439,7 +439,7 @@ async def receive_tally_webhook(
         cache_key = f"email_dedup:{candidate_email}"
 
         # --- VÉRIFICATION DOUBLON (Cache Persistant) ---
-        if cache_service.exists(cache_key):
+        if await cache_service.exists(cache_key):
             logger.warning(f"⛔ Doublon bloqué pour {candidate_email}")
             return JSONResponse(
                 status_code=429,
@@ -451,10 +451,10 @@ async def receive_tally_webhook(
             )
 
         # Enregistrer dans le cache avec TTL
-        cache_service.set(cache_key, "processed", ttl_seconds=COOLDOWN_SECONDS)
+        await cache_service.set(cache_key, "processed", ttl_seconds=COOLDOWN_SECONDS)
 
         # --- PERSISTANCE AVANT TRAITEMENT ---
-        task_id = cache_service.enqueue_task(
+        task_id = await cache_service.enqueue_task(
             task_type="tally_webhook", payload=json_module.dumps(payload.model_dump())
         )
         logger.info(f"📥 Tâche persistée en DB (Task ID: {task_id})")

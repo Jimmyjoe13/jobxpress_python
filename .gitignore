@@ -12,7 +12,17 @@ frontend/out/
 .env
 .env.local
 .env.*.local
-job_xpress_v2/
+
+# Dossier vide / vestige
+jobxpress_v2/
+
+# Cache et fichiers temporaires
+cache.db
+.cache/
+
+# Fichiers générés
+*.png
+output/
 
 # IDE
 .vscode/

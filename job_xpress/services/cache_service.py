@@ -1,12 +1,12 @@
 """
-Service de cache persistant avec SQLite.
+Service de cache persistant avec SQLite async (aiosqlite).
 Remplace le cache in-memory pour survivre aux redémarrages.
 """
 
-import sqlite3
+import asyncio
 import time
 from typing import Optional, Dict, Any
-from contextlib import contextmanager
+import aiosqlite
 from core.logging_config import get_logger
 
 logger = get_logger()
@@ -14,39 +14,33 @@ logger = get_logger()
 
 class CacheService:
     """
-    Cache persistant basé sur SQLite pour la déduplication et le stockage temporaire.
+    Cache persistant basé sur SQLite async pour la déduplication et le stockage temporaire.
 
     Features:
     - Survit aux redémarrages
     - TTL automatique (expiration)
-    - Thread-safe avec connections par thread
+    - Async-native (ne bloque pas l'event loop)
     - Nettoyage automatique des entrées expirées
     """
 
     def __init__(self, db_path: str = "cache.db"):
         self.db_path = db_path
         self._init_db()
-        logger.info(f"💾 Cache SQLite initialisé: {db_path}")
-
-    @contextmanager
-    def _get_connection(self):
-        """Context manager pour les connexions SQLite."""
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Erreur SQLite: {e}")
-            raise
-        finally:
-            conn.close()
+        logger.info(f"Cache SQLite async initialisé: {db_path}")
 
     def _init_db(self):
-        """Initialise la structure de la base de données."""
-        with self._get_connection() as conn:
-            conn.execute("""
+        """Lance la création de la base de données en arrière-plan."""
+        try:
+            loop = asyncio.get_running_loop()
+            asyncio.ensure_future(self.initialize())
+        except RuntimeError:
+            # Pas d'event loop — lancer une tâche bloquante puis fermer
+            asyncio.run(self.initialize())
+
+    async def initialize(self):
+        """Initialise la structure de la base de données (idempotent)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
                 CREATE TABLE IF NOT EXISTS cache (
                     key TEXT PRIMARY KEY,
                     value TEXT,
@@ -54,15 +48,11 @@ class CacheService:
                     created_at REAL DEFAULT (strftime('%s', 'now'))
                 )
             """)
-
-            # Index pour le nettoyage rapide
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_cache_expires 
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cache_expires
                 ON cache(expires_at)
             """)
-
-            # Table pour les tâches en attente (queue persistante légère)
-            conn.execute("""
+            await db.execute("""
                 CREATE TABLE IF NOT EXISTS pending_tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_type TEXT NOT NULL,
@@ -74,8 +64,9 @@ class CacheService:
                     error_message TEXT
                 )
             """)
+            await db.commit()
 
-    def set(self, key: str, value: str, ttl_seconds: int = 300) -> bool:
+    async def set(self, key: str, value: str, ttl_seconds: int = 300) -> bool:
         """
         Stocke une valeur avec TTL.
 
@@ -90,59 +81,62 @@ class CacheService:
         expires_at = time.time() + ttl_seconds
 
         try:
-            with self._get_connection() as conn:
-                conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
                     """
                     INSERT OR REPLACE INTO cache (key, value, expires_at)
                     VALUES (?, ?, ?)
                 """,
                     (key, value, expires_at),
                 )
+                await db.commit()
             return True
         except Exception as e:
             logger.error(f"Cache set error: {e}")
             return False
 
-    def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> Optional[str]:
         """
         Récupère une valeur du cache.
 
         Args:
-            key: Clé à rechercher
+            key: Clé à chercher
 
         Returns:
             Valeur ou None si expirée/inexistante
         """
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
                     """
-                    SELECT value FROM cache 
+                    SELECT value FROM cache
                     WHERE key = ? AND expires_at > ?
                 """,
                     (key, time.time()),
                 )
-                row = cursor.fetchone()
+                row = await cursor.fetchone()
                 return row["value"] if row else None
         except Exception as e:
             logger.error(f"Cache get error: {e}")
             return None
 
-    def exists(self, key: str) -> bool:
+    async def exists(self, key: str) -> bool:
         """Vérifie si une clé existe et n'est pas expirée."""
-        return self.get(key) is not None
+        return await self.get(key) is not None
 
-    def delete(self, key: str) -> bool:
+    async def delete(self, key: str) -> bool:
         """Supprime une clé du cache."""
         try:
-            with self._get_connection() as conn:
-                conn.execute("DELETE FROM cache WHERE key = ?", (key,))
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute("DELETE FROM cache WHERE key = ?", (key,))
+                await db.commit()
             return True
         except Exception as e:
             logger.error(f"Cache delete error: {e}")
             return False
 
-    def cleanup_expired(self) -> int:
+    async def cleanup_expired(self) -> int:
         """
         Supprime toutes les entrées expirées.
 
@@ -150,8 +144,8 @@ class CacheService:
             Nombre d'entrées supprimées
         """
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
                     """
                     DELETE FROM cache WHERE expires_at < ?
                 """,
@@ -159,19 +153,21 @@ class CacheService:
                 )
                 count = cursor.rowcount
                 if count > 0:
-                    logger.info(f"🧹 Cache: {count} entrée(s) expirée(s) supprimée(s)")
+                    logger.info(f"Cache: {count} entrée(s) expirée(s) supprimée(s)")
+                await db.commit()
                 return count
         except Exception as e:
             logger.error(f"Cache cleanup error: {e}")
             return 0
 
-    def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> Dict[str, Any]:
         """Retourne des statistiques sur le cache."""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
                     """
-                    SELECT 
+                    SELECT
                         COUNT(*) as total,
                         SUM(CASE WHEN expires_at > ? THEN 1 ELSE 0 END) as active,
                         SUM(CASE WHEN expires_at <= ? THEN 1 ELSE 0 END) as expired
@@ -179,7 +175,7 @@ class CacheService:
                 """,
                     (time.time(), time.time()),
                 )
-                row = cursor.fetchone()
+                row = await cursor.fetchone()
                 return {
                     "total": row["total"] or 0,
                     "active": row["active"] or 0,
@@ -191,7 +187,7 @@ class CacheService:
 
     # --- Méthodes pour la Queue de Tâches ---
 
-    def enqueue_task(self, task_type: str, payload: str) -> Optional[int]:
+    async def enqueue_task(self, task_type: str, payload: str) -> Optional[int]:
         """
         Ajoute une tâche à la queue persistante.
 
@@ -199,71 +195,76 @@ class CacheService:
             ID de la tâche ou None si erreur
         """
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
                     """
                     INSERT INTO pending_tasks (task_type, payload)
                     VALUES (?, ?)
                 """,
                     (task_type, payload),
                 )
+                await db.commit()
                 return cursor.lastrowid
         except Exception as e:
             logger.error(f"Task enqueue error: {e}")
             return None
 
-    def get_pending_tasks(self, limit: int = 10) -> list:
+    async def get_pending_tasks(self, limit: int = 10) -> list:
         """Récupère les tâches en attente."""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
                     """
-                    SELECT id, task_type, payload, retries 
-                    FROM pending_tasks 
+                    SELECT id, task_type, payload, retries
+                    FROM pending_tasks
                     WHERE status = 'pending'
                     ORDER BY id
                     LIMIT ?
                 """,
                     (limit,),
                 )
-                return [dict(row) for row in cursor.fetchall()]
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
         except Exception as e:
             logger.error(f"Get pending tasks error: {e}")
             return []
 
-    def mark_task_done(self, task_id: int):
+    async def mark_task_done(self, task_id: int):
         """Marque une tâche comme terminée."""
         try:
-            with self._get_connection() as conn:
-                conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
                     """
-                    UPDATE pending_tasks 
+                    UPDATE pending_tasks
                     SET status = 'done', processed_at = ?
                     WHERE id = ?
                 """,
                     (time.time(), task_id),
                 )
+                await db.commit()
         except Exception as e:
             logger.error(f"Mark task done error: {e}")
 
-    def mark_task_failed(self, task_id: int, error: str):
+    async def mark_task_failed(self, task_id: int, error: str):
         """Marque une tâche comme échouée."""
         try:
-            with self._get_connection() as conn:
-                conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
                     """
-                    UPDATE pending_tasks 
-                    SET status = 'failed', 
+                    UPDATE pending_tasks
+                    SET status = 'failed',
                         error_message = ?,
                         retries = retries + 1
                     WHERE id = ?
                 """,
                     (error, task_id),
                 )
+                await db.commit()
         except Exception as e:
             logger.error(f"Mark task failed error: {e}")
 
-    def claim_task(self, task_id: int) -> bool:
+    async def claim_task(self, task_id: int) -> bool:
         """
         Marque une tâche comme en cours de traitement.
         Utilise le pattern "work stealing" pour éviter les doublons.
@@ -272,10 +273,10 @@ class CacheService:
             True si la tâche a été claim avec succès, False sinon
         """
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
                     """
-                    UPDATE pending_tasks 
+                    UPDATE pending_tasks
                     SET status = 'processing', processed_at = ?
                     WHERE id = ? AND status = 'pending'
                 """,
@@ -283,13 +284,14 @@ class CacheService:
                 )
                 success = cursor.rowcount > 0
                 if success:
-                    logger.info(f"🔒 Tâche {task_id} claim pour traitement")
+                    logger.info(f"Tâche {task_id} claim pour traitement")
+                await db.commit()
                 return success
         except Exception as e:
             logger.error(f"Claim task error: {e}")
             return False
 
-    def get_orphan_tasks(self, timeout_seconds: int = 600) -> list:
+    async def get_orphan_tasks(self, timeout_seconds: int = 600) -> list:
         """
         Récupère les tâches orphelines (en 'processing' depuis trop longtemps).
 
@@ -303,27 +305,27 @@ class CacheService:
         """
         cutoff_time = time.time() - timeout_seconds
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
                     """
                     SELECT id, task_type, payload, retries, processed_at
-                    FROM pending_tasks 
+                    FROM pending_tasks
                     WHERE status = 'processing' AND processed_at < ?
                     ORDER BY id
                 """,
                     (cutoff_time,),
                 )
-                orphans = [dict(row) for row in cursor.fetchall()]
+                rows = await cursor.fetchall()
+                orphans = [dict(row) for row in rows]
                 if orphans:
-                    logger.warning(
-                        f"🔍 {len(orphans)} tâche(s) orpheline(s) détectée(s)"
-                    )
+                    logger.warning(f"{len(orphans)} tâche(s) orpheline(s) détectée(s)")
                 return orphans
         except Exception as e:
             logger.error(f"Get orphan tasks error: {e}")
             return []
 
-    def reset_task(self, task_id: int) -> bool:
+    async def reset_task(self, task_id: int) -> bool:
         """
         Remet une tâche en 'pending' pour re-traitement.
 
@@ -333,10 +335,10 @@ class CacheService:
             True si la tâche a été reset avec succès
         """
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
                     """
-                    UPDATE pending_tasks 
+                    UPDATE pending_tasks
                     SET status = 'pending', processed_at = NULL, retries = retries + 1
                     WHERE id = ?
                 """,
@@ -344,13 +346,14 @@ class CacheService:
                 )
                 success = cursor.rowcount > 0
                 if success:
-                    logger.info(f"🔄 Tâche {task_id} remise en queue")
+                    logger.info(f"Tâche {task_id} remise en queue")
+                await db.commit()
                 return success
         except Exception as e:
             logger.error(f"Reset task error: {e}")
             return False
 
-    def purge_old_tasks(self, days: int = 7) -> int:
+    async def purge_old_tasks(self, days: int = 7) -> int:
         """
         Supprime les tâches terminées ou échouées depuis plus de X jours.
 
@@ -359,35 +362,38 @@ class CacheService:
         """
         cutoff_time = time.time() - (days * 86400)
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
                     """
-                    DELETE FROM pending_tasks 
-                    WHERE (status = 'done' OR status = 'failed') 
+                    DELETE FROM pending_tasks
+                    WHERE (status = 'done' OR status = 'failed')
                       AND processed_at < ?
                 """,
                     (cutoff_time,),
                 )
                 count = cursor.rowcount
                 if count > 0:
-                    logger.info(f"🧹 Cache Tasks: {count} ancienne(s) tâche(s) purgée(s)")
+                    logger.info(f"Cache Tasks: {count} ancienne(s) tâche(s) purgée(s)")
+                await db.commit()
                 return count
         except Exception as e:
             logger.error(f"Purge old tasks error: {e}")
             return 0
 
-    def get_task_stats(self) -> dict:
+    async def get_task_stats(self) -> dict:
         """Retourne des statistiques sur les tâches."""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute("""
-                    SELECT 
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("""
+                    SELECT
                         status,
                         COUNT(*) as count
                     FROM pending_tasks
                     GROUP BY status
                 """)
-                stats = {row["status"]: row["count"] for row in cursor.fetchall()}
+                rows = await cursor.fetchall()
+                stats = {row["status"]: row["count"] for row in rows}
                 return {
                     "pending": stats.get("pending", 0),
                     "processing": stats.get("processing", 0),

@@ -51,7 +51,7 @@ class LLMEngine:
         cache_key = f"job_analysis:{job_hash}"
         
         # 1. Vérifier le cache
-        cached_result = cache_service.get(cache_key)
+        cached_result = await cache_service.get(cache_key)
         if cached_result:
             logger.info(f"💾 Cache Hit pour l'offre: {offer.title}")
             analysis = json.loads(cached_result)
@@ -72,7 +72,7 @@ class LLMEngine:
             offer.ai_analysis = result.get("reasoning", "")
             
             # 3. Sauvegarder dans le cache (TTL 24h)
-            cache_service.set(cache_key, json.dumps(result), ttl_seconds=86400)
+            await cache_service.set(cache_key, json.dumps(result), ttl_seconds=86400)
             
         except Exception as e:
             logger.error(f"⚠️ Erreur OpenAI sur '{offer.title}': {e}")

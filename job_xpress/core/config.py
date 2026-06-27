@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = ""  # Clé 'anon' pour le frontend
     SUPABASE_SERVICE_KEY: str = ""  # Clé 'service_role' pour le backend (bypass RLS)
     SUPABASE_JWT_SECRET: str = ""  # JWT signing secret (Settings > API > JWT Settings)
+    SUPABASE_ADMIN_USER_ID: str = ""  # ID Supabase de l'admin (accès endpoints /admin)
 
     # CORS - Liste d'origines séparées par des virgules
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
