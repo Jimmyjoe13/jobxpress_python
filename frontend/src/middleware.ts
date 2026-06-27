@@ -2,10 +2,8 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
-  // Mode de dÃ©veloppement local : Autoriser tout l'accÃ¨s au dashboard sans auth
-  if (process.env.NODE_ENV === 'development' || request.nextUrl.pathname.startsWith('/dashboard')) {
-      return NextResponse.next()
-  }
+  // Toujours passer par updateSession pour que les cookies Supabase soient rafraîchis
+  // (surtout après le callback OAuth qui redirige vers /dashboard)
   return await updateSession(request)
 }
 
