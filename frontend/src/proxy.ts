@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Toujours passer par updateSession pour que les cookies Supabase soient rafraîchis
   // (surtout après le callback OAuth qui redirige vers /dashboard)
   return await updateSession(request)
