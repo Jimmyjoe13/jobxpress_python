@@ -61,13 +61,49 @@ class TestStripeWebhookCore:
 
         assert result is False
 
-    def test_verify_stripe_signature_returns_true_without_secret(self, mock_stripe):
-        """Sans secret configuré, la vérification est ignorée (passe en dev)."""
+    def test_verify_stripe_signature_returns_false_without_secret(self, mock_stripe):
+        """Fix P0-1 : sans secret configuré, la vérification FAIL-CLOSE (retourne False)."""
         from api.stripe_webhook import verify_stripe_signature
 
         result = verify_stripe_signature(b"payload", "any-sig", "")
 
-        assert result is True
+        assert result is False
+
+    async def test_prod_rejects_missing_signature_header(self):
+        """Fix P0-1 : en production, un POST sans header Stripe-Signature = 401."""
+        from api.stripe_webhook import stripe_webhook
+        from fastapi import HTTPException
+
+        with patch("api.stripe_webhook.settings") as mock_settings:
+            mock_settings.ENVIRONMENT = "production"
+            mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+
+            mock_request = MagicMock(spec=Request)
+            mock_request.json = AsyncMock(return_value={"id": "evt_x", "type": "test", "data": {"object": {}}})
+            mock_request.body = AsyncMock(return_value=b'{}')
+
+            with pytest.raises(HTTPException) as exc_info:
+                await stripe_webhook(mock_request, None)
+
+            assert exc_info.value.status_code == 401
+
+    async def test_prod_rejects_no_secret_configured(self):
+        """Fix P0-1 : en production sans STRIPE_WEBHOOK_SECRET, tout est refusé."""
+        from api.stripe_webhook import stripe_webhook
+        from fastapi import HTTPException
+
+        with patch("api.stripe_webhook.settings") as mock_settings:
+            mock_settings.ENVIRONMENT = "production"
+            mock_settings.STRIPE_WEBHOOK_SECRET = ""
+
+            mock_request = MagicMock(spec=Request)
+            mock_request.json = AsyncMock(return_value={"id": "evt_x", "type": "test", "data": {"object": {}}})
+            mock_request.body = AsyncMock(return_value=b'{}')
+
+            with pytest.raises(HTTPException) as exc_info:
+                await stripe_webhook(mock_request, "some-sig")
+
+            assert exc_info.value.status_code == 401
 
     async def test_webhook_skips_processed_event(self, mock_db_service):
         """Si l'événement a déjà été traité, on ne fait rien."""

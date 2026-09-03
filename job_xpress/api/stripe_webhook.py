@@ -55,8 +55,10 @@ def verify_stripe_signature(payload: bytes, signature: str, secret: str) -> bool
     Vérifie la signature Stripe du webhook en utilisant le SDK officiel. # FIX: SDK Officiel
     """
     if not secret:
-        logger.warning("⚠️ STRIPE_WEBHOOK_SECRET non configuré - webhook non vérifié")
-        return True
+        # FIX P0-1 (audit 2026-09-03) : fail-CLOSED. Un secret absent = webhook refusé,
+        # plus jamais "return True" qui ouvrait l'endpoint à tous.
+        logger.error("❌ STRIPE_WEBHOOK_SECRET non configuré — vérification impossible")
+        return False
 
     try:
         # FIX: Utilisation de stripe.Webhook.construct_event pour une sécurité optimale
@@ -295,9 +297,18 @@ async def stripe_webhook(
         logger.error(f"❌ Erreur parsing webhook: {e}")
         raise HTTPException(status_code=400, detail="Invalid payload")
 
-    # Vérifier la signature (optionnel en dev)
+    # Vérification signature — fail-CLOSED en production/staging (fix P0-1 audit 2026-09-03).
+    # Un event POSTé SANS header Stripe-Signature n'atteint plus jamais le handler.
     webhook_secret = getattr(settings, "STRIPE_WEBHOOK_SECRET", None)
-    if stripe_signature and webhook_secret:
+    if settings.ENVIRONMENT in ("production", "staging"):
+        if not stripe_signature or not webhook_secret:
+            logger.warning("⚠️ Webhook Stripe refusé : signature ou secret manquant")
+            raise HTTPException(status_code=401, detail="Missing signature")
+        if not verify_stripe_signature(payload, stripe_signature, webhook_secret):
+            logger.warning("⚠️ Signature Stripe invalide")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+    elif stripe_signature and webhook_secret:
+        # Dev/test : vérification appliquée seulement si les deux sont fournis.
         if not verify_stripe_signature(payload, stripe_signature, webhook_secret):
             logger.warning("⚠️ Signature Stripe invalide")
             raise HTTPException(status_code=401, detail="Invalid signature")
@@ -504,20 +515,10 @@ async def stripe_webhook(
 @router.get("/stripe/health")
 async def stripe_webhook_health():
     """
-    Endpoint de santé pour vérifier que le webhook est configuré.
+    Endpoint de santé pour vérifier que le webhook est joignable.
+    Fix audit P2 : ne révèle plus si le secret est configuré (renseignement gratuit).
     """
-    webhook_secret = getattr(settings, "STRIPE_WEBHOOK_SECRET", None)
-
     return {
         "status": "ok",
-        "webhook_configured": bool(webhook_secret),
         "endpoint": "/webhooks/stripe",
-        "supported_events": [
-            "checkout.session.completed",
-            "customer.subscription.created",
-            "customer.subscription.updated",
-            "customer.subscription.deleted",
-            "invoice.payment_succeeded",
-            "invoice.payment_failed",
-        ],
     }
