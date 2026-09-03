@@ -16,6 +16,7 @@ import {
   Clock
 } from "lucide-react"
 import { sendJobyJobaMessageStream, getAuthToken } from "@/lib/api"
+import { SanitizedHTML } from "@/components/sanitized-html"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
@@ -295,13 +296,12 @@ export default function ChatPage() {
                       ? 'bg-indigo-500 text-white rounded-tr-sm'
                       : 'bg-slate-700 text-slate-100 rounded-tl-sm'
                   }`}>
-                    <div 
+                    {/* Fix XSS audit 2026-09-03 : DOMPurify via SanitizedHTML au lieu du rendu brut */}
+                    <SanitizedHTML
                       className="text-sm whitespace-pre-wrap"
-                      dangerouslySetInnerHTML={{ 
-                        __html: msg.content
-                          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                          .replace(/\n/g, '<br/>')
-                      }}
+                      html={msg.content
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\n/g, '<br/>')}
                     />
                     {isSending && index === messages.length - 1 && msg.role === 'assistant' && (
                       <motion.span 
