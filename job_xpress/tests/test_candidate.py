@@ -7,11 +7,7 @@ from pydantic import ValidationError
 
 from models.candidate import (
     CandidateProfile,
-    TallyWebhookPayload,
     sanitize_text,
-    EXPERIENCE_MAP,
-    CONTRACT_MAP,
-    WORK_TYPE_MAP,
     WorkType,
 )
 
@@ -176,57 +172,6 @@ class TestCandidateProfileValidation:
         assert candidate2.cv_url is None
 
 
-class TestCandidateFromTally:
-    """Tests pour la conversion depuis payload Tally."""
-
-    def test_from_tally_valid_payload(self, sample_tally_payload):
-        """Vérifie la conversion d'un payload Tally valide."""
-        payload = TallyWebhookPayload(**sample_tally_payload)
-        candidate = CandidateProfile.from_tally(payload)
-
-        assert candidate.first_name == "Jean"
-        assert candidate.last_name == "Dupont"
-        assert candidate.email == "jean.dupont@test.com"
-        assert candidate.job_title == "Growth Hacker"
-        assert candidate.contract_type == "CDI"
-        assert candidate.experience_level == "Confirmé"
-        assert candidate.work_type == "Full Remote"
-        assert candidate.location == "Paris"
-
-    def test_from_tally_missing_fields(self):
-        """Vérifie la gestion des champs manquants."""
-        minimal_payload = {
-            "eventId": "test-123",
-            "createdAt": "2025-12-13T19:00:00Z",
-            "data": {
-                "responseId": "resp-123",
-                "submissionId": "sub-123",
-                "fields": [
-                    {
-                        "key": "question_D7V1kj",
-                        "label": "Email",
-                        "value": "test@test.com",
-                        "type": "INPUT_EMAIL",
-                    }
-                ],
-            },
-        }
-
-        payload = TallyWebhookPayload(**minimal_payload)
-        candidate = CandidateProfile.from_tally(payload)
-
-        assert candidate.first_name == "Inconnu"
-        assert candidate.last_name == "Inconnu"
-        assert candidate.job_title == "Non spécifié"
-        assert candidate.location == "France"
-
-    def test_mapping_dictionaries(self):
-        """Vérifie que les dictionnaires de mapping sont corrects."""
-        assert "Junior" in EXPERIENCE_MAP.values()
-        assert "CDI" in CONTRACT_MAP.values()
-        assert "Full Remote" in WORK_TYPE_MAP.values()
-
-
 class TestEdgeCases:
     """Tests pour les cas limites."""
 
@@ -277,39 +222,6 @@ class TestWorkTypeEnum:
         assert WorkType.HYBRIDE.value == "Hybride"
         assert WorkType.PRESENTIEL.value == "Présentiel"
         assert WorkType.TOUS.value == "Tous"
-
-    def test_from_tally_id_full_remote(self):
-        """Vérifie la conversion de l'ID Tally Full Remote."""
-        assert (
-            WorkType.from_tally_id("29694558-89d8-4dfa-973b-19506de2a1ad")
-            == WorkType.FULL_REMOTE
-        )
-
-    def test_from_tally_id_hybride(self):
-        """Vérifie la conversion de l'ID Tally Hybride."""
-        assert (
-            WorkType.from_tally_id("74591379-f02b-4565-93f8-53d2251ec6ab")
-            == WorkType.HYBRIDE
-        )
-
-    def test_from_tally_id_presentiel(self):
-        """Vérifie la conversion de l'ID Tally Présentiel."""
-        assert (
-            WorkType.from_tally_id("4f646aeb-c80a-4acf-b772-786f64834a8e")
-            == WorkType.PRESENTIEL
-        )
-
-    def test_from_tally_id_none_returns_tous(self):
-        """IMPORTANT: Aucune sélection retourne TOUS (recherche tous les types)."""
-        assert WorkType.from_tally_id(None) == WorkType.TOUS
-
-    def test_from_tally_id_unknown_returns_tous(self):
-        """Un ID inconnu retourne TOUS."""
-        assert WorkType.from_tally_id("unknown-id") == WorkType.TOUS
-
-    def test_from_tally_id_empty_string_returns_tous(self):
-        """Une chaîne vide retourne TOUS."""
-        assert WorkType.from_tally_id("") == WorkType.TOUS
 
     def test_enum_is_string_compatible(self):
         """Vérifie que l'enum est compatible avec les strings (héritage str)."""

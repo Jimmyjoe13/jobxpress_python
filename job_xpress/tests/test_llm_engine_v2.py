@@ -23,7 +23,7 @@ async def test_llm_engine_strategic_advice():
         url="http://job.com"
     )
     
-    with patch("services.llm_engine.OpenAIProvider.chat", new_callable=AsyncMock) as mock_chat:
+    with patch("services.llm_engine.OpenRouterProvider.chat", new_callable=AsyncMock) as mock_chat:
         mock_chat.return_value = "<h3>Points forts</h3><ul><li>Python</li></ul>"
         
         result = await engine.generate_strategic_advice(candidate, offer)

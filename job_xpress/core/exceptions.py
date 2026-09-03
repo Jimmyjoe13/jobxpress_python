@@ -88,7 +88,7 @@ class DuplicateRequestError(APIError):
 
 
 class PayloadValidationError(APIError):
-    """Payload Tally invalide."""
+    """Payload de candidature invalide."""
 
     def __init__(self, message: str, field: Optional[str] = None):
         super().__init__(

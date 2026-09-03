@@ -27,8 +27,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<votre-clé-anon>
 | `/`              | GET     | Health check simple       |
 | `/health`        | GET     | Health check détaillé     |
 | `/health/tasks`  | GET     | Stats des tâches          |
-| `/api/v2/apply`  | POST    | Soumettre une candidature |
-| `/webhook/tally` | POST    | Webhook Tally             |
 
 ### Endpoints authentifiés (token JWT requis)
 

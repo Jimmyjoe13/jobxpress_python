@@ -1,9 +1,11 @@
 """
 Tests pour les endpoints API FastAPI.
+
+Note (cleanup Tally 2026-09-03) : l'endpoint /webhook/tally a été supprimé,
+l'input des candidatures passe par le formulaire frontend -> /api/v2/search/start.
 """
 
 import pytest
-import uuid
 
 
 class TestHealthEndpoints:
@@ -24,7 +26,7 @@ class TestHealthEndpoints:
         assert response.status_code == 200
 
     def test_health_endpoint(self, test_client):
-        """Vérifie l'endpoint de santé approfondi."""
+        """Vérifie l'endpoint de santé approfondi (env test = payload détaillé)."""
         response = test_client.get("/health")
 
         assert response.status_code == 200
@@ -50,113 +52,31 @@ class TestHealthEndpoints:
 
         assert data["checks"]["api"] == "healthy"
 
+    def test_health_minimal_in_production(self, test_client):
+        """Fix audit P2 : en production, /health ne révèle ni version ni checks détaillés."""
+        from unittest.mock import patch
+        from core.config import settings
 
-class TestWebhookEndpoint:
-    """Tests pour l'endpoint webhook Tally."""
-
-    @pytest.fixture
-    def unique_tally_payload(self, sample_tally_payload):
-        """Génère un payload avec un email unique pour éviter les conflits de cache."""
-        unique_email = f"test_{uuid.uuid4().hex[:8]}@test.com"
-        payload = sample_tally_payload.copy()
-        payload["data"] = payload["data"].copy()
-        payload["data"]["fields"] = payload["data"]["fields"].copy()
-
-        # Modifier l'email (index 2 dans le payload)
-        for i, field in enumerate(payload["data"]["fields"]):
-            if field["key"] == "question_D7V1kj":
-                payload["data"]["fields"][i] = {**field, "value": unique_email}
-                break
-
-        return payload
-
-    def test_webhook_accepts_valid_payload(self, test_client, unique_tally_payload):
-        """Vérifie que le webhook accepte un payload valide."""
-        response = test_client.post("/webhook/tally", json=unique_tally_payload)
+        with patch.object(settings, "ENVIRONMENT", "production"):
+            response = test_client.get("/health")
 
         assert response.status_code == 200
         data = response.json()
-
-        assert data["status"] in ["received", "received_fallback"]
-
-    def test_webhook_returns_event_id(self, test_client, unique_tally_payload):
-        """Vérifie que le webhook retourne l'event_id."""
-        response = test_client.post("/webhook/tally", json=unique_tally_payload)
-
-        if response.status_code == 200:
-            data = response.json()
-            if data["status"] == "received":
-                assert data["event_id"] == unique_tally_payload["eventId"]
-
-    def test_webhook_rejects_duplicate(self, test_client, unique_tally_payload):
-        """Vérifie le rejet des doublons."""
-        # Premier envoi
-        response1 = test_client.post("/webhook/tally", json=unique_tally_payload)
-        assert response1.status_code == 200
-
-        # Deuxième envoi immédiat (doublon)
-        response2 = test_client.post("/webhook/tally", json=unique_tally_payload)
-
-        # Le deuxième doit être rejeté (429)
-        assert response2.status_code == 429
-        data = response2.json()
-        assert data["status"] == "ignored"
-        assert data["reason"] == "rate_limited"
-
-    def test_webhook_rejects_invalid_payload(self, test_client):
-        """Vérifie le rejet des payloads invalides."""
-        invalid_payload = {"invalid": "data"}
-
-        response = test_client.post("/webhook/tally", json=invalid_payload)
-
-        # Doit retourner une erreur de validation
-        assert response.status_code == 422
-
-    def test_webhook_handles_missing_fields(self, test_client):
-        """Vérifie la gestion des champs manquants."""
-        unique_email = f"minimal_{uuid.uuid4().hex[:8]}@test.com"
-        minimal_payload = {
-            "eventId": f"test-minimal-{uuid.uuid4().hex[:8]}",
-            "createdAt": "2025-12-13T19:00:00Z",
-            "data": {
-                "responseId": "resp-123",
-                "submissionId": "sub-123",
-                "fields": [
-                    {
-                        "key": "question_D7V1kj",
-                        "label": "Email",
-                        "value": unique_email,
-                        "type": "INPUT_EMAIL",
-                    }
-                ],
-            },
-        }
-
-        response = test_client.post("/webhook/tally", json=minimal_payload)
-
-        # Doit accepter même avec des champs manquants
-        assert response.status_code in [200, 422]
+        assert set(data.keys()) == {"status"}
 
 
-class TestRateLimiting:
-    """Tests pour le rate limiting."""
+class TestRemovedEndpoints:
+    """Vérifie que les endpoints legacy sont bien retirés."""
 
-    def test_rate_limit_headers(self, test_client, sample_tally_payload):
-        """Vérifie la présence des headers de rate limit."""
-        # Modifier l'email pour éviter la déduplication
-        unique_email = f"ratelimit_{uuid.uuid4().hex[:8]}@test.com"
-        payload = sample_tally_payload.copy()
-        payload["data"] = payload["data"].copy()
-        payload["data"]["fields"] = [
-            {**f, "value": unique_email} if f["key"] == "question_D7V1kj" else f
-            for f in payload["data"]["fields"]
-        ]
+    def test_tally_webhook_gone(self, test_client):
+        """/webhook/tally n'existe plus (404/405)."""
+        response = test_client.post("/webhook/tally", json={})
+        assert response.status_code in (404, 405)
 
-        response = test_client.post("/webhook/tally", json=payload)
-
-        # Les headers de rate limit peuvent être présents
-        # (dépend de la configuration exacte)
-        assert response.status_code in [200, 429]
+    def test_legacy_apply_gone(self, test_client):
+        """/api/v2/apply (stub 410) a été retiré du tout."""
+        response = test_client.post("/api/v2/apply", json={})
+        assert response.status_code in (404, 422)
 
 
 class TestDocumentation:

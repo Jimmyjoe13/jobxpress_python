@@ -14,20 +14,13 @@ import sys
 
 import httpx
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, BackgroundTasks, Request, Depends
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from models.candidate import TallyWebhookPayload, CandidateProfile
-from services.search_engine import search_engine
-from services.llm_engine import llm_engine
-from services.pdf_generator import pdf_generator
 from services.database import db_service
-from services.email_service import email_service
-from services.ocr_service import ocr_service
 from services.cache_service import cache_service
 from core.config import settings
 from core.logging_config import setup_logging
@@ -103,9 +96,9 @@ app = FastAPI(
     
     API d'automatisation intelligente pour la recherche d'emploi.
     
-    - Réception de formulaires Tally
+    - Formulaire de candidature via le frontend (workflow V2)
     - Recherche multi-sources d'offres
-    - Scoring IA avec DeepSeek
+    - Scoring IA (MiMo via OpenCode Zen)
     - Génération de lettres personnalisées
     """,
     lifespan=lifespan,
@@ -156,12 +149,9 @@ logger.info("✅ API Recherche & Favoris enregistrée")
 logger.info("✅ API Admin Monitoring enregistrée")
 logger.info("✅ API Dashboard & UX enregistrée")
 
-# --- CONFIGURATION DEDUPLICATION ---
-COOLDOWN_SECONDS = 300  # 5 minutes
-
 
 # ===========================================
-# ENDPOINTS
+# ENDPOINTS SANTÉ / MONITORING
 # ===========================================
 
 
@@ -180,7 +170,9 @@ def health_check_head():
 @app.get("/health")
 async def health_check_deep():
     """
-    Health check approfondi avec vérification des dépendances. # FIX: Optimisation timeouts
+    Health check approfondi avec vérification des dépendances.
+    Fix audit P2 : en production, ne détaille plus l'état par intégration
+    (révéler quelles clés sont configurées est un renseignement gratuit).
     """
     checks = {
         "api": "healthy",
@@ -201,7 +193,6 @@ async def health_check_deep():
     # Test Supabase (timeout court)
     try:
         if db_service.client:
-            # FIX: Utilisation d'un timeout explicite pour ne pas bloquer le HC
             db_service.client.table("user_profiles").select("id").limit(1).execute()
             checks["supabase"] = "healthy"
         else:
@@ -219,7 +210,7 @@ async def health_check_deep():
                 resp = await client.get(
                     provider_url,
                     headers={"Authorization": f"Bearer {api_key_to_check}"},
-                    timeout=2.0, # FIX: Timeout réduit pour Health Check
+                    timeout=2.0,
                 )
                 checks["llm_api"] = (
                     "healthy" if resp.status_code == 200 else f"unhealthy ({resp.status_code})"
@@ -240,7 +231,7 @@ async def health_check_deep():
                         "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
                     },
                     params={"query": "test", "num_pages": "1"},
-                    timeout=2.0, # FIX: Timeout réduit pour Health Check
+                    timeout=2.0,
                 )
                 checks["rapidapi"] = (
                     "healthy" if resp.status_code == 200 else f"unhealthy ({resp.status_code})"
@@ -253,6 +244,10 @@ async def health_check_deep():
     # Statut global
     unhealthy = [k for k, v in checks.items() if "unhealthy" in v or v == "unreachable"]
     overall = "healthy" if not unhealthy else "degraded"
+
+    if settings.ENVIRONMENT == "production":
+        # Payload minimal en prod : statut global + santé technique basique
+        return {"status": overall}
 
     return {
         "status": overall,
@@ -299,236 +294,6 @@ async def health_check_redis():
             "rate_limiting": redis_cache.is_available,
         },
     }
-
-
-async def process_application_task(payload: TallyWebhookPayload, task_id: int = None):
-    """
-    Tâche de traitement d'une candidature.
-    Exécutée en arrière-plan après réception du webhook.
-
-    Args:
-        payload: Données du webhook Tally
-        task_id: ID de la tâche persistée (optionnel, pour tracking)
-    """
-    event_id = payload.eventId
-    logger.info(
-        f"🚀 Démarrage traitement Event ID: {event_id}"
-        + (f" (Task ID: {task_id})" if task_id else "")
-    )
-
-    # Marquer la tâche comme en cours de traitement
-    if task_id:
-        await cache_service.claim_task(task_id)
-
-    try:
-        # 1. PROFIL
-        candidate = CandidateProfile.from_tally(payload)
-        logger.info(
-            f"👤 Candidat: {candidate.first_name} {candidate.last_name} ({candidate.email})"
-        )
-
-        # --- OCR ---
-        if candidate.cv_url:
-            candidate.cv_text = await ocr_service.extract_text_from_cv(candidate.cv_url)
-        else:
-            logger.warning("⚠️ Pas de CV fourni")
-
-        # 2. RECHERCHE
-        raw_jobs = await search_engine.find_jobs(candidate)
-        total_found = len(raw_jobs)
-        logger.info(f"🔍 {total_found} offres trouvées")
-
-        if not raw_jobs:
-            logger.warning("❌ Aucune offre trouvée. Fin du traitement.")
-            if task_id:
-                await cache_service.mark_task_done(
-                    task_id
-                )  # Pas d'erreur, juste pas d'offres
-            return
-
-        # 3. ANALYSE - Avec garantie minimum d'offres
-        MIN_OFFERS_TO_SEND = 5  # Garantir au moins 5 offres à envoyer
-        all_analyzed_jobs = []  # Toutes les offres analysées
-        BATCH_SIZE = 5
-
-        for i in range(0, total_found, BATCH_SIZE):
-            batch = raw_jobs[i : i + BATCH_SIZE]
-            logger.info(f"🧠 Analyse lot {i + 1}-{i + len(batch)}...")
-
-            analyzed_batch = await llm_engine.analyze_offers_parallel(candidate, batch)
-            all_analyzed_jobs.extend(analyzed_batch)
-
-            # Log informatif
-            high_matches = [j for j in analyzed_batch if j.match_score > 0]
-            logger.info(f"   -> {len(high_matches)} offre(s) avec score > 0")
-
-        # Séparer les offres valides des offres à score 0
-        valid_jobs = [j for j in all_analyzed_jobs if j.match_score > 0]
-        zero_score_jobs = [j for j in all_analyzed_jobs if j.match_score == 0]
-
-        # Garantir un minimum d'offres
-        if len(valid_jobs) < MIN_OFFERS_TO_SEND and zero_score_jobs:
-            needed = MIN_OFFERS_TO_SEND - len(valid_jobs)
-            valid_jobs.extend(zero_score_jobs[:needed])
-            logger.info(f"📦 Ajout de {needed} offre(s) supplémentaire(s) (score 0)")
-
-        if not valid_jobs:
-            logger.warning("⚠️ Aucune offre retenue du tout")
-            if task_id:
-                await cache_service.mark_task_done(task_id)
-            return
-
-        # Tri final par score
-        valid_jobs.sort(key=lambda x: x.match_score, reverse=True)
-
-        logger.info("📊 PODIUM FINAL:")
-        for j in valid_jobs[:3]:
-            logger.info(f"   🥇 {j.match_score}% - {j.title} ({j.company})")
-
-        # 4. SÉLECTION & LIVRABLES
-        best_offer = valid_jobs[0]
-        other_offers = valid_jobs[1:]
-        logger.info(f"🏆 GAGNANT: {best_offer.title} chez {best_offer.company}")
-
-        letter_data = await llm_engine.generate_cover_letter(candidate, best_offer)
-        pdf_path = pdf_generator.create_application_pdf(
-            candidate, best_offer, letter_data.get("html_content", "")
-        )
-
-        if pdf_path:
-            db_service.save_application(candidate, best_offer, pdf_path)
-            email_service.send_application_email(
-                candidate, best_offer, other_offers, pdf_path
-            )
-            logger.info(f"✅ Cycle terminé avec succès pour {candidate.email}")
-
-        # Marquer la tâche comme terminée
-        if task_id:
-            cache_service.mark_task_done(task_id)
-            logger.info(f"✅ Tâche {task_id} marquée comme terminée")
-
-    except Exception as e:
-        logger.exception(f"❌ CRASH Background Task: {str(e)}")
-        # Marquer la tâche comme échouée
-        if task_id:
-            await cache_service.mark_task_failed(task_id, str(e))
-        # En production, Sentry capture automatiquement l'exception
-
-
-@app.post("/webhook/tally")
-@limiter.limit("10/minute")
-async def receive_tally_webhook(
-    request: Request, payload: TallyWebhookPayload, background_tasks: BackgroundTasks
-):
-    """
-    Endpoint principal - Réception des webhooks Tally.
-
-    Protection:
-    - Rate limiting: 10 requêtes/minute par IP
-    - Anti-doublon: 5 minutes de cooldown par email
-    - Persistance: le payload est sauvegardé AVANT traitement
-    """
-    import json as json_module
-
-    try:
-        # Extraction de l'email pour déduplication
-        fields = {f.key: f.value for f in payload.data.fields}
-        candidate_email = fields.get("question_D7V1kj", "unknown")
-
-        # Clé de cache unique
-        cache_key = f"email_dedup:{candidate_email}"
-
-        # --- VÉRIFICATION DOUBLON (Cache Persistant) ---
-        if await cache_service.exists(cache_key):
-            logger.warning(f"⛔ Doublon bloqué pour {candidate_email}")
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "status": "ignored",
-                    "reason": "rate_limited",
-                    "retry_after": COOLDOWN_SECONDS,
-                },
-            )
-
-        # Enregistrer dans le cache avec TTL
-        await cache_service.set(cache_key, "processed", ttl_seconds=COOLDOWN_SECONDS)
-
-        # --- PERSISTANCE AVANT TRAITEMENT ---
-        task_id = await cache_service.enqueue_task(
-            task_type="tally_webhook", payload=json_module.dumps(payload.model_dump())
-        )
-        logger.info(f"📥 Tâche persistée en DB (Task ID: {task_id})")
-
-        # Lancement du traitement avec le task_id
-        background_tasks.add_task(process_application_task, payload, task_id)
-
-        logger.info(f"📨 Webhook reçu pour {candidate_email}")
-        return {
-            "status": "received",
-            "message": "Processing started",
-            "event_id": payload.eventId,
-            "task_id": task_id,
-        }
-
-    except Exception as e:
-        logger.exception(f"⚠️ Erreur webhook: {e}")
-        # Fallback: on traite quand même (sans tracking)
-        background_tasks.add_task(process_application_task, payload, None)
-        return {"status": "received_fallback"}
-
-
-# ===========================================
-# LEGACY ENDPOINT (deprecated - use /api/v2/search/start instead)
-# ===========================================
-
-from pydantic import BaseModel, EmailStr
-from typing import Optional
-
-
-class DirectApplicationRequest(BaseModel):
-    """
-    DEPRECATED: Use SearchStartRequest from api.v2_endpoints instead.
-    Kept for backwards compatibility.
-    """
-
-    first_name: str
-    last_name: str
-    email: EmailStr
-    phone: Optional[str] = None
-    job_title: str
-    contract_type: str
-    work_type: str = "Tous"
-    experience_level: str
-    location: str
-    cv_url: Optional[str] = None
-    user_id: Optional[str] = None
-
-
-@app.post("/api/v2/apply", deprecated=True)
-@limiter.limit("10/minute")
-async def apply_direct_deprecated(request: Request, data: DirectApplicationRequest):
-    """
-    ⚠️ DEPRECATED: Cet endpoint est obsolète.
-
-    Utilisez le nouveau workflow V2 Human-in-the-Loop:
-    1. POST /api/v2/search/start - Lancer la recherche
-    2. GET /api/v2/applications/{id}/results - Récupérer les offres
-    3. POST /api/v2/applications/{id}/select - Sélectionner les offres
-
-    Cet endpoint retourne maintenant une erreur 410 Gone.
-    """
-    return JSONResponse(
-        status_code=410,
-        content={
-            "status": "deprecated",
-            "message": "Cet endpoint est obsolète. Utilisez POST /api/v2/search/start",
-            "migration_guide": {
-                "step_1": "POST /api/v2/search/start avec job_title, location, etc.",
-                "step_2": "GET /api/v2/applications/{id}/results (polling)",
-                "step_3": "POST /api/v2/applications/{id}/select avec les IDs des offres",
-            },
-        },
-    )
 
 
 # ===========================================

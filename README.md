@@ -10,7 +10,7 @@ Elle transforme un simple formulaire de candidature en un pipeline complet : rec
 
 ### 📥 Acquisition & Traitement
 
-- **Webhook Tally** : Réception des données candidat via formulaire
+- **Formulaire de candidature** : saisie des données candidat directement dans le frontend (workflow V2)
 - **OCR CV** : Extraction du contenu des CVs via **Mistral OCR**
 - **Validation Renforcée** : Sanitization anti-XSS, validation téléphone FR
 
@@ -53,7 +53,7 @@ Elle transforme un simple formulaire de candidature en un pipeline complet : rec
 | -------------------- | ------------------------------------------------------ |
 | **Retry Pattern**    | Tentatives automatiques (3x) avec backoff exponentiel  |
 | **Circuit Breaker**  | Protection contre les services défaillants             |
-| **Rate Limiting**    | 10 req/min par IP sur `/webhook/tally`                 |
+| **Rate Limiting**    | 10 req/min par IP sur les endpoints publics                 |
 | **Cache Persistant** | SQLite pour la déduplication (survit aux redémarrages) |
 
 ### Observabilité
