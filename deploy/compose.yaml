@@ -1,0 +1,120 @@
+# ==================================================
+# JobXpress - Stack VPS (OVH 51.38.99.226)
+# ==================================================
+# Cible : ~1 Go RAM plafonne. Caddy deja present sur l'hote (80/443) :
+# il frontalise api:8000 et web:3000 via 127.0.0.1 uniquement.
+#
+# Mise en route (apres la phase 3 de decouplage Supabase) :
+#   1. cp api.env.example /opt/jobxpress/.env.api   (remplir les secrets)
+#   2. docker compose --env-file .env.api up -d --build
+#   3. Ajouter les blocs Caddy (voir Caddyfile.snippet) + reload
+name: jobxpress
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jobxpress
+      POSTGRES_USER: jobxpress
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir dans .env.api}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobxpress"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks: [jobxpress]
+    # Jamais expose a l'externe : uniquement le reseau docker
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:?definir dans .env.api} --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redisdata:/data
+    deploy:
+      resources:
+        limits:
+          memory: 160M
+    networks: [jobxpress]
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --address ":9000"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?definir dans .env.api}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?definir dans .env.api}
+    volumes:
+      - miniodata:/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks: [jobxpress]
+
+  api:
+    build:
+      context: ../job_xpress
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env.api
+    environment:
+      # Cibles internes : ecrasent tout URL externe
+      DATABASE_URL: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
+      S3_ENDPOINT: http://minio:9000
+    ports:
+      - "127.0.0.1:8010:8000"   # -> Caddy api.jobxpress.fr
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/')\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks: [jobxpress]
+
+  web:
+    build:
+      context: ../frontend
+      dockerfile: ../deploy/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://api.jobxpress.fr
+    restart: unless-stopped
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?phase 3 - definir dans .env.api}
+      BETTER_AUTH_URL: https://app.jobxpress.fr
+    ports:
+      - "127.0.0.1:3010:3000"   # -> Caddy app.jobxpress.fr
+    depends_on: [api]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks: [jobxpress]
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+
+networks:
+  jobxpress:
+    driver: bridge

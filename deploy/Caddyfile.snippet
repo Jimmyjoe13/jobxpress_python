@@ -1,0 +1,27 @@
+# ==================================================
+# Blocs a ajouter au Caddyfile existant du VPS
+# (/etc/caddy/Caddyfile) apres bascule DNS
+# ==================================================
+
+api.jobxpress.fr {
+	# CORS gere par l'app ; Caddy = TLS + reverse proxy + headers securite
+	reverse_proxy 127.0.0.1:8010 {
+		header_up X-Forwarded-Proto https
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+}
+
+app.jobxpress.fr {
+	reverse_proxy 127.0.0.1:3010
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.jobxpress.fr; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.jobxpress.fr; frame-ancestors 'none'"
+	}
+}

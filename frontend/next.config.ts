@@ -4,6 +4,9 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   /* config options here */
   
+  // Build standalone pour déploiement Docker sur VPS (déploiement Netlify conservé en fallback)
+  output: "standalone",
+
   // Required for Sentry source maps
   productionBrowserSourceMaps: true,
   
