@@ -113,6 +113,7 @@ services:
       API_EXTERNAL_URL: https://api.jobxpress.fr/auth/v1
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_EXP: "3600"
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_API_PORT: "9999"
