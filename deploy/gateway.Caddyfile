@@ -1,0 +1,25 @@
+# Passerelle interne du stack (docker network) :
+# reproduit la convention de routing Supabase -> PostgREST.
+# Le frontend/backend pointe sur http://gateway (interne) ou api.jobxpress.fr (public).
+
+:8080 {
+	# API REST (PostgREST)
+	handle_path /rest/v1/* {
+		reverse_proxy postgrest:3000
+	}
+
+	# Auth (GoTrue standalone - remplace Supabase Auth)
+	handle_path /auth/v1/* {
+		reverse_proxy gotrue:9999
+	}
+
+	# RPC expose aussi sous /rpc/v1 comme Supabase (alias de /rest/v1/rpc)
+	handle_path /rpc/v1/* {
+		reverse_proxy postgrest:3000/rpc
+	}
+
+	# Fallback direct (admin/health PostgREST)
+	handle {
+		reverse_proxy postgrest:3000
+	}
+}

@@ -88,11 +88,48 @@ services:
       - ./gateway.Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
       - "127.0.0.1:8012:8080"
-    depends_on: [postgrest]
+    depends_on: [postgrest, gotrue]
     deploy:
       resources:
         limits:
           memory: 64M
+    networks: [jobxpress]
+
+  # Auth standalone (ex-Supabase Auth) : GoTrue, un seul binaire Go.
+  # Remplace le cloud Supabase Auth sans toucher au frontend (supabase-js parle a /auth/v1).
+  gotrue:
+    image: supabase/gotrue:v2.185.0
+    restart: unless-stopped
+    environment:
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress
+      GOTRUE_SITE_URL: ${SITE_URL:-https://jobxpress.fr}
+      GOTRUE_URI_ALLOW_LIST: ${SITE_URL:-https://jobxpress.fr}/auth/callback
+      GOTRUE_API_EXTERNAL_URL: https://api.jobxpress.fr/auth/v1
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_DISABLE_SIGNUP: "false"
+      # Google OAuth (creds recuperees depuis la config Supabase cloud)
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true"
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOOGLE_CLIENT_SECRET}
+      # Mailer (SMTP Brevo relay - meme compte que Supabase)
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_SMTP_HOST: smtp-relay.brevo.com
+      GOTRUE_SMTP_PORT: "588"
+      GOTRUE_SMTP_USER: ${BREVO_SMTP_USER}
+      GOTRUE_SMTP_PASS: ${BREVO_SMTP_PASS}
+      GOTRUE_SMTP_SENDER_NAME: Jimmy
+      GOTRUE_SMTP_SENDER_EMAIL: ${SENDER_EMAIL}
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     networks: [jobxpress]
 
   api:
@@ -143,12 +180,11 @@ services:
       dockerfile: ../deploy/web.Dockerfile
       args:
         NEXT_PUBLIC_API_URL: https://api.jobxpress.fr
+        NEXT_PUBLIC_SUPABASE_URL: https://api.jobxpress.fr
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_KEY}
     restart: unless-stopped
-    environment:
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?phase 3 - definir dans .env.api}
-      BETTER_AUTH_URL: https://app.jobxpress.fr
     ports:
-      - "127.0.0.1:3010:3000"   # -> Caddy app.jobxpress.fr
+      - "127.0.0.1:3010:3000"   # -> Caddy app.jobxpress.fr / jobxpress.fr
     depends_on: [api]
     deploy:
       resources:
