@@ -210,6 +210,20 @@ $$;
 
 GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 GRANT SELECT ON auth.users TO authenticated, service_role;
+
+-- Fonctions pont pour le backend (remplacent GoTrue admin API)
+CREATE OR REPLACE FUNCTION public.get_auth_user_email(p_user_id uuid)
+RETURNS text LANGUAGE sql SECURITY DEFINER SET search_path = public, auth AS $$
+  SELECT email FROM auth.users WHERE id = p_user_id
+$$;
+CREATE OR REPLACE FUNCTION public.delete_auth_user(p_user_id uuid)
+RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path = public, auth AS $$
+  DELETE FROM auth.users WHERE id = p_user_id
+$$;
+REVOKE ALL ON FUNCTION public.get_auth_user_email(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.delete_auth_user(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_auth_user_email(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.delete_auth_user(uuid) TO service_role;
 """)
 
     # ---- enums publics (crees avant les tables) ----
