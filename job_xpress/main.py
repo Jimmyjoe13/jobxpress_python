@@ -231,7 +231,7 @@ async def health_check_deep():
                         "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
                     },
                     params={"query": "test", "num_pages": "1"},
-                    timeout=2.0,
+                    timeout=5.0,
                 )
                 checks["rapidapi"] = (
                     "healthy" if resp.status_code == 200 else f"unhealthy ({resp.status_code})"
