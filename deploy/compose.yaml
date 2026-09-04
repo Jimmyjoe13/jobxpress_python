@@ -98,7 +98,7 @@ services:
   # Auth standalone (ex-Supabase Auth) : GoTrue, un seul binaire Go.
   # Remplace le cloud Supabase Auth sans toucher au frontend (supabase-js parle a /auth/v1).
   gotrue:
-    image: supabase/gotrue:v2.185.0
+    image: supabase/gotrue:v2.187.0
     restart: unless-stopped
     environment:
       GOTRUE_DB_DRIVER: postgres
@@ -109,6 +109,7 @@ services:
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: "3600"
       GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_API_PORT: "9999"
       GOTRUE_DISABLE_SIGNUP: "false"
       # Google OAuth (creds recuperees depuis la config Supabase cloud)
       GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true"
