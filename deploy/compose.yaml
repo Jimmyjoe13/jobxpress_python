@@ -100,9 +100,14 @@ services:
   gotrue:
     image: supabase/gotrue:v2.187.0
     restart: unless-stopped
+    # Set de migrations COMPLET monte en volume (le set embarque dans l'image
+    # est tronque et echoue en standalone) - voir scripts/fetch_gotrue_migrations.py
+    volumes:
+      - ./gotrue-migrations:/migrations:ro
     environment:
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress
+      GOTRUE_DB_MIGRATIONS_PATH: /migrations
       GOTRUE_SITE_URL: ${SITE_URL:-https://jobxpress.fr}
       GOTRUE_URI_ALLOW_LIST: ${SITE_URL:-https://jobxpress.fr}/auth/callback
       API_EXTERNAL_URL: https://api.jobxpress.fr/auth/v1
