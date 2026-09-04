@@ -102,6 +102,10 @@ services:
     restart: unless-stopped
     env_file: .env.api
     environment:
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+      PORT: "10000"
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://app.jobxpress.fr}
       # Cibles internes : ecrasent tout URL externe
       DATABASE_URL: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress
       REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
@@ -113,7 +117,7 @@ services:
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       SUPABASE_JWT_SECRET: ${JWT_SECRET}
     ports:
-      - "127.0.0.1:8010:8000"   # -> Caddy api.jobxpress.fr
+      - "127.0.0.1:8010:10000"   # -> Caddy api.jobxpress.fr
     depends_on:
       postgres:
         condition: service_healthy
@@ -122,7 +126,7 @@ services:
       minio:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/')\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:10000/', timeout=5)\" || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
