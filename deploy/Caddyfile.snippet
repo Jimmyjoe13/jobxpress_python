@@ -2,12 +2,26 @@
 # Blocs a ajouter au Caddyfile existant du VPS
 # (/etc/caddy/Caddyfile) apres bascule DNS
 # ==================================================
+# IMPORTANT: la route /rest/v1 DOIT etre evaluee AVANT le proxy api
+# (sinon les clients supabase-py/supabase-js tombent sur FastAPI qui
+# renvoie 404 au lieu de passer par PostgREST via le gateway interne).
 
 api.jobxpress.fr {
-	# CORS gere par l'app ; Caddy = TLS + reverse proxy + headers securite
-	reverse_proxy 127.0.0.1:8010 {
-		header_up X-Forwarded-Proto https
+	# Acces tables RPC direct pour clients (frontend, outils) -> gateway Caddy interne
+	handle /rest/v1/* {
+		reverse_proxy 127.0.0.1:8012
 	}
+	handle /rpc/v1/* {
+		reverse_proxy 127.0.0.1:8012
+	}
+
+	# API applicative FastAPI
+	handle {
+		reverse_proxy 127.0.0.1:8010 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options nosniff
