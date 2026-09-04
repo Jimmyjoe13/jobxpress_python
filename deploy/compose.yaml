@@ -105,7 +105,7 @@ services:
       GOTRUE_DB_DATABASE_URL: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress
       GOTRUE_SITE_URL: ${SITE_URL:-https://jobxpress.fr}
       GOTRUE_URI_ALLOW_LIST: ${SITE_URL:-https://jobxpress.fr}/auth/callback
-      GOTRUE_API_EXTERNAL_URL: https://api.jobxpress.fr/auth/v1
+      API_EXTERNAL_URL: https://api.jobxpress.fr/auth/v1
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: "3600"
       GOTRUE_JWT_ADMIN_ROLES: service_role
