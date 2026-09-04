@@ -106,7 +106,7 @@ services:
       - ./gotrue-migrations:/migrations:ro
     environment:
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress
+      GOTRUE_DB_DATABASE_URL: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress?options=-c%20search_path%3Dauth
       GOTRUE_DB_MIGRATIONS_PATH: /migrations
       GOTRUE_SITE_URL: ${SITE_URL:-https://jobxpress.fr}
       GOTRUE_URI_ALLOW_LIST: ${SITE_URL:-https://jobxpress.fr}/auth/callback
