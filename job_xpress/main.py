@@ -241,8 +241,15 @@ async def health_check_deep():
     else:
         checks["rapidapi"] = "not_configured"
 
-    # Statut global
-    unhealthy = [k for k, v in checks.items() if "unhealthy" in v or v == "unreachable"]
+    # Statut global : seules les dependances CRITIQUES degradent le statut.
+    # rapidapi/llm_api sont des services optionnels (fallbacks SerpAPI/heuristique)
+    # et JSearch repond en 3-4s depuis l'EU : un timeout court ne doit pas
+    # faire basculer toute la prod en "degraded" (fix audit P2 / VPS 2026-09-04).
+    critical = ["api", "supabase", "cache"]
+    unhealthy = [
+        k for k, v in checks.items()
+        if k in critical and ("unhealthy" in v or v == "unreachable")
+    ]
     overall = "healthy" if not unhealthy else "degraded"
 
     if settings.ENVIRONMENT == "production":
