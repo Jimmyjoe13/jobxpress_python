@@ -24,6 +24,12 @@ from models.user_profile import (
 )
 from services.database import db_service
 from services.billing import PLANS
+from services.storage_service import (
+    storage_service,
+    sniff_content_type,
+    BUCKET_AVATARS,
+    BUCKET_CVS,
+)
 from core.exceptions import (
     DatabaseError, 
     APIError, 
@@ -48,6 +54,22 @@ ALLOWED_CV_TYPES = [
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]
 
+# Mapping MIME -> signatures binaires acceptees (fix audit P2: content_type
+# client-controlle ne suffit pas)
+_AVATAR_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+_CV_MIMES = {"application/pdf", "application/zip", "application/vnd.ms-office"}
+
+
+def _validate_magic_bytes(content: bytes, allowed: set) -> str:
+    """Retourne le MIME reel si dans allowed, sinon leve HTTPException 400."""
+    real = sniff_content_type(content)
+    if real not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Contenu de fichier non conforme (detecte: {real or 'inconnu'})",
+        )
+    return real
+
 
 # ===========================================
 # HELPERS
@@ -58,20 +80,26 @@ def _build_profile_response(profile_data: dict, email: str = None) -> UserProfil
     """Construit un objet UserProfileRead à partir des données DB."""
     plan = profile_data.get("plan", "FREE")
 
+    # URLs: en mode MinIO les colonnes stockent des cles d'objet -> presign a la
+    # volee (fix P1-2: plus aucune URL publique permanente). Legacy supabase
+    # (http://...) passe tel quel.
+    avatar = storage_service.presigned_url(profile_data.get("avatar_url"))
+    cv = storage_service.presigned_url(profile_data.get("cv_url"))
+
     return UserProfileRead(
         id=str(profile_data.get("id", "")),
         email=email,
         first_name=profile_data.get("first_name"),
         last_name=profile_data.get("last_name"),
         phone=profile_data.get("phone"),
-        avatar_url=profile_data.get("avatar_url"),
+        avatar_url=avatar,
         job_title=profile_data.get("job_title"),
         location=profile_data.get("location", "France"),
         experience_level=profile_data.get("experience_level", "Non spécifié"),
         preferred_contract_type=profile_data.get("preferred_contract_type", "CDI"),
         preferred_work_type=profile_data.get("preferred_work_type", "Tous"),
         key_skills=profile_data.get("key_skills") or [],
-        cv_url=profile_data.get("cv_url"),
+        cv_url=cv,
         cv_uploaded_at=profile_data.get("cv_uploaded_at"),
         credits=profile_data.get("credits", 5),
         plan=plan,
@@ -83,13 +111,23 @@ def _build_profile_response(profile_data: dict, email: str = None) -> UserProfil
 
 async def _get_user_email(client, user_id: str) -> Optional[str]:
     """Récupère l'email de l'utilisateur depuis auth.users via RPC."""
+    admin_client = db_service.admin_client
+    if not admin_client:
+        return None
     try:
-        # On utilise le client admin pour accéder aux métadonnées auth
-        admin_client = db_service.admin_client
-        if admin_client:
-            result = admin_client.auth.admin.get_user_by_id(user_id)
-            if result and result.user:
-                return result.user.email
+        # Mode gateway VPS: pont auth.users expose get_auth_user_email (SECURITY DEFINER)
+        result = admin_client.rpc(
+            "get_auth_user_email", {"p_user_id": user_id}
+        ).execute()
+        if result.data:
+            return result.data
+    except Exception:
+        pass
+    try:
+        # Mode legacy Supabase: API admin GoTrue
+        result = admin_client.auth.admin.get_user_by_id(user_id)
+        if result and result.user:
+            return result.user.email
     except Exception as e:
         logger.warning(f"⚠️ Impossible de récupérer l'email: {e}")
     return None
@@ -246,20 +284,53 @@ async def upload_avatar(
 
     L'avatar précédent sera remplacé.
     """
-    # Validation du type
+    # Lecture bornee (fix audit P2: pas de read() entier avant controle taille)
+    content = await file.read(MAX_AVATAR_SIZE + 1)
+    if len(content) > MAX_AVATAR_SIZE:
+        raise HTTPException(
+            status_code=400, detail="Fichier trop volumineux. Maximum: 5 MB"
+        )
+
+    # Validation binaire reelle (le content_type client n'est pas fiable)
+    real_mime = _validate_magic_bytes(content, _AVATAR_MIMES)
+
+    if storage_service.is_configured:
+        # --- Mode gateway VPS: MinIO prive + presign ---
+        ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+        if ext not in ["jpg", "jpeg", "png", "webp", "gif"]:
+            ext = "jpg"
+        key = f"{BUCKET_AVATARS}/{user_id}/{uuid.uuid4()}.{ext}"
+        if not storage_service.upload(BUCKET_AVATARS, key.split("/", 1)[1],
+                                      content, real_mime):
+            raise HTTPException(status_code=500, detail="Échec upload avatar")
+        # on stocke 'avatars/<...>' ; presigned_url le resout a la lecture
+        stored_value = key
+        avatar_url = storage_service.presigned_url(stored_value)
+        try:
+            user_client = db_service.get_user_client(token)
+            if user_client:
+                user_client.table("user_profiles").update(
+                    {
+                        "avatar_url": stored_value,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                ).eq("id", user_id).execute()
+        except JobXpressError:
+            raise
+        except Exception as e:
+            logger.error(f"❌ update profile avatar: {e}")
+            raise DatabaseError("DB-008", "Avatar uploadé mais profil non mis à jour",
+                                details={"user_id": user_id})
+        logger.info(f"📸 Avatar uploadé (MinIO) pour {user_id[:8]}...")
+        return AvatarUploadResponse(
+            avatar_url=avatar_url, message="Avatar uploadé avec succès"
+        )
+
+    # --- Mode legacy Supabase Storage (Render, jusqu'au decom) ---
     if file.content_type not in ALLOWED_AVATAR_TYPES:
         raise HTTPException(
             status_code=400,
             detail="Type de fichier non supporté. Acceptés: JPEG, PNG, WebP, GIF",
-        )
-
-    # Lire le contenu
-    content = await file.read()
-
-    # Validation de la taille
-    if len(content) > MAX_AVATAR_SIZE:
-        raise HTTPException(
-            status_code=400, detail="Fichier trop volumineux. Maximum: 5 MB"
         )
 
     client = db_service.admin_client  # Besoin de admin pour Storage
@@ -350,20 +421,51 @@ async def upload_cv(
 
     Le CV sera utilisé comme défaut pour les nouvelles candidatures.
     """
-    # Validation du type
+    # Lecture bornee + validation binaire
+    content = await file.read(MAX_CV_SIZE + 1)
+    if len(content) > MAX_CV_SIZE:
+        raise HTTPException(
+            status_code=400, detail="Fichier trop volumineux. Maximum: 10 MB"
+        )
+    real_mime = _validate_magic_bytes(content, _CV_MIMES)
+
+    if storage_service.is_configured:
+        # --- Mode gateway VPS: MinIO prive + presign ---
+        safe_filename = "".join(c for c in file.filename if c.isalnum() or c in "._-")[
+            :50
+        ]
+        stored_value = f"cvs/{user_id}/{uuid.uuid4()}_{safe_filename}"
+        obj_key = stored_value.split("/", 1)[1]  # bucket cvs/<...> -> cvs/<...> en cle
+        if not storage_service.upload(BUCKET_CVS, obj_key, content, real_mime):
+            raise HTTPException(status_code=500, detail="Échec upload CV")
+        cv_url = storage_service.presigned_url(stored_value)
+        now = datetime.now(timezone.utc)
+        try:
+            user_client = db_service.get_user_client(token)
+            if user_client:
+                user_client.table("user_profiles").update(
+                    {
+                        "cv_url": stored_value,
+                        "cv_uploaded_at": now.isoformat(),
+                        "updated_at": now.isoformat(),
+                    }
+                ).eq("id", user_id).execute()
+        except JobXpressError:
+            raise
+        except Exception as e:
+            logger.error(f"❌ update profile cv: {e}")
+            raise DatabaseError("DB-009", "CV uploadé mais profil non mis à jour",
+                                details={"user_id": user_id})
+        logger.info(f"📄 CV uploadé (MinIO) pour {user_id[:8]}...")
+        return CVUploadResponse(
+            cv_url=cv_url, cv_uploaded_at=now, message="CV uploadé avec succès"
+        )
+
+    # --- Mode legacy Supabase Storage ---
     if file.content_type not in ALLOWED_CV_TYPES:
         raise HTTPException(
             status_code=400,
             detail="Type de fichier non supporté. Acceptés: PDF, DOC, DOCX",
-        )
-
-    # Lire le contenu
-    content = await file.read()
-
-    # Validation de la taille
-    if len(content) > MAX_CV_SIZE:
-        raise HTTPException(
-            status_code=400, detail="Fichier trop volumineux. Maximum: 10 MB"
         )
 
     client = db_service.admin_client  # Besoin de admin pour Storage
@@ -435,6 +537,10 @@ async def delete_avatar(
             {"avatar_url": None, "updated_at": datetime.now(timezone.utc).isoformat()}
         ).eq("id", user_id).execute()
 
+        # Purge MinIO (mode gateway) : tous les objets sous avatars/<user_id>/
+        if storage_service.is_configured:
+            storage_service.delete_prefix(BUCKET_AVATARS, f"{user_id}/")
+
         logger.info(f"🗑️ Avatar supprimé pour {user_id[:8]}...")
 
         return {"success": True, "message": "Avatar supprimé"}
@@ -470,6 +576,9 @@ async def delete_cv(
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", user_id).execute()
+
+        if storage_service.is_configured:
+            storage_service.delete_prefix(BUCKET_CVS, f"{user_id}/")
 
         logger.info(f"🗑️ CV supprimé pour {user_id[:8]}...")
 

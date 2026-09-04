@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     # Format: redis://default:password@host:port ou rediss://... pour TLS
     REDIS_URL: str = ""
 
+    # Storage objet (MinIO/S3 sur VPS — remplace Supabase Storage)
+    S3_ENDPOINT: str = ""  # ex: http://minio:9000
+    S3_ACCESS_KEY: str = ""
+    S3_SECRET_KEY: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
 
     @model_validator(mode="after")

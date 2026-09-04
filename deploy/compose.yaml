@@ -59,6 +59,42 @@ services:
           memory: 256M
     networks: [jobxpress]
 
+  postgrest:
+    image: postgrest/postgrest:v13.0.7
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,auth
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_SERVER_PROXY_URI: https://api.jobxpress.fr
+      PGRST_OPEN_SERVER_INTROSPECTION: ""    # schema cache auto-reload
+    ports:
+      - "127.0.0.1:8011:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+    networks: [jobxpress]
+
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./gateway.Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "127.0.0.1:8012:8080"
+    depends_on: [postgrest]
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    networks: [jobxpress]
+
   api:
     build:
       context: ../job_xpress
@@ -70,6 +106,12 @@ services:
       DATABASE_URL: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress
       REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
       S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      SUPABASE_URL: http://gateway:8080
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      SUPABASE_JWT_SECRET: ${JWT_SECRET}
     ports:
       - "127.0.0.1:8010:8000"   # -> Caddy api.jobxpress.fr
     depends_on:

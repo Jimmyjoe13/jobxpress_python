@@ -358,23 +358,34 @@ class DatabaseService:
         try:
             logger.warning(f"🗑️ Suppression totale du compte: {user_id}")
 
-            # 1. Optionnel: Nettoyage Storage (Supabase ne cascade pas automatiquement sur Storage)
+            # 1. Nettoyage Storage (les buckets ne cascaderaient pas tout seuls)
             try:
-                # Lister les fichiers dans les dossiers de l'utilisateur
-                buckets = ["cvs", "avatars"]
-                for bucket in buckets:
-                    files = self.admin_client.storage.from_(bucket).list(user_id)
-                    if files:
-                        paths = [f"{user_id}/{f['name']}" for f in files]
-                        self.admin_client.storage.from_(bucket).remove(paths)
-                        logger.info(f"   -> {len(paths)} fichiers supprimés dans bucket '{bucket}'")
+                from services.storage_service import storage_service, BUCKET_AVATARS, BUCKET_CVS
+                if storage_service.is_configured:
+                    # Mode gateway VPS (MinIO)
+                    for bucket in (BUCKET_CVS, BUCKET_AVATARS):
+                        n = storage_service.delete_prefix(bucket, f"{user_id}/")
+                        if n:
+                            logger.info(f"   -> {n} fichiers MinIO purges ({bucket})")
+                else:
+                    # Mode legacy Supabase Storage
+                    for bucket in ["cvs", "avatars"]:
+                        files = self.admin_client.storage.from_(bucket).list(user_id)
+                        if files:
+                            paths = [f"{user_id}/{f['name']}" for f in files]
+                            self.admin_client.storage.from_(bucket).remove(paths)
+                            logger.info(f"   -> {len(paths)} fichiers supprimés dans bucket '{bucket}'")
             except Exception as e:
                 logger.warning(f"⚠️ Erreur lors du nettoyage Storage (non-bloquant): {e}")
 
-            # 2. Suppression de l'utilisateur dans Supabase Auth
-            # Cela déclenche les triggers DELETE CASCADE dans la DB public
-            self.admin_client.auth.admin.delete_user(user_id)
-            
+            # 2. Suppression de l'utilisateur auth (CASCADE sur les tables public)
+            try:
+                self.admin_client.rpc("delete_auth_user", {"p_user_id": user_id}).execute()
+                logger.info(f"✅ Compte {user_id} supprimé avec succès")
+                return True
+            except Exception as rpc_err:
+                logger.debug(f"RPC delete_auth_user indisponible ({rpc_err}), fallback GoTrue admin")
+                self.admin_client.auth.admin.delete_user(user_id)
             logger.info(f"✅ Compte {user_id} supprimé avec succès")
             return True
 
