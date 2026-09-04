@@ -12,7 +12,7 @@ name: jobxpress
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16   # job_offers_v2 utilise halfvec (pgvector 0.8)
     restart: unless-stopped
     environment:
       POSTGRES_DB: jobxpress
