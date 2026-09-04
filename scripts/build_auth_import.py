@@ -76,6 +76,8 @@ GRANT SELECT ON auth.users TO authenticated, service_role;
     S.append("ALTER TABLE auth.identities DISABLE TRIGGER ALL;")
     if users:
         cols = sorted(users[0].keys())
+        # confirmed_at est GENERATED dans le schema GoTrue v2.187 -> a exclure
+        cols = [c for c in cols if c != "confirmed_at"]
         rows_sql = []
         for u in users:
             rows_sql.append("(" + ", ".join(sql(u.get(c)) for c in cols) + ")")
@@ -84,6 +86,8 @@ GRANT SELECT ON auth.users TO authenticated, service_role;
         )
     if identities:
         cols = sorted(identities[0].keys())
+        # identities.email est GENERATED dans le schema GoTrue v2.187
+        cols = [c for c in cols if c != "email"]
         rows_sql = []
         for i in identities:
             rows_sql.append("(" + ", ".join(sql(i.get(c)) for c in cols) + ")")
@@ -116,6 +120,17 @@ GRANT SELECT ON auth.users TO authenticated, service_role;
             continue
         S.append(f'DROP TRIGGER IF EXISTS "{t["trigger"]}" ON auth.users;')
         S.append(t["def"].rstrip(" ;") + ";")
+
+    # Triggers auth.users non exportes (filtre public du dump) : recreation
+    # manuelle (recuperes depuis le cloud via /database/query).
+    S.append("""
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+DROP TRIGGER IF EXISTS on_auth_user_created_settings ON auth.users;
+CREATE TRIGGER on_auth_user_created_settings AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user_settings();
+""")
 
     OUT.write_text("\n".join(S) + "\n", encoding="utf-8")
     print(f"users={len(users)} identities={len(identities)}")
