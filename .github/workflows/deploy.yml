@@ -1,0 +1,48 @@
+name: 🚀 Deploy to Production VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to VPS (51.38.99.226)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🌐 Deploy via SSH to VPS
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST: ${{ secrets.VPS_SSH_HOST }}
+          USER: ${{ secrets.VPS_SSH_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "$USER@$HOST" << 'EOF'
+            set -e
+            echo "=== 📥 1. Mise à jour du code depuis origin/main ==="
+            cd /home/jimmy/jobxpress/repo
+            git fetch origin main
+            git reset --hard origin/main
+            
+            echo "=== 🐳 2. Rebuild et redémarrage des conteneurs ==="
+            cd /home/jimmy/jobxpress/repo/deploy
+            docker compose --env-file .env.api up -d --build
+            
+            echo "=== ⏳ 3. Attente de la stabilisation des services (12s) ==="
+            sleep 12
+            
+            echo "=== 🔍 4. Vérification de santé de l'API ==="
+            curl -fsS http://127.0.0.1:8010/health || (echo "❌ Échec de la vérification de santé API !" && exit 1)
+            
+            echo "=== 🔍 5. Vérification de santé du Frontend ==="
+            curl -fsS http://127.0.0.1:3010/ > /dev/null || (echo "❌ Échec de la vérification du frontend !" && exit 1)
+            
+            echo "=== ✅ Déploiement en production réussi avec succès ! ==="
+          EOF
