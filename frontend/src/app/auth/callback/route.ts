@@ -13,9 +13,14 @@ import { NextResponse } from 'next/server'
  * - Prod: https://votre-domaine.com/auth/callback
  */
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
+
+  // Résolution de l'origine publique réelle derrière le reverse-proxy (Caddy)
+  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host')
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https'
+  const origin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : (process.env.NEXT_PUBLIC_SITE_URL || 'https://jobxpress.fr')
 
   // Si pas de code, rediriger vers login avec erreur
   if (!code) {
