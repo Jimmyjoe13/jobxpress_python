@@ -27,6 +27,7 @@ class DiscoveryEngine:
         location: str = "France",
         limit: int = 15,
         contract_type: Optional[str] = None,
+        no_cache: bool = False,
     ) -> List[JobOffer]:
         """
         Trouve des offres d'emploi réelles via les Reverse APIs des plateformes.
@@ -37,6 +38,7 @@ class DiscoveryEngine:
             location=location,
             contract_type=contract_type,
             limit=limit,
+            no_cache=no_cache,
         )
 
     async def find_job_urls(self, job_title: str, location: str = "France") -> List[str]:

@@ -14,12 +14,33 @@ from models.job_offer_v2 import JobOffer
 logger = logging.getLogger("jobxpress.scrapers")
 
 KNOWN_RECRUITMENT_AGENCIES = [
-    "michael page", "page personnel", "hays", "robert half", "expectra",
-    "randstad", "adecco", "manpower", "fed it", "fed", "walters people",
+    # Cabinets de recrutement & Intérim spécialisé
+    "michael page", "page personnel", "hays", "robert half", "robert walters",
+    "expectra", "randstad", "adecco", "manpower", "fed it", "fed", "walters people",
     "spring", "badenoch", "groupe adéquat", "synergie", "proman", "crit",
-    "sii", "alten", "altran", "capgemini", "sopra steria", "cgi", "atos",
+    "kelly services", "huxley", "progressis", "avanda", "allegis group",
+    "allegis", "sthree", "computer futures", "darwin recruitment", "club freelance",
+    "freelance.com", "freelance republik", "comet", "experis",
+    # ESN & Sociétés de Conseil IT
+    "sii", "alten", "altran", "capgemini", "sopra steria", "cgi", "atos", "eviden",
     "devoteam", "ausy", "akkodis", "modis", "amaris", "infeeny", "aubay",
-    "extia", "open", "sword", "consort", "gfi", "inetum"
+    "extia", "open", "sword", "consort", "gfi", "inetum", "wavestone", "talan",
+    "solutec", "infotel", "sqli", "viseo", "zenika", "octo technology", "linkvalue",
+    "publicis sapient", "accenture", "ey", "deloitte", "kpmg", "pwc", "meritis",
+    "davidson", "neurones", "econocom", "hardis", "proservia", "umanis", "apside"
+]
+
+AGENCY_DESCRIPTION_PATTERNS = [
+    re.compile(r'\bcabinet de recrutement\b', re.I),
+    re.compile(r'\bchasseur[s]? de t[eê]tes\b', re.I),
+    re.compile(r'\besn\b', re.I),
+    re.compile(r'\bsoci[eé]t[eé] de conseil\b', re.I),
+    re.compile(r'\bsoci[eé]t[eé] de services\b', re.I),
+    re.compile(r'pour le compte d[\'’]un (?:de nos )?clients?', re.I),
+    re.compile(r'pour l[\'’]un de nos clients', re.I),
+    re.compile(r'mandat[eé] par notre client', re.I),
+    re.compile(r'notre client,? (?:acteur majeur|leader|sp[eé]cialiste)', re.I),
+    re.compile(r'notre client recherche\b', re.I),
 ]
 
 EMAIL_REGEX = re.compile(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+')
@@ -46,16 +67,17 @@ class BaseJobScraper(ABC):
 
     def detect_agency(self, company_name: str, description: str = "") -> bool:
         """Détecte si l'entreprise est une ESN ou un cabinet de recrutement."""
-        name_lower = (company_name or "").lower()
-        desc_lower = (description or "").lower()[:500]
+        name_lower = (company_name or "").lower().strip()
+        desc_lower = (description or "").lower()[:800]
 
+        # 1. Vérification du nom de l'entreprise
         for agency in KNOWN_RECRUITMENT_AGENCIES:
             if agency in name_lower:
                 return True
 
-        agency_keywords = ["cabinet de recrutement", "chasseur de têtes", "esn", "société de conseil en technologies"]
-        for kw in agency_keywords:
-            if kw in desc_lower:
+        # 2. Vérification sémantique dans la description
+        for pattern in AGENCY_DESCRIPTION_PATTERNS:
+            if pattern.search(desc_lower):
                 return True
 
         return False

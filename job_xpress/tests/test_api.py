@@ -43,7 +43,7 @@ class TestHealthEndpoints:
         assert "cache" in checks
         assert "supabase" in checks
         assert "llm_api" in checks
-        assert "rapidapi" in checks
+        assert "reverse_api" in checks
 
     def test_health_api_always_healthy(self, test_client):
         """Vérifie que l'API est toujours marquée healthy."""

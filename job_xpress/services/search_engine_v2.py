@@ -79,7 +79,8 @@ class SearchEngineV2:
                 for job in web_results:
                     asyncio.create_task(self._index_job_vector(job, candidate.user_id))
                 
-                return db_results + web_results
+                from services.scrapers.deduplication import deduplicate_job_offers
+                return deduplicate_job_offers(db_results + web_results, limit=limit)
 
             except Exception as e:
                 logger.error(f"❌ Erreur Discovery Engine: {e}")
