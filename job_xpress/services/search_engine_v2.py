@@ -63,15 +63,16 @@ class SearchEngineV2:
         except Exception as e:
             logger.warning(f"⚠️ Échec Vector Search: {e}")
 
-        # 2. Découverte d'offres via API (si pas assez de résultats en DB)
+        # 2. Découverte d'offres via Reverse APIs (si pas assez de résultats en DB)
         if len(db_results) < limit:
-            logger.info("🌐 Lancement de la découverte d'offres via JSearch API...")
+            logger.info("🌐 Lancement de la découverte d'offres via Reverse APIs (Free-Work, Remotive, Jobicy)...")
             
             try:
                 web_results = await self.discovery.find_jobs(
                     job_title=candidate.job_title,
                     location=candidate.location,
-                    limit=limit - len(db_results)
+                    limit=limit - len(db_results),
+                    contract_type=getattr(candidate, "contract_type", None)
                 )
                 
                 # Sauvegarder les nouveaux résultats en DB avec embedding

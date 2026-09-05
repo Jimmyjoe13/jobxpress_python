@@ -207,14 +207,15 @@ async def quick_search(
                     id=str(i),
                     title=job.title,
                     company=job.company,
-                    location=job.location or "Non spécifié",
+                    location=getattr(job, "location", None) or "Non spécifié",
                     url=job.url,
-                    date_posted=job.date_posted,
-                    is_remote=job.is_remote,
-                    work_type=job.work_type,
-                    salary_warning=job.salary_warning,
-                    is_agency=job.is_agency,
-                    source=job.source,
+                    salary=getattr(job, "salary", None),
+                    date_posted=getattr(job, "date_posted", None),
+                    is_remote=getattr(job, "is_remote", False),
+                    work_type=getattr(job, "work_type", None),
+                    salary_warning=getattr(job, "salary_warning", False),
+                    is_agency=getattr(job, "is_agency", False),
+                    source=getattr(job, "source", "reverse_api"),
                 )
             )
         except Exception as e:

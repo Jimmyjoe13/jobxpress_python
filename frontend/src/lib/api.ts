@@ -164,6 +164,7 @@ export interface JobResultItem {
   company: string
   location: string
   url: string
+  salary?: string
   date_posted?: string
   is_remote: boolean
   work_type?: string

@@ -120,12 +120,17 @@ export function QuickSearchJobCard({
             {job.work_type}
           </span>
         )}
-        {job.salary_warning && (
+        {job.salary ? (
+          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+            <DollarSign className="w-3 h-3" />
+            {job.salary}
+          </span>
+        ) : job.salary_warning ? (
           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
             <DollarSign className="w-3 h-3" />
             Salaire non précisé
           </span>
-        )}
+        ) : null}
         {job.is_agency && (
           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-red-500/10 text-red-400 border border-red-500/20">
             <AlertTriangle className="w-3 h-3" />

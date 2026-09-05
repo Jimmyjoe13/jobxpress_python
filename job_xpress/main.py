@@ -179,7 +179,7 @@ async def health_check_deep():
         "cache": "unknown",
         "supabase": "unknown",
         "llm_api": "unknown",
-        "rapidapi": "unknown",
+        "reverse_api": "unknown",
     }
 
     # Test Cache SQLite (très rapide)
@@ -220,26 +220,20 @@ async def health_check_deep():
     else:
         checks["llm_api"] = "not_configured"
 
-    # Test RapidAPI (timeout très court 2s)
-    if settings.RAPIDAPI_KEY:
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    "https://jsearch.p.rapidapi.com/search",
-                    headers={
-                        "X-RapidAPI-Key": settings.RAPIDAPI_KEY,
-                        "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
-                    },
-                    params={"query": "test", "num_pages": "1"},
-                    timeout=5.0,
-                )
-                checks["rapidapi"] = (
-                    "healthy" if resp.status_code == 200 else f"unhealthy ({resp.status_code})"
-                )
-        except Exception:
-            checks["rapidapi"] = "unreachable"
-    else:
-        checks["rapidapi"] = "not_configured"
+    # Test Reverse API (sourcing jobboards autonome)
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://www.free-work.com/api/job_postings",
+                headers={"User-Agent": "JobXpress-HealthCheck/1.0", "Accept": "application/json"},
+                params={"page": "1"},
+                timeout=3.0,
+            )
+            checks["reverse_api"] = (
+                "healthy" if resp.status_code == 200 else f"unhealthy ({resp.status_code})"
+            )
+    except Exception:
+        checks["reverse_api"] = "unreachable"
 
     # Statut global : seules les dependances CRITIQUES degradent le statut.
     # rapidapi/llm_api sont des services optionnels (fallbacks SerpAPI/heuristique)

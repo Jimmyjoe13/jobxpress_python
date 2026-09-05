@@ -98,6 +98,7 @@ class JobResultItem(BaseModel):
     company: str
     location: str = Field("Non spécifié", description="Localisation de l'offre")
     url: str
+    salary: Optional[str] = None
     date_posted: Optional[str] = None
     is_remote: bool = False
     work_type: Optional[str] = None
