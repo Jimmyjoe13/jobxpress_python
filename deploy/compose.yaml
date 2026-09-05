@@ -156,7 +156,7 @@ services:
       ENVIRONMENT: production
       LOG_LEVEL: INFO
       PORT: "10000"
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://app.jobxpress.fr}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://jobxpress.fr,https://www.jobxpress.fr,https://app.jobxpress.fr,http://localhost:3000}
       # Cibles internes : ecrasent tout URL externe
       DATABASE_URL: postgresql://jobxpress:${POSTGRES_PASSWORD}@postgres:5432/jobxpress
       REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379/0
