@@ -29,8 +29,7 @@ export default function StructuredData() {
       "Scoring de compatibilité CV"
     ],
     "screenshot": "https://jobxpress.fr/og-image.png",
-    "softwareVersion": "1.0",
-    "operatingSystem": "Web (Navigateur)"
+    "softwareVersion": "1.0"
   };
 
   const organizationSchema = {
