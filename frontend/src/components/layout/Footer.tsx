@@ -11,6 +11,7 @@ const footerLinks = [
   { href: "/terms", label: "Conditions" },
   { href: "/careers", label: "Carrières" },
   { href: "/contact", label: "Contact" },
+  { href: "/testimonials", label: "Témoignages" },
 ]
 
 export function Footer() {

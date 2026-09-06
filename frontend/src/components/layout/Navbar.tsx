@@ -11,6 +11,7 @@ const navLinks = [
   { href: "/pricing", label: "Tarifs", isPage: true },
   { href: "/blog", label: "Blog", isPage: true },
   { href: "/guide-emploi", label: "Guide gratuit", isPage: true },
+  { href: "/testimonials", label: "Témoignages", isPage: true },
 ]
 
 export function Navbar() {
