@@ -9,6 +9,7 @@ const footerLinks = [
   { href: "/about", label: "À propos" },
   { href: "/privacy", label: "Confidentialité" },
   { href: "/terms", label: "Conditions" },
+  { href: "/careers", label: "Carrières" },
   { href: "/contact", label: "Contact" },
 ]
 

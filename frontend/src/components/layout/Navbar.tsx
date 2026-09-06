@@ -10,6 +10,7 @@ const navLinks = [
   { href: "#how-it-works", label: "Comment ça marche" },
   { href: "/pricing", label: "Tarifs", isPage: true },
   { href: "/blog", label: "Blog", isPage: true },
+  { href: "/guide-emploi", label: "Guide gratuit", isPage: true },
 ]
 
 export function Navbar() {
