@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { Sparkles } from "lucide-react"
 
 const footerLinks = [
+  { href: "/blog", label: "Blog" },
   { href: "/privacy", label: "Confidentialité" },
   { href: "/terms", label: "Conditions" },
   { href: "/contact", label: "Contact" },

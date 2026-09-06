@@ -9,6 +9,7 @@ const navLinks = [
   { href: "#features", label: "Fonctionnalités" },
   { href: "#how-it-works", label: "Comment ça marche" },
   { href: "/pricing", label: "Tarifs", isPage: true },
+  { href: "/blog", label: "Blog", isPage: true },
 ]
 
 export function Navbar() {

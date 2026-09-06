@@ -1,8 +1,26 @@
 import { MetadataRoute } from 'next'
+import { getAllArticles } from '@/lib/blog'
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = 'https://jobxpress.fr'
-  
+  const articles = getAllArticles()
+
+  const blogIndex: MetadataRoute.Sitemap = [
+    {
+      url: `${baseUrl}/blog`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.7,
+    },
+  ]
+
+  const blogArticles: MetadataRoute.Sitemap = articles.map((article) => ({
+    url: `${baseUrl}/blog/${article.slug}`,
+    lastModified: new Date(article.date),
+    changeFrequency: 'monthly' as const,
+    priority: 0.6,
+  }))
+
   return [
     {
       url: baseUrl,
@@ -34,5 +52,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'yearly',
       priority: 0.3,
     },
+    ...blogIndex,
+    ...blogArticles,
   ]
 }

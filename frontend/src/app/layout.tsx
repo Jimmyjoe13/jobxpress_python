@@ -43,6 +43,9 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.ico",
   },
+  other: {
+    "msapplication-TileColor": "#6366f1",
+  },
 }
 
 export default function RootLayout({
@@ -52,6 +55,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className={`${inter.variable} ${sora.variable}`} suppressHydrationWarning>
+      <head>
+        <link rel="alternate" hrefLang="fr" href="https://jobxpress.fr" />
+      </head>
       <body>
         <ThemeProvider
           attribute="class"
