@@ -4,6 +4,7 @@ import { getArticleBySlug, getAllArticleSlugs, markdownToHtml, estimateReadingTi
 import { ArticleHeader } from "@/components/blog/ArticleHeader"
 import { ArticleContent } from "@/components/blog/ArticleContent"
 import { BlogSidebar } from "@/components/blog/BlogSidebar"
+import { getOgImageUrl } from "@/components/blog/OgImage"
 
 const SITE_URL = "https://jobxpress.fr"
 
@@ -26,6 +27,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const url = `${SITE_URL}/blog/${article.slug}`
 
+  const ogImageUrl = getOgImageUrl(article)
+  const ogFullUrl = ogImageUrl.startsWith("http")
+    ? ogImageUrl
+    : `${SITE_URL}${ogImageUrl}`
+
   return {
     title: article.title,
     description: article.description,
@@ -44,13 +50,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       publishedTime: article.date,
       authors: [article.author],
       tags: article.tags,
-      ...(article.image && { images: [{ url: article.image, width: 1200, height: 630 }] }),
+      images: [
+        {
+          url: ogFullUrl,
+          width: 1200,
+          height: 630,
+          alt: article.title,
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title: article.title,
       description: article.description,
-      ...(article.image && { images: [article.image] }),
+      images: [ogFullUrl],
     },
     robots: {
       index: true,

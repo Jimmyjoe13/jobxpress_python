@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Star, ArrowRight } from "lucide-react"
+import { Star, ArrowRight, Shield, Clock, Users } from "lucide-react"
 
 export function CtaSection() {
   return (
@@ -61,21 +61,54 @@ export function CtaSection() {
           Prêt à booster votre recherche d&apos;emploi ?
         </h2>
 
-        <p className="text-xl text-white/80 mb-10 max-w-2xl mx-auto">
+        <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
           Commencez gratuitement et recevez vos premières candidatures personnalisées en moins de 5 minutes.
         </p>
 
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.98 }}>
-          <Link
-            href="/register"
-            className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full text-lg font-bold shadow-2xl hover:shadow-white/20 transition-all group relative overflow-hidden"
-          >
-            <span className="relative z-10">Commencer gratuitement</span>
-            <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
-            {/* Shine effect */}
-            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-100 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-          </Link>
-        </motion.div>
+        {/* Social proof + trust signals */}
+        <div className="flex flex-wrap items-center justify-center gap-6 mb-10 text-white/70 text-sm">
+          <span className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-emerald-300" />
+            Sans engagement
+          </span>
+          <span className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-emerald-300" />
+            30 secondes pour démarrer
+          </span>
+          <span className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-emerald-300" />
+            Plan gratuit à vie
+          </span>
+        </div>
+
+        {/* Primary CTA */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.98 }}>
+            <Link
+              href="/register"
+              className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full text-lg font-bold shadow-2xl hover:shadow-white/20 transition-all group relative overflow-hidden"
+            >
+              <span className="relative z-10">Commencer gratuitement</span>
+              <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
+              {/* Shine effect */}
+              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-100 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+            </Link>
+          </motion.div>
+
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.98 }}>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center gap-2 bg-white/10 text-white px-8 py-4 rounded-full text-lg font-semibold border border-white/20 hover:bg-white/20 transition-all backdrop-blur-sm"
+            >
+              Voir les tarifs
+            </Link>
+          </motion.div>
+        </div>
+
+        {/* Micro-copy */}
+        <p className="mt-6 text-white/50 text-sm">
+          Aucune carte bancaire requise • Annulation facile
+        </p>
       </motion.div>
     </section>
   )

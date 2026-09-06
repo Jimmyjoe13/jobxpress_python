@@ -6,6 +6,7 @@ import { Sparkles } from "lucide-react"
 
 const footerLinks = [
   { href: "/blog", label: "Blog" },
+  { href: "/about", label: "À propos" },
   { href: "/privacy", label: "Confidentialité" },
   { href: "/terms", label: "Conditions" },
   { href: "/contact", label: "Contact" },
