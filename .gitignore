@@ -33,3 +33,8 @@ output/
 # OS
 .DS_Store
 Thumbs.db
+
+# Assistants & caches
+.qwen/
+__pycache__/
+*.pyc
