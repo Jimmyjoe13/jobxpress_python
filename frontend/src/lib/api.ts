@@ -612,3 +612,39 @@ export async function* sendJobyJobaMessageStream(applicationId: string, message:
     }
   }
 }
+
+// ============================================
+// IMPORT OFFRES EXTERNES (100% GRATUIT)
+// ============================================
+
+export interface JobImportRequest {
+  url?: string
+  raw_text?: string
+}
+
+export interface JobImportResponse {
+  application_id: string
+  job_id: string
+  title: string
+  company: string
+  location?: string
+  contract_type?: string
+  work_type?: string
+  salary?: string
+  description: string
+  skills: string[]
+  url: string
+  tracking_status: string
+  message: string
+}
+
+/**
+ * Importe une offre externe (depuis une URL ou un texte brut).
+ * Action 100% GRATUITE (0 crédit).
+ */
+export async function importExternalJob(data: JobImportRequest): Promise<JobImportResponse> {
+  return apiRequest<JobImportResponse>('/api/v2/jobs/import', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}

@@ -19,6 +19,7 @@ import {
   DollarSign,
   Activity,
   X,
+  Sparkles,
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/ui/dashboard-skeleton"
 import {
@@ -33,6 +34,7 @@ import { TrackingBoard } from "@/components/dashboard/tracking-board"
 import { EmptyStateDashboard } from "@/components/dashboard/EmptyStateDashboard"
 import { getAdminUsageStats } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ImportJobModal } from "@/components/jobs/ImportJobModal"
 
 interface UserData {
   firstName: string
@@ -66,6 +68,20 @@ export default function DashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminStats, setAdminStats] = useState<any>(null)
   const [checklistDismissed, setChecklistDismissed] = useState(false)
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+
+  const refreshApplications = async () => {
+    try {
+      const [appRes, statsRes] = await Promise.all([
+        getApplicationsV2(10),
+        getDashboardStats(),
+      ])
+      setApplications(appRes.applications || [])
+      setStats(statsRes)
+    } catch (err) {
+      console.error("Erreur actualisation applications:", err)
+    }
+  }
 
   useEffect(() => {
     const loadData = async () => {
@@ -218,6 +234,16 @@ export default function DashboardPage() {
               <span className="text-slate-500 hidden xs:inline">favoris</span>
             </div>
           )}
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800/90 hover:bg-slate-700/90 text-slate-200 border border-slate-700/60 hover:border-slate-600 font-semibold rounded-xl transition-all text-sm group shadow-md"
+          >
+            <Sparkles className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+            <span>Importer une offre</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              0 crédit
+            </span>
+          </button>
           <Link
             href="/dashboard/apply"
             className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors text-sm shadow-lg shadow-indigo-600/20"
@@ -410,6 +436,13 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors border border-emerald-500/20"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>+ Importer une offre</span>
+            </button>
             <Link
               href="/dashboard/search"
               className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-800/60 border border-transparent hover:border-slate-700/40"
@@ -502,6 +535,14 @@ export default function DashboardPage() {
           </div>
         </motion.div>
       )}
+
+      {/* Modal d'import d'offre externe (100% gratuit) */}
+      <ImportJobModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={refreshApplications}
+      />
     </motion.div>
   )
 }
+

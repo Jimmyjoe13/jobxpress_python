@@ -91,7 +91,7 @@ async def get_profile_checklist(
         return ProfileChecklistResponse(
             has_profile=False,
             has_cv=False,
-            has_first_search=False
+            has_searched=False,
         )
 
 # ===========================================
