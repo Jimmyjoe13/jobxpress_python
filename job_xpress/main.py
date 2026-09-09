@@ -133,6 +133,7 @@ from api.dashboard_endpoints import router as dashboard_router
 from api.admin_endpoints import router as admin_router
 from api.ab_test_endpoints import router as ab_test_router
 from api.import_endpoints import router as import_router
+from api.tailoring_endpoints import router as tailoring_router
 
 app.include_router(v2_router)
 app.include_router(notifications_router)
@@ -144,6 +145,7 @@ app.include_router(dashboard_router)
 app.include_router(admin_router)
 app.include_router(ab_test_router)
 app.include_router(import_router)
+app.include_router(tailoring_router)
 logger.info("✅ API V2 Human-in-the-Loop enregistrée")
 logger.info("✅ API Notifications & Chat enregistrée")
 logger.info("✅ API Profile enregistrée")
@@ -153,6 +155,7 @@ logger.info("✅ API Recherche & Favoris enregistrée")
 logger.info("✅ API Admin Monitoring enregistrée")
 logger.info("✅ API Dashboard & UX enregistrée")
 logger.info("✅ API Import d'offres externes enregistrée")
+logger.info("✅ API ATS Analysis & CV Tailoring enregistrée")
 
 
 # ===========================================

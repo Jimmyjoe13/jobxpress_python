@@ -26,12 +26,15 @@ import {
   GripHorizontal,
   Sparkles,
   Loader2,
-  Trash2
+  Trash2,
+  Target,
+  FileText
 } from "lucide-react"
 import type { ApplicationV2, TrackingStatus } from "@/lib/api"
 import { updateTrackingStatus, deleteApplicationTracker } from "@/lib/api"
 import { useToast } from "@/components/ui/toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { TailoringModal } from "@/components/jobs/TailoringModal"
 
 interface TrackingBoardProps {
   applications: ApplicationV2[]
@@ -150,22 +153,24 @@ function DraggableCard({
   column,
   updatingId, 
   handleStatusChange,
-  onDeleteClick
+  onDeleteClick,
+  onOpenTailoring
 }: { 
   app: ApplicationV2, 
   column: typeof COLUMNS[0],
   updatingId: string | null,
   handleStatusChange: (id: string, st: TrackingStatus) => void,
-  onDeleteClick: () => void
+  onDeleteClick: () => void,
+  onOpenTailoring: (tab: "ats" | "cv" | "job") => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: app.id,
     data: app
   })
 
-  // Le wrapper extérieur gère la ref Dnd-kit + la transparence quand dragué.
-  // Les écouteurs (listeners + attributes) sont appliqués au wrapper entier 
-  // car l'utilisations de distance/delay évite les clics intempestifs.
+  const atsScore = app.final_choice?.ats_analysis?.match_score ?? app.final_choice?.score
+  const hasTailoredCV = !!app.final_choice?.tailored_cv
+
   return (
     <div 
       ref={setNodeRef} 
@@ -194,7 +199,11 @@ function DraggableCard({
         )}
 
         <div className="flex justify-between items-start mb-3 pl-4 md:pl-0">
-          <h4 className="font-bold text-white text-sm line-clamp-2 pr-6 leading-snug">
+          <h4 
+            onClick={() => onOpenTailoring('ats')}
+            className="font-bold text-white text-sm line-clamp-2 pr-6 leading-snug cursor-pointer hover:text-indigo-400 transition-colors"
+            title="Ouvrir la préparation candidature"
+          >
             {app.final_choice?.title || app.job_title}
           </h4>
           
@@ -206,8 +215,32 @@ function DraggableCard({
               <DropdownMenuTrigger className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700/50 transition-colors">
                 <MoreVertical className="w-4 h-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-slate-900 border-white/10 p-2 rounded-xl">
-                <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Changer le statut</div>
+              <DropdownMenuContent align="end" className="w-60 bg-slate-900 border-white/10 p-2 rounded-xl">
+                <div className="px-3 py-1.5 text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Outils Candidature</div>
+                <DropdownMenuItem
+                  onClick={() => onOpenTailoring('ats')}
+                  className="text-slate-300 hover:text-white hover:bg-indigo-500/10 cursor-pointer flex items-center gap-3 rounded-lg mb-1"
+                >
+                  <Target className="w-3.5 h-3.5 text-indigo-400" />
+                  Diagnostic ATS (1 crédit)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onOpenTailoring('cv')}
+                  className="text-slate-300 hover:text-white hover:bg-indigo-500/10 cursor-pointer flex items-center gap-3 rounded-lg mb-1"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                  CV Adapté Sur-Mesure (5 cr.)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onOpenTailoring('job')}
+                  className="text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer flex items-center gap-3 rounded-lg mb-1"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Détails de l'offre
+                </DropdownMenuItem>
+
+                <div className="h-px bg-white/10 my-1 mx-2" />
+                <div className="px-3 py-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Changer le statut</div>
                 {COLUMNS.map(c => (
                   <DropdownMenuItem
                     key={c.id}
@@ -242,10 +275,53 @@ function DraggableCard({
               <span className="truncate">{app.location}</span>
             </div>
           )}
+
+          {/* Quick Tailoring & ATS Actions */}
+          <div className="pt-2 flex flex-wrap items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
+            {atsScore ? (
+              <button
+                onClick={() => onOpenTailoring('ats')}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                title="Voir le diagnostic ATS"
+              >
+                <Target className="w-3 h-3" />
+                <span>ATS {atsScore}%</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onOpenTailoring('ats')}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 hover:text-white transition-colors"
+                title="Lancer le diagnostic ATS (1 crédit)"
+              >
+                <Target className="w-3 h-3 text-indigo-400" />
+                <span>ATS (1 cr.)</span>
+              </button>
+            )}
+
+            {hasTailoredCV ? (
+              <button
+                onClick={() => onOpenTailoring('cv')}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors"
+                title="Voir le CV adapté"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>CV Prêt</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onOpenTailoring('cv')}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 hover:text-white transition-colors"
+                title="Générer un CV adapté sur-mesure (5 crédits)"
+              >
+                <Sparkles className="w-3 h-3 text-indigo-400" />
+                <span>CV (5 cr.)</span>
+              </button>
+            )}
+          </div>
           
           {/* Action Link (Lien vers l'offre) */}
           {(app.final_choice?.url || (app as any).url) && (
-            <div className="mt-3 pt-3 border-t border-white/5">
+            <div className="mt-2 pt-2 border-t border-white/5">
               <a 
                 href={app.final_choice?.url || (app as any).url}
                 target="_blank"
@@ -260,7 +336,7 @@ function DraggableCard({
           )}
         </div>
 
-        <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+        <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/5">
           <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold tracking-wider">
               <Clock className="w-3 h-3" />
               {new Date(app.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
@@ -321,6 +397,9 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
 
   const [appToDelete, setAppToDelete] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  const [selectedTailoringApp, setSelectedTailoringApp] = useState<ApplicationV2 | null>(null)
+  const [tailoringTab, setTailoringTab] = useState<"ats" | "cv" | "job">("ats")
 
   // Sensors configuration (Desktop: distance 8px / Mobile: long press 250ms)
   const sensors = useSensors(
@@ -495,6 +574,10 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
                   updatingId={updatingId}
                   handleStatusChange={handleStatusChange} 
                   onDeleteClick={() => setAppToDelete(app.id)}
+                  onOpenTailoring={(tab) => {
+                    setSelectedTailoringApp(app)
+                    setTailoringTab(tab)
+                  }}
                 />
               ))}
             </DroppableColumn>
@@ -505,6 +588,15 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
       <DragOverlay>
         {activeApp && activeColumn ? <CardPreview app={activeApp} column={activeColumn} /> : null}
       </DragOverlay>
+
+      {/* Tailoring & ATS Modal */}
+      <TailoringModal
+        isOpen={!!selectedTailoringApp}
+        onClose={() => setSelectedTailoringApp(null)}
+        application={selectedTailoringApp}
+        initialTab={tailoringTab}
+        onSuccess={onUpdate}
+      />
 
       <AnimatePresence>
         {appToDelete && (

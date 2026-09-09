@@ -50,6 +50,8 @@ PLANS = {
 
 SEARCH_COST = 1
 ADVICE_COST = 1
+ATS_ANALYSIS_COST = 1
+CV_TAILORING_COST = 5
 
 
 class BillingService:
@@ -207,6 +209,30 @@ class BillingService:
             Crédits restants après débit
         """
         return await self._debit_credits(user_id, access_token, ADVICE_COST, "advice")
+
+    async def can_analyze_ats(self, user_id: str, access_token: str) -> Tuple[bool, int]:
+        """Vérifie si l'utilisateur a assez de crédits pour le diagnostic ATS (1 crédit)."""
+        user_credits = await self.get_user_credits(user_id, access_token)
+        credits = user_credits.get("credits", 0)
+        return credits >= ATS_ANALYSIS_COST, credits
+
+    async def debit_ats_analysis(self, user_id: str, access_token: str) -> int:
+        """Débite 1 crédit pour le diagnostic ATS Match & Gap Analysis."""
+        return await self._debit_credits(
+            user_id, access_token, ATS_ANALYSIS_COST, "ats_analysis"
+        )
+
+    async def can_tailor_cv(self, user_id: str, access_token: str) -> Tuple[bool, int]:
+        """Vérifie si l'utilisateur a assez de crédits pour générer un CV adapté (5 crédits)."""
+        user_credits = await self.get_user_credits(user_id, access_token)
+        credits = user_credits.get("credits", 0)
+        return credits >= CV_TAILORING_COST, credits
+
+    async def debit_cv_tailoring(self, user_id: str, access_token: str) -> int:
+        """Débite 5 crédits pour la génération de CV adapté à une offre."""
+        return await self._debit_credits(
+            user_id, access_token, CV_TAILORING_COST, "cv_tailoring"
+        )
 
     async def _debit_credits(
         self, user_id: str, access_token: str, amount: int, reason: str

@@ -203,6 +203,10 @@ export interface ApplicationV2 {
     company?: string
     url?: string
     score?: number
+    description?: string
+    ats_analysis?: ATSAnalysisResponse
+    tailored_cv?: TailoredCVResponse
+    [key: string]: any
   }
   cover_letter_html?: string
 }
@@ -648,3 +652,87 @@ export async function importExternalJob(data: JobImportRequest): Promise<JobImpo
     body: JSON.stringify(data),
   })
 }
+
+// ============================================
+// ATS ANALYSIS (1 CRÉDIT) & CV TAILORING (5 CRÉDITS)
+// ============================================
+
+export interface ATSAnalysisResponse {
+  application_id: string
+  match_score: number
+  strengths: string[]
+  missing_skills: string[]
+  ats_keywords_to_add: string[]
+  recommendations: string[]
+  credits_remaining: number
+}
+
+export interface TailoredCVExperience {
+  role: string
+  company: string
+  location?: string
+  period?: string
+  bullets: string[]
+}
+
+export interface TailoredCVEducation {
+  degree: string
+  institution: string
+  year?: string
+}
+
+export interface TailoredCVResponse {
+  application_id: string
+  full_name: string
+  target_title: string
+  contact: {
+    email?: string
+    phone?: string
+    location?: string
+    [key: string]: any
+  }
+  pitch: string
+  highlighted_skills: string[]
+  experiences: TailoredCVExperience[]
+  education: TailoredCVEducation[]
+  ats_score: number
+  credits_remaining: number
+  message: string
+}
+
+/**
+ * Lance le diagnostic ATS Match & Gap Analysis (1 crédit).
+ */
+export async function triggerATSAnalysis(applicationId: string): Promise<ATSAnalysisResponse> {
+  return apiRequest<ATSAnalysisResponse>(`/api/v2/applications/${applicationId}/ats-analysis`, {
+    method: 'POST',
+  })
+}
+
+/**
+ * Récupère le diagnostic ATS déjà calculé (0 crédit).
+ */
+export async function getATSAnalysis(applicationId: string): Promise<ATSAnalysisResponse> {
+  return apiRequest<ATSAnalysisResponse>(`/api/v2/applications/${applicationId}/ats-analysis`, {
+    method: 'GET',
+  })
+}
+
+/**
+ * Génère un CV adapté sur-mesure pour l'offre ciblée (5 crédits).
+ */
+export async function generateTailoredCV(applicationId: string): Promise<TailoredCVResponse> {
+  return apiRequest<TailoredCVResponse>(`/api/v2/applications/${applicationId}/tailored-cv`, {
+    method: 'POST',
+  })
+}
+
+/**
+ * Récupère le CV adapté déjà généré (0 crédit).
+ */
+export async function getTailoredCV(applicationId: string): Promise<TailoredCVResponse> {
+  return apiRequest<TailoredCVResponse>(`/api/v2/applications/${applicationId}/tailored-cv`, {
+    method: 'GET',
+  })
+}
+
