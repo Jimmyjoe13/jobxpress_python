@@ -490,7 +490,16 @@ export async function deleteSavedJob(id: string): Promise<any> {
 // ============================================
 
 export interface DashboardStats {
-  total_applications: number; total_saved_jobs: number; checklist: { has_profile: boolean; has_cv: boolean; has_searched: boolean; }
+  total_applications: number
+  total_saved_jobs: number
+  checklist: {
+    has_profile: boolean
+    has_cv: boolean
+    has_searched: boolean
+    has_imported_job?: boolean
+    has_ats_diagnosis?: boolean
+    has_tailored_cv?: boolean
+  }
 }
 export type TrackingStatus = 'SAVED' | 'APPLIED' | 'INTERVIEW_SCHEDULED' | 'INTERVIEWED' | 'OFFER_RECEIVED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'
 export interface TrackingNote { date: string; note: string; status: string; }

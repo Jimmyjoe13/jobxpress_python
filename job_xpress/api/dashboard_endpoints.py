@@ -36,6 +36,9 @@ class ProfileChecklistResponse(BaseModel):
     has_profile: bool
     has_cv: bool
     has_searched: bool
+    has_imported_job: bool = False
+    has_ats_diagnosis: bool = False
+    has_tailored_cv: bool = False
 
 
 @router.get("/profile/checklist", response_model=ProfileChecklistResponse)
@@ -50,6 +53,9 @@ async def get_profile_checklist(
     1. Créer son profil de base
     2. Uploader un CV
     3. Lancer sa première recherche
+    4. Importer une offre cible
+    5. Lancer son 1er diagnostic ATS
+    6. Générer son 1er CV adapté
     """
     client = db_service.get_user_client(token)
     if not client:
@@ -59,7 +65,7 @@ async def get_profile_checklist(
         # 1. Vérifier profil et CV
         profile_res = (
             client.table("user_profiles")
-            .select("first_name, cv_url")
+            .select("first_name, cv_url, current_cv_id")
             .eq("id", user_id)
             .single()
             .execute()
@@ -69,7 +75,7 @@ async def get_profile_checklist(
         has_cv = False
         if profile_res.data:
             has_profile = bool(profile_res.data.get("first_name"))
-            has_cv = bool(profile_res.data.get("cv_url"))
+            has_cv = bool(profile_res.data.get("cv_url") or profile_res.data.get("current_cv_id"))
 
         # 2. Vérifier si au moins une recherche a été faite
         search_res = (
@@ -81,10 +87,31 @@ async def get_profile_checklist(
         )
         has_search = len(search_res.data) > 0 if search_res.data else False
 
+        # 3. Vérifier les candidatures (import, diagnostic ATS, CV adapté)
+        apps_res = (
+            client.table("applications_v2")
+            .select("id, final_choice")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        apps_data = apps_res.data or []
+        has_imported_job = len(apps_data) > 0
+        has_ats_diagnosis = any(
+            bool((a.get("final_choice") or {}).get("ats_analysis") or (a.get("final_choice") or {}).get("score"))
+            for a in apps_data
+        )
+        has_tailored_cv = any(
+            bool((a.get("final_choice") or {}).get("tailored_cv"))
+            for a in apps_data
+        )
+
         return ProfileChecklistResponse(
             has_profile=has_profile,
             has_cv=has_cv,
-            has_searched=has_search
+            has_searched=has_search,
+            has_imported_job=has_imported_job,
+            has_ats_diagnosis=has_ats_diagnosis,
+            has_tailored_cv=has_tailored_cv,
         )
     except Exception as e:
         logger.error(f"❌ Erreur checklist: {e}")
@@ -92,6 +119,9 @@ async def get_profile_checklist(
             has_profile=False,
             has_cv=False,
             has_searched=False,
+            has_imported_job=False,
+            has_ats_diagnosis=False,
+            has_tailored_cv=False,
         )
 
 # ===========================================
@@ -112,14 +142,24 @@ async def get_dashboard_stats(
         raise HTTPException(status_code=500, detail="Erreur base de données")
 
     try:
-        # Applications
+        # Applications & Checklists
         apps_res = (
             client.table("applications_v2")
-            .select("id, tracking_status", count="exact")
+            .select("id, tracking_status, final_choice")
             .eq("user_id", user_id)
             .execute()
         )
-        total_apps = apps_res.count if apps_res.count is not None else 0
+        apps_data = apps_res.data or []
+        total_apps = len(apps_data)
+        has_imported_job = total_apps > 0
+        has_ats_diagnosis = any(
+            bool((a.get("final_choice") or {}).get("ats_analysis") or (a.get("final_choice") or {}).get("score"))
+            for a in apps_data
+        )
+        has_tailored_cv = any(
+            bool((a.get("final_choice") or {}).get("tailored_cv"))
+            for a in apps_data
+        )
 
         # Saved jobs
         saved_res = (
@@ -133,7 +173,7 @@ async def get_dashboard_stats(
         # Profile completeness
         profile_res = (
             client.table("user_profiles")
-            .select("job_title, location, current_cv_id, free_searches_used")
+            .select("job_title, location, current_cv_id, cv_url, free_searches_used")
             .eq("id", user_id)
             .execute()
         )
@@ -155,6 +195,9 @@ async def get_dashboard_stats(
                 "has_profile": has_profile,
                 "has_cv": has_cv,
                 "has_searched": has_searched,
+                "has_imported_job": has_imported_job,
+                "has_ats_diagnosis": has_ats_diagnosis,
+                "has_tailored_cv": has_tailored_cv,
             },
         }
     except Exception as e:

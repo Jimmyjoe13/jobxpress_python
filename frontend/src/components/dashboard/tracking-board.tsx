@@ -28,7 +28,10 @@ import {
   Loader2,
   Trash2,
   Target,
-  FileText
+  FileText,
+  Search,
+  Filter,
+  RotateCcw
 } from "lucide-react"
 import type { ApplicationV2, TrackingStatus } from "@/lib/api"
 import { updateTrackingStatus, deleteApplicationTracker } from "@/lib/api"
@@ -170,6 +173,7 @@ function DraggableCard({
 
   const atsScore = app.final_choice?.ats_analysis?.match_score ?? app.final_choice?.score
   const hasTailoredCV = !!app.final_choice?.tailored_cv
+  const isReadyToApply = Boolean(atsScore && atsScore >= 60 && hasTailoredCV)
 
   return (
     <div 
@@ -336,12 +340,20 @@ function DraggableCard({
           )}
         </div>
 
-        <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/5">
-          <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold tracking-wider">
-              <Clock className="w-3 h-3" />
+        <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/5 gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
+              isReadyToApply
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                : "bg-slate-800 text-slate-400 border-white/5"
+            }`}>
+              {isReadyToApply ? "✓ Prêt à postuler" : "En préparation"}
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium">
               {new Date(app.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+            </span>
           </div>
-          <span className={`px-2.5 py-1 rounded-lg text-[9px] font-bold border uppercase tracking-widest ${getStatusColor(app.tracking_status || (app.status === 'completed' ? 'APPLIED' : 'SAVED'))}`}>
+          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold border uppercase tracking-widest ${getStatusColor(app.tracking_status || (app.status === 'completed' ? 'APPLIED' : 'SAVED'))}`}>
             {app.tracking_status ? column.label : 'IA Généré'}
           </span>
         </div>
@@ -400,6 +412,11 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
 
   const [selectedTailoringApp, setSelectedTailoringApp] = useState<ApplicationV2 | null>(null)
   const [tailoringTab, setTailoringTab] = useState<"ats" | "cv" | "job">("ats")
+
+  // Filters & Search state
+  const [searchQuery, setSearchQuery] = useState("")
+  const [scoreFilter, setScoreFilter] = useState<"all" | "high" | "medium" | "none">("all")
+  const [cvFilter, setCvFilter] = useState<"all" | "ready" | "pending">("all")
 
   // Sensors configuration (Desktop: distance 8px / Mobile: long press 250ms)
   const sensors = useSensors(
@@ -513,9 +530,41 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
     }
   }
 
-  // Group by status locally
+  // Filtered applications based on search query, score, and cv status
+  const filteredApps = localApps.filter(app => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim()
+      const title = (app.final_choice?.title || app.job_title || "").toLowerCase()
+      const company = (app.final_choice?.company || "").toLowerCase()
+      const loc = (app.location || "").toLowerCase()
+      if (!title.includes(q) && !company.includes(q) && !loc.includes(q)) {
+        return false
+      }
+    }
+
+    const score = app.final_choice?.ats_analysis?.match_score ?? app.final_choice?.score
+    if (scoreFilter === "high" && (score === undefined || score < 80)) return false
+    if (scoreFilter === "medium" && (score === undefined || score < 60 || score >= 80)) return false
+    if (scoreFilter === "none" && score !== undefined && score !== null && score > 0) return false
+
+    const hasCV = !!app.final_choice?.tailored_cv
+    if (cvFilter === "ready" && !hasCV) return false
+    if (cvFilter === "pending" && hasCV) return false
+
+    return true
+  })
+
+  const hasActiveFilters = searchQuery.trim() !== "" || scoreFilter !== "all" || cvFilter !== "all"
+
+  const handleResetFilters = () => {
+    setSearchQuery("")
+    setScoreFilter("all")
+    setCvFilter("all")
+  }
+
+  // Group filtered applications by status locally
   const groupedApps = COLUMNS.reduce((acc, col) => {
-    acc[col.id] = localApps.filter(app => {
+    acc[col.id] = filteredApps.filter(app => {
       const st = app.tracking_status || (app.status === 'completed' ? 'APPLIED' : 'SAVED')
       return st === col.id || (col.id === 'REJECTED' && ['REJECTED', 'WITHDRAWN'].includes(st)) || (col.id === 'INTERVIEW_SCHEDULED' && ['INTERVIEW_SCHEDULED', 'INTERVIEWED', 'OFFER_RECEIVED', 'ACCEPTED'].includes(st))
     })
@@ -558,6 +607,135 @@ export function TrackingBoard({ applications, onUpdate }: TrackingBoardProps) {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* ─── KANBAN SEARCH & FILTER TOOLBAR ─── */}
+        <div className="mb-5 p-3 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
+          {/* Search Bar */}
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filtrer par intitulé, entreprise, lieu..."
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-950/70 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                title="Effacer"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            {/* ATS Score Filter */}
+            <div className="flex items-center gap-1 bg-slate-950/70 p-1 rounded-xl border border-white/5">
+              <span className="text-[10px] text-slate-500 font-bold px-1.5 uppercase">ATS</span>
+              <button
+                onClick={() => setScoreFilter("all")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  scoreFilter === "all" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Tous
+              </button>
+              <button
+                onClick={() => setScoreFilter("high")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  scoreFilter === "high" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Score ATS supérieur ou égal à 80%"
+              >
+                ≥ 80%
+              </button>
+              <button
+                onClick={() => setScoreFilter("medium")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  scoreFilter === "medium" ? "bg-amber-600 text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Score ATS entre 60% et 79%"
+              >
+                60-79%
+              </button>
+              <button
+                onClick={() => setScoreFilter("none")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  scoreFilter === "none" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Candidatures sans diagnostic ATS"
+              >
+                À faire
+              </button>
+            </div>
+
+            {/* CV Tailoring Filter */}
+            <div className="flex items-center gap-1 bg-slate-950/70 p-1 rounded-xl border border-white/5">
+              <span className="text-[10px] text-slate-500 font-bold px-1.5 uppercase">CV</span>
+              <button
+                onClick={() => setCvFilter("all")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  cvFilter === "all" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Tous
+              </button>
+              <button
+                onClick={() => setCvFilter("ready")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  cvFilter === "ready" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Avec CV adapté généré"
+              >
+                Adapté ✨
+              </button>
+              <button
+                onClick={() => setCvFilter("pending")}
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                  cvFilter === "pending" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Sans CV adapté"
+              >
+                Sans CV
+              </button>
+            </div>
+
+            {/* Reset Button */}
+            {hasActiveFilters && (
+              <button
+                onClick={handleResetFilters}
+                className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 rounded-xl border border-indigo-500/20 transition-colors"
+                title="Réinitialiser tous les filtres"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Réinitialiser</span>
+              </button>
+            )}
+
+            <span className="text-[11px] text-slate-500 ml-auto hidden sm:inline font-medium">
+              {filteredApps.length} / {localApps.length} opportunité{localApps.length > 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+
+        {/* Empty Search / Filter Notice */}
+        {filteredApps.length === 0 && localApps.length > 0 && (
+          <div className="p-8 rounded-2xl bg-slate-900/40 border border-white/5 text-center mb-6">
+            <Filter className="w-8 h-8 text-slate-500 mx-auto mb-2 opacity-50" />
+            <p className="text-sm font-semibold text-white">Aucune candidature ne correspond à vos filtres</p>
+            <p className="text-xs text-slate-400 mt-1 mb-4">Essayez d'ajuster votre recherche ou de réinitialiser les filtres.</p>
+            <button
+              onClick={handleResetFilters}
+              className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+            >
+              Effacer les filtres
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 overflow-x-auto pb-4">
           {COLUMNS.map((column) => (

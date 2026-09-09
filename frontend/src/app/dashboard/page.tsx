@@ -168,21 +168,54 @@ export default function DashboardPage() {
   const totalApps = stats?.total_applications ?? 0
   const totalSaved = stats?.total_saved_jobs ?? 0
 
-  const checklistItems = [
+  const checklistItems: Array<{
+    id: string
+    label: string
+    sublabel: string
+    done: boolean
+    badge: string
+    href?: string
+    action?: () => void
+  }> = [
     {
-      label: "Compléter mon profil",
-      done: !!stats?.checklist.has_profile,
+      id: "profile",
+      label: "Profil candidat",
+      sublabel: "Titre & compétences",
+      done: !!stats?.checklist?.has_profile,
       href: "/dashboard/profile",
+      badge: "Base",
     },
     {
-      label: "Importer un CV",
-      done: !!stats?.checklist.has_cv,
+      id: "cv",
+      label: "CV référence",
+      sublabel: "Document & parsing IA",
+      done: !!stats?.checklist?.has_cv,
       href: "/dashboard/profile",
+      badge: "Base",
     },
     {
-      label: "Lancer une recherche",
-      done: !!stats?.checklist.has_searched,
-      href: "/dashboard/apply",
+      id: "import",
+      label: "Importer une offre",
+      sublabel: "Lien ou texte brut",
+      done: !!(stats?.checklist?.has_imported_job || totalApps > 0),
+      action: () => setIsImportModalOpen(true),
+      badge: "0 crédit",
+    },
+    {
+      id: "ats",
+      label: "Diagnostic ATS",
+      sublabel: "Score & mots-clés ATS",
+      done: !!stats?.checklist?.has_ats_diagnosis,
+      href: "#tracking-board-section",
+      badge: "1 crédit",
+    },
+    {
+      id: "tailored_cv",
+      label: "CV sur-mesure",
+      sublabel: "Puces adaptées & pitch",
+      done: !!stats?.checklist?.has_tailored_cv,
+      href: "#tracking-board-section",
+      badge: "5 crédits",
     },
   ]
   const completedCount = checklistItems.filter((i) => i.done).length
@@ -192,9 +225,9 @@ export default function DashboardPage() {
 
   const subtitle = isOnboardingDone
     ? totalApps > 0
-      ? `${totalApps} candidature${totalApps > 1 ? "s" : ""} en cours · Bonne continuation !`
-      : "Prêt à lancer votre première recherche ?"
-    : `Profil complété à ${Math.round(progressPct)}% — encore ${checklistItems.length - completedCount} étape${checklistItems.length - completedCount > 1 ? "s" : ""}`
+      ? `${totalApps} candidature${totalApps > 1 ? "s" : ""} en cours · Prêt pour décrocher vos entretiens !`
+      : "Prêt à importer et préparer votre première candidature ?"
+    : `Parcours candidat complété à ${Math.round(progressPct)}% — encore ${checklistItems.length - completedCount} étape${checklistItems.length - completedCount > 1 ? "s" : ""}`
 
   return (
     <motion.div
@@ -350,60 +383,98 @@ export default function DashboardPage() {
             transition={{ duration: 0.3 }}
             className="overflow-hidden"
           >
-            <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-r from-purple-500/5 to-pink-500/5 p-5">
+            <div className="rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-emerald-500/5 p-5">
               {/* Header */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-                  <span className="text-sm font-semibold text-white">
-                    Configurez votre profil
+                  <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                  <span className="text-sm font-bold text-white">
+                    Parcours Préparation Candidature
                   </span>
-                  <span className="text-xs text-slate-500">
-                    {completedCount}/{checklistItems.length} étapes complétées
+                  <span className="text-xs text-slate-400 font-medium">
+                    · {completedCount}/{checklistItems.length} étapes validées
                   </span>
                 </div>
                 <button
                   onClick={() => setChecklistDismissed(true)}
                   className="p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
                   aria-label="Masquer"
+                  title="Masquer le guide"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Progress bar */}
-              <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden mb-4">
+              <div className="h-1.5 w-full bg-slate-800/80 rounded-full overflow-hidden mb-4">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${progressPct}%` }}
                   transition={{ duration: 0.8, ease: "easeOut" }}
-                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"
+                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 rounded-full"
                 />
               </div>
 
-              {/* Steps */}
-              <div className="flex flex-col sm:flex-row gap-2">
-                {checklistItems.map((item, idx) => (
-                  <Link
-                    key={idx}
-                    href={item.done ? "#" : item.href}
-                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm flex-1 transition-all ${
-                      item.done
-                        ? "bg-slate-800/30 text-slate-500 cursor-default pointer-events-none"
-                        : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-white/5 hover:border-white/10 hover:-translate-y-0.5"
-                    }`}
-                  >
-                    {item.done ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    ) : (
-                      <Circle className="w-4 h-4 text-slate-600 flex-shrink-0" />
-                    )}
-                    <span className={item.done ? "line-through" : ""}>{item.label}</span>
-                    {!item.done && (
-                      <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-500 flex-shrink-0" />
-                    )}
-                  </Link>
-                ))}
+              {/* Steps Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                {checklistItems.map((item) => {
+                  const content = (
+                    <div className="flex items-start gap-2.5 w-full">
+                      {item.done ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <Circle className="w-4 h-4 text-slate-500 flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`font-semibold text-xs truncate ${item.done ? "line-through text-slate-500" : "text-white"}`}>
+                            {item.label}
+                          </span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            item.done 
+                              ? "bg-slate-800 text-slate-500" 
+                              : item.badge === "0 crédit" 
+                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                              : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                          }`}>
+                            {item.done ? "Fait" : item.badge}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 truncate mt-0.5">{item.sublabel}</p>
+                      </div>
+                      {!item.done && (
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 self-center" />
+                      )}
+                    </div>
+                  )
+
+                  return item.action ? (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={item.done ? undefined : item.action}
+                      className={`p-3 rounded-xl text-left transition-all ${
+                        item.done
+                          ? "bg-slate-900/40 border border-white/5 opacity-70 cursor-default"
+                          : "bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-indigo-500/40 hover:-translate-y-0.5 cursor-pointer shadow-sm"
+                      }`}
+                    >
+                      {content}
+                    </button>
+                  ) : (
+                    <Link
+                      key={item.id}
+                      href={item.done ? "#" : (item.href || "#")}
+                      className={`p-3 rounded-xl text-left transition-all ${
+                        item.done
+                          ? "bg-slate-900/40 border border-white/5 opacity-70 cursor-default pointer-events-none"
+                          : "bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-indigo-500/40 hover:-translate-y-0.5 shadow-sm"
+                      }`}
+                    >
+                      {content}
+                    </Link>
+                  )
+                })}
               </div>
             </div>
           </motion.div>
@@ -414,8 +485,9 @@ export default function DashboardPage() {
           4. TRACKING BOARD — Focus central
          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <motion.div
+        id="tracking-board-section"
         variants={itemVariants}
-        className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden"
+        className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden scroll-mt-6"
       >
         {/* Board header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/60">
