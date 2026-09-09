@@ -294,6 +294,8 @@ def setup_logging(
     return logger
 
 
-def get_logger() -> logging.Logger:
+def get_logger(name: Optional[str] = None) -> logging.Logger:
     """Récupère le logger JobXpress configuré."""
+    if name:
+        return logging.getLogger(name)
     return logging.getLogger("jobxpress")
