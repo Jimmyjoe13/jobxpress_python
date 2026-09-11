@@ -32,6 +32,7 @@ import {
   getTailoredCV
 } from "@/lib/api"
 import { useToast } from "@/components/ui/toast"
+import { track } from "@/lib/analytics"
 
 interface TailoringModalProps {
   isOpen: boolean
@@ -109,6 +110,7 @@ export function TailoringModal({
     try {
       const res = await triggerATSAnalysis(application.id)
       setAtsData(res)
+      track("ats_check", { credits: 1, credits_remaining: res.credits_remaining })
       showToast("Diagnostic ATS calculé avec succès (-1 crédit)", "success")
       if (onSuccess) onSuccess()
     } catch (err: any) {
@@ -124,6 +126,7 @@ export function TailoringModal({
     try {
       const res = await generateTailoredCV(application.id)
       setCvData(res)
+      track("cv_adapted", { credits: 5, credits_remaining: res.credits_remaining })
       showToast("CV adapté généré avec succès (-5 crédits)", "success")
       if (onSuccess) onSuccess()
     } catch (err: any) {

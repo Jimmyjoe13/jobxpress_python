@@ -38,3 +38,6 @@ Thumbs.db
 .qwen/
 __pycache__/
 *.pyc
+
+# Credentials Google Analytics (clé de service - ne jamais committer)
+analytics-credentials/

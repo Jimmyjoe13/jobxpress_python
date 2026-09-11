@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getAuthToken } from '@/lib/api'
+import { setUserProperties } from '@/lib/analytics'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -142,6 +143,8 @@ export function useUserProfile(): UseUserProfileReturn {
 
       const data = await response.json()
       setProfile(data)
+      // Envoie la propriété utilisateur (scope USER) à GA4
+      setUserProperties({ user_plan: data.plan })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erreur inconnue'
       setError(message)

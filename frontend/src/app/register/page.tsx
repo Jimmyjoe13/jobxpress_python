@@ -8,6 +8,7 @@ import { Sparkles, ArrowLeft, CheckCircle, Mail, Lock, User, Eye, EyeOff, Credit
 import { useToast } from "@/components/ui/toast"
 import { Confetti } from "@/components/ui/confetti"
 import { SocialAuth, AuthDivider } from "@/components/auth/social-auth"
+import { track } from "@/lib/analytics"
 
 // Liens Stripe pour les plans payants
 const STRIPE_LINKS: Record<string, string> = {
@@ -95,6 +96,7 @@ function RegisterFormContent() {
       }
 
       setSuccess(true)
+      track("sign_up", { method: "email" })
       showToast(hasPendingPayment ? "Inscription réussie ! Confirmez votre email pour continuer." : "Inscription réussie !", "success")
     } catch {
       setError("Une erreur est survenue")

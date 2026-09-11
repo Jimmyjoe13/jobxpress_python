@@ -7,6 +7,7 @@ import { motion } from "framer-motion"
 import { Sparkles, ArrowLeft, Mail, Lock, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { SocialAuth, AuthDivider } from "@/components/auth/social-auth"
+import { track } from "@/lib/analytics"
 
 /**
  * Composant qui gère les erreurs OAuth depuis les paramètres URL.
@@ -94,6 +95,7 @@ export default function LoginPage() {
       }
 
       showToast("Connexion réussie !", "success")
+      track("login", { method: "email" })
       
       // Redirection vers Stripe si paiement en attente
       if (redirectToPayment && planFromUrl && STRIPE_LINKS[planFromUrl]) {
