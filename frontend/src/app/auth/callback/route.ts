@@ -58,12 +58,30 @@ export async function GET(request: Request) {
       },
     })
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { error, data } = await supabase.auth.exchangeCodeForSession(code)
 
     if (error) {
       console.error('OAuth callback error:', error.message, error.status)
       return NextResponse.redirect(`${origin}/login?error=oauth_failed`)
     }
+
+    // --- Tracking OAuth pour GA4 ---
+    // Le callback est côté serveur (pas de gtag ici) : on transmet les infos
+    // via un cookie consommé par le client à l'arrivée sur le dashboard.
+    // is_new est déduit de created_at : un compte créé il y a moins de 2 minutes
+    // est une inscription, sinon une simple connexion.
+    const { provider, isNew } = (() => {
+      try {
+        const created = data?.user?.created_at
+        const appMeta = data?.user?.app_metadata as Record<string, unknown> | undefined
+        return {
+          provider: (appMeta?.provider as string) ?? 'oauth',
+          isNew: created ? (Date.now() - new Date(created).getTime()) < 2 * 60 * 1000 : false,
+        }
+      } catch {
+        return { provider: 'oauth', isNew: false }
+      }
+    })()
 
     // Session échangée avec succès — rediriger vers le dashboard
     const forwardedHost = request.headers.get('x-forwarded-host')
@@ -77,8 +95,18 @@ export async function GET(request: Request) {
     } else {
       redirectUrl = `${origin}${next}`
     }
+    // Marqueur pour le client : cette connexion vient d'un retour OAuth
+    redirectUrl = `${redirectUrl}${redirectUrl.includes('?') ? '&' : '?'}oauth=1`
 
-    return NextResponse.redirect(redirectUrl)
+    const response = NextResponse.redirect(redirectUrl)
+    response.cookies.set('jxp_oauth', JSON.stringify({ is_new: isNew, provider }), {
+      httpOnly: false, // doit être lisible en JS côté client pour le tracking
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 300, // 5 min : consommé puis ignoré
+    })
+
+    return response
   } catch (err) {
     console.error('OAuth callback exception:', err)
     return NextResponse.redirect(`${origin}/login?error=oauth_exception`)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -23,6 +23,7 @@ import { NotificationsPopover } from "@/components/ui/notifications-popover"
 import { ChatWidget } from "@/components/ui/chat-widget"
 import { UpgradeBannerCompact } from "@/components/ui/upgrade-banner"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { OAuthTracker } from "@/components/analytics/oauth-tracker"
 
 const navigation = [
   { name: "Inbox IA", href: "/dashboard/inbox", icon: Sparkles, isNew: true },
@@ -234,6 +235,11 @@ export default function DashboardLayout({
       
       {/* Widget Global Chat */}
       <ChatWidget />
+
+      {/* Tracking retour OAuth (sign_up / login) pour GA4 */}
+      <Suspense fallback={null}>
+        <OAuthTracker />
+      </Suspense>
     </div>
   )
 }
