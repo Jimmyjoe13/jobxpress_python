@@ -1,6 +1,6 @@
 import { Metadata } from "next"
 import { Navbar, Footer } from "@/components/layout"
-import { HeroSection, FeaturesSection, HowItWorksSection, PricingSection, TestimonialsSection, FAQSection, CtaSection } from "@/components/sections/home"
+import { HeroSection, FeaturesSection, HowItWorksSection, PricingSection, TestimonialsSection, FAQSection, CtaSection, BlogTeaserSection } from "@/components/sections/home"
 import StructuredData from "@/components/seo/StructuredData"
 
 // Métadonnées SEO optimisées pour la landing page
@@ -57,6 +57,7 @@ export default function Home() {
         <FeaturesSection />
         <HowItWorksSection />
         <TestimonialsSection />
+        <BlogTeaserSection />
         <PricingSection />
         <FAQSection />
         <CtaSection />
