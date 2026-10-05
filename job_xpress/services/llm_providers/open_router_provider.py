@@ -30,6 +30,7 @@ class OpenRouterProvider(BaseLLMProvider):
         self.api_url = f"{self.base_url}/chat/completions"
         self.site_url = settings.OPENROUTER_SITE_URL or ""
         self.site_name = settings.OPENROUTER_SITE_NAME or "JobXpress"
+        self.session_id = settings.OPENCODE_SESSION_ID or ""
 
     def _get_headers(self) -> Dict[str, str]:
         """Headers avec authentification + metadata OpenRouter."""
@@ -37,6 +38,9 @@ class OpenRouterProvider(BaseLLMProvider):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+        # Requis par l'API OpenCode Go (routage des requêtes)
+        if self.session_id:
+            headers["x-opencode-session"] = self.session_id
         # Headers optionnels pour le classement OpenRouter
         if self.site_url:
             headers["HTTP-Referer"] = self.site_url

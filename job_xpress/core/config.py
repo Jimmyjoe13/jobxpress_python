@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     OPENROUTER_MODEL_FAST: str = "openrouter/owl-alpha"     # pré-filtre, normalisation
     OPENROUTER_SITE_URL: str = ""  # URL pour ranking openrouter.ai (optionnel)
     OPENROUTER_SITE_NAME: str = "JobXpress"  # Nom affiché sur openrouter.ai
+    OPENCODE_SESSION_ID: str = "jobxpress-api"  # En-tete x-opencode-session (exige par opencode.ai/zen/go)
 
     # Legacy OpenAI (conservé pour fallback si besoin)
     OPENAI_API_KEY: str = ""
