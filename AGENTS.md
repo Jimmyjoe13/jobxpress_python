@@ -32,7 +32,7 @@ Ce document consigne l'ensemble des agents spécialisés mobilisés pour le proj
 - **Identifiant** : `code_arch_auditor`
 - **Rôle** : Audit statique et dynamique de la base de code locale (Backend & Frontend).
 - **Compétences** :
-  - Analyse du backend FastAPI (moteur de scraping reverse API, scoring DeepSeek, OCR Mistral, billing Stripe).
+  - Analyse du backend FastAPI (moteur de scraping reverse API, scoring LLM (OpenCode), OCR Mistral, billing Stripe).
   - Analyse du frontend Next.js 16 (App Router, Tailwind CSS, composants UI, gestion d'état, Auth GoTrue).
   - Détection des failles de sécurité résiduelles (XSS, injections, bypass d'auth, CORS, gestion des secrets).
   - Évaluation de la robustesse (gestion des exceptions, typage TypeScript/Python, couverture de tests).

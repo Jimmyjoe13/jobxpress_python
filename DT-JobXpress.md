@@ -10,7 +10,7 @@ JobXpress est une solution d'automatisation de candidature structurée autour d'
 
 * **Langage** : Python 3.10+
 * **Framework** : FastAPI `>=0.100.0`
-* **IA / LLM** : DeepSeek API (Modèle `deepseek-chat`)
+* **IA / LLM** : OpenCode Go (Modèle `mimo-v2.5`)
 * **Traitement de Données** :
 * Parsing HTML/XML : `trafilatura`, `lxml`
 * Matching flou : `thefuzz`, `python-Levenshtein`
@@ -56,11 +56,11 @@ Le moteur opère en étapes séquentielles asynchrones :
 
 ### 3.2. Moteur d'Intelligence (LLMEngine)
 
-Le service gère l'interaction avec le LLM DeepSeek.
+Le service gère l'interaction avec le LLM (OpenCode Go / MiMo).
 
 * **Scoring** : Analyse JSON stricte. Le prompt force une réponse JSON contenant 3 scores (Tech, Structure, Expérience).
 * **Pondération** : Score final calculé côté Python : `0.4*Tech + 0.3*Struct + 0.3*Exp`.
-* **Circuit Breaker** : Si DeepSeek échoue 3 fois consécutives, le circuit s'ouvre pour 180s.
+* **Circuit Breaker** : Si le LLM échoue 3 fois consécutives, le circuit s'ouvre pour 180s.
 * **Fallback** : Mode dégradé utilisant des heuristiques (mots-clés dans le titre/description) pour garantir un score, même approximatif.
 
 ## 4. Modèle de Données (Supabase & Pydantic)
@@ -86,7 +86,7 @@ Le backend expose une API REST documentée (Swagger/OpenAPI).
 | --- | --- | --- |
 | `POST` | `/api/v2/search/start` | Initialise une nouvelle candidature, lance la recherche asynchrone. |
 | `GET` | `/api/v2/applications` | Récupère l'historique de l'utilisateur (RLS activé). |
-| `GET` | `/health` | Healthcheck complet vérifiant Supabase, DeepSeek et RapidAPI. |
+| `GET` | `/health` | Healthcheck complet vérifiant Cache, Supabase, API LLM et Reverse API. |
 | `POST` | `/webhook/tally` | Point d'entrée pour l'automatisation via formulaire externe. |
 
 ## 6. Sécurité et Performance
@@ -99,7 +99,7 @@ Le backend expose une API REST documentée (Swagger/OpenAPI).
 ## 7. Recommandations de Déploiement
 
 1. **Variables d'Environnement** :
-* `DEEPSEEK_API_KEY`, `RAPIDAPI_KEY`, `SERPAPI_KEY` (Obligatoires pour le moteur).
+* `OPENROUTER_API_KEY` (+ `OPENCODE_SESSION_ID`), `RAPIDAPI_KEY`, `SERPAPI_KEY` (Obligatoires pour le moteur).
 * `SUPABASE_URL`, `SUPABASE_KEY`.
 * `SENTRY_DSN` (Pour la prod).
 

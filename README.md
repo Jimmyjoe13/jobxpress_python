@@ -21,7 +21,7 @@ Elle transforme un simple formulaire de candidature en un pipeline complet : rec
 - **Synonymes Métiers** : Base étendue de 50+ métiers avec leurs variantes
 - **Deep Fetching** : Extraction du contenu complet des pages carrières
 
-### 🧠 Intelligence Artificielle (DeepSeek)
+### 🧠 Intelligence Artificielle (OpenCode Go / MiMo)
 
 - **Scoring Multi-critères** : Technique (40%), Structurel (30%), Expérience (30%)
 - **Filtre Anti-École** : Vérification de l'e-réputation (DuckDuckGo)
@@ -85,7 +85,7 @@ Elle transforme un simple formulaire de candidature en un pipeline complet : rec
 ```
 Backend (Python 3.10+)
 ├── Framework API    : FastAPI
-├── IA / LLM         : DeepSeek API
+├── IA / LLM         : OpenCode Go (MiMo)
 ├── OCR CV           : Mistral OCR
 ├── Recherche        : httpx, trafilatura, ddgs
 ├── Base de données  : Supabase (PostgreSQL)
@@ -160,7 +160,7 @@ Frontend (Next.js 14+)
 
 - Python 3.10 ou supérieur
 - Node.js 18 ou supérieur
-- Comptes API : Supabase, DeepSeek, RapidAPI, Brevo, Mistral
+- Comptes API : Supabase, OpenCode, RapidAPI, Brevo, Mistral
 
 ### 2. Installation Backend
 
@@ -199,7 +199,10 @@ SUPABASE_KEY=votre-cle-anon
 SUPABASE_SERVICE_KEY=votre-service-role-key
 
 # IA & Recherche
-DEEPSEEK_API_KEY=sk-votre-cle
+# IA (OpenCode Go - API compatible OpenAI)
+OPENROUTER_API_KEY=oc_sk-votre-cle
+OPENROUTER_BASE_URL=https://opencode.ai/zen/go/v1
+OPENCODE_SESSION_ID=jobxpress-api
 MISTRAL_API_KEY=votre-cle-mistral
 RAPIDAPI_KEY=votre-cle-rapidapi
 
@@ -261,7 +264,7 @@ jobxpress_python/
 │   ├── services/
 │   │   ├── database.py         # Supabase client
 │   │   ├── billing.py          # Gestion crédits
-│   │   ├── llm_engine.py       # IA DeepSeek
+│   │   ├── llm_engine.py       # IA OpenCode (MiMo)
 │   │   └── search_engine_v2.py # Recherche V2
 │   ├── migrations/             # Migrations SQL Supabase
 │   └── main.py                 # Point d'entrée FastAPI
