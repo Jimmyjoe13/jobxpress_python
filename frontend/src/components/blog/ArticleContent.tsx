@@ -1,27 +1,13 @@
-"use client"
-
-import { useEffect, useState } from "react"
-
 interface ArticleContentProps {
   html: string
 }
 
 /**
- * Composant client qui rend le HTML du contenu d'un article.
- * Le rendu du HTML nécessite dangerouslySetInnerHTML,
- * ce qui requiert un composant client.
+ * Rend le HTML du contenu d'un article côté serveur (Server Component).
+ * Le texte doit être présent dans le HTML initial pour être indexé par Google :
+ * ne pas repasser ce composant en "use client" avec un rendu différé.
  */
 export function ArticleContent({ html }: ArticleContentProps) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return <div className="animate-pulse space-y-4"><div className="h-4 bg-muted rounded w-3/4" /><div className="h-4 bg-muted rounded w-full" /><div className="h-4 bg-muted rounded w-5/6" /></div>
-  }
-
   return (
     <div
       className="prose prose-invert prose-lg max-w-none

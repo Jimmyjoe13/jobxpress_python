@@ -21,8 +21,8 @@ const sora = Sora({
 export const metadata: Metadata = {
   metadataBase: new URL("https://jobxpress.fr"),
   title: {
-    default: "jobXpress - Automatisez votre recherche d'emploi avec l'IA",
-    template: "%s | jobXpress",
+    default: "JobXpress - Recherche d'emploi IA & Candidatures automatisées",
+    template: "%s | JobXpress",
   },
   description: "jobXpress trouve les meilleures offres, analyse leur pertinence et génère des lettres de motivation personnalisées avec l'IA.",
   keywords: [

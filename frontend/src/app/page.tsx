@@ -5,7 +5,7 @@ import StructuredData from "@/components/seo/StructuredData"
 
 // Métadonnées SEO optimisées pour la landing page
 export const metadata: Metadata = {
-  title: "JobXpress — Recherche d'emploi IA & Candidature Automatisée",
+  title: "JobXpress — Recherche d'emploi IA & Candidatures automatisées",
   description:
     "Trouvez votre job 10x plus vite avec JobXpress. Analyse d'offres IA, scoring de compatibilité CV et génération de lettres de motivation personnalisées en 30s.",
   keywords: [

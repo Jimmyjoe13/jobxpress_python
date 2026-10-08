@@ -1,5 +1,7 @@
 "use client"
 
+import { track } from "@/lib/analytics"
+
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Check, Zap, Star, ArrowRight, Clock, Sparkles, MessageCircle, CreditCard } from "lucide-react"
@@ -292,6 +294,7 @@ export default function PricingPage() {
                       href={plan.href} 
                       target="_blank" 
                       rel="noopener noreferrer"
+                      onClick={() => { try { track("begin_checkout", { plan: plan.name, price: plan.price }) } catch {} }}
                       className="block"
                     >
                       <Button 
@@ -318,7 +321,7 @@ export default function PricingPage() {
                 ) : (
                   <Link
                     href={plan.disabled ? "#" : plan.href}
-                    onClick={(e) => plan.disabled && e.preventDefault()}
+                    onClick={(e) => { if (plan.disabled) { e.preventDefault(); return } if (plan.external) { try { track("begin_checkout", { plan: plan.name, price: plan.price }) } catch {} } }}
                     className={plan.disabled ? "cursor-not-allowed" : ""}
                   >
                     <Button
